@@ -7,6 +7,7 @@ type SearchParams = {
   type?: string;
   category?: string;
   tag?: string;
+  district?: string;
 };
 
 export default async function HomePage({
@@ -24,7 +25,7 @@ export default async function HomePage({
   let query = supabase
     .from("proposals")
     .select(
-      `id, title, type, summary, geography_scope, geography_label, created_at,
+      `id, title, type, summary, geography_scope, geography_label, council_district, created_at,
        categories ( slug, label ),
        proposal_tags ( tags ( slug, label ) ),
        reactions ( value ),
@@ -36,6 +37,15 @@ export default async function HomePage({
   if (searchParams.category)
     query = query.eq("categories.slug", searchParams.category);
 
+  // A citywide proposal counts toward every council district, since it
+  // applies everywhere — so filtering by District 3 should surface both
+  // District-3-specific proposals AND citywide ones.
+  if (searchParams.district) {
+    query = query.or(
+      `council_district.eq.${Number(searchParams.district)},geography_scope.eq.citywide`
+    );
+  }
+
   const { data: proposals } = await query;
 
   const filteredProposals = searchParams.tag
@@ -44,9 +54,11 @@ export default async function HomePage({
       )
     : proposals ?? [];
 
+  const districts = Array.from({ length: 10 }, (_, i) => i + 1);
+
   return (
     <div>
-      <h1 className="text-2xl font-semibold">If you were mayor...</h1>
+      <h1 className="text-2xl font-semibold">If I were mayor...</h1>
       <p className="mt-2 text-neutral-600">
         Propose a policy or project for Philadelphia, and help shape everyone
         else&apos;s.
@@ -56,7 +68,7 @@ export default async function HomePage({
         <FilterLink
           label="All types"
           href="/"
-          active={!searchParams.type && !searchParams.category}
+          active={!searchParams.type && !searchParams.category && !searchParams.district}
         />
         <FilterLink
           label="Policies"
@@ -81,6 +93,21 @@ export default async function HomePage({
         ))}
       </div>
 
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        {districts.map((d) => (
+          <FilterLink
+            key={d}
+            label={`District ${d}`}
+            href={`/?district=${d}`}
+            active={searchParams.district === String(d)}
+          />
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-neutral-400">
+        District filters also include citywide proposals, since those apply
+        everywhere.
+      </p>
+
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-neutral-500">
         {tags?.map((t) => (
           <FilterLink
@@ -102,6 +129,13 @@ export default async function HomePage({
             (f: any) => f.flag_type === "ready_to_escalate"
           ).length;
 
+          const location =
+            p.geography_scope === "citywide"
+              ? "Citywide"
+              : p.geography_scope === "council_district" && p.council_district
+              ? `District ${p.council_district}`
+              : p.geography_label ?? p.geography_scope;
+
           return (
             <li key={p.id} className="rounded-lg border border-neutral-200 bg-white p-4">
               <div className="flex items-center justify-between">
@@ -120,16 +154,14 @@ export default async function HomePage({
               </Link>
               <p className="mt-1 text-sm text-neutral-600">{p.summary}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-                <span>
-                  📍 {p.geography_label ?? p.geography_scope}
-                </span>
+                <span>📍 {location}</span>
                 {p.proposal_tags?.map((pt: any) => (
                   <span key={pt.tags?.slug} className="rounded-full bg-neutral-100 px-2 py-0.5">
                     #{pt.tags?.label}
                   </span>
                 ))}
                 {escalateCount > 0 && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">
+                  <span className="rounded-full bg-duty-yellow px-2 py-0.5 text-neutral-900">
                     {escalateCount} flagged ready to escalate
                   </span>
                 )}
@@ -161,7 +193,7 @@ function FilterLink({
       href={href}
       className={`rounded-full border px-3 py-1 ${
         active
-          ? "border-neutral-900 bg-neutral-900 text-white"
+          ? "border-duty-blue bg-duty-blue text-white"
           : "border-neutral-300 text-neutral-700 hover:border-neutral-500"
       }`}
     >

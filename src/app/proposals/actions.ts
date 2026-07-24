@@ -29,6 +29,32 @@ export async function createProposal(formData: FormData) {
     throw new Error("Title, summary, and body text are all required.");
   }
 
+  // Council district: citywide always means "every district," so it's left
+  // null and handled as a wildcard in filtering, never stored as a fixed
+  // value. For the council_district scope, the person picked it directly.
+  // For zip, we auto-populate it from the zip -> district crosswalk when
+  // that zip maps to exactly one district. Address/neighborhood don't have
+  // a reliable auto-lookup yet (needs real geocoding — see README), so they
+  // stay unset for now rather than guessing.
+  let councilDistrict: number | null = null;
+
+  if (geographyScope === "council_district") {
+    const picked = Number(formData.get("council_district"));
+    councilDistrict = picked >= 1 && picked <= 10 ? picked : null;
+  } else if (geographyScope === "zip" && geographyLabel) {
+    const { data: matches } = await supabase
+      .from("zip_council_districts")
+      .select("council_district")
+      .eq("zip_code", geographyLabel);
+
+    if (matches && matches.length === 1) {
+      councilDistrict = matches[0].council_district;
+    }
+    // If it matches 0 or several districts, we leave it null rather than
+    // guess wrong — the crosswalk table needs real data loaded before this
+    // gets more precise (see README "Deferred to a fast-follow").
+  }
+
   const { data: proposal, error } = await supabase
     .from("proposals")
     .insert({
@@ -39,7 +65,8 @@ export async function createProposal(formData: FormData) {
       summary,
       body,
       geography_scope: geographyScope,
-      geography_label: geographyLabel || null,
+      geography_label: geographyScope === "citywide" ? null : geographyLabel || null,
+      council_district: councilDistrict,
     })
     .select("id")
     .single();

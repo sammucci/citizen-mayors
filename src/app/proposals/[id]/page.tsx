@@ -39,6 +39,13 @@ export default async function ProposalPage({
     ?.slice()
     .sort((a: any, b: any) => b.version_number - a.version_number)[0];
 
+  const location =
+    proposal.geography_scope === "citywide"
+      ? "Citywide (applies to every council district)"
+      : proposal.geography_scope === "council_district" && proposal.council_district
+      ? `Council District ${proposal.council_district}`
+      : proposal.geography_label ?? proposal.geography_scope;
+
   const { data: comments } = await supabase
     .from("comments")
     .select("*, profiles ( display_name )")
@@ -76,9 +83,7 @@ export default async function ProposalPage({
           {proposal.type} · {proposal.categories?.label}
         </span>
         <h1 className="mt-1 text-2xl font-semibold">{proposal.title}</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          📍 {proposal.geography_label ?? proposal.geography_scope}
-        </p>
+        <p className="mt-1 text-sm text-neutral-600">📍 {location}</p>
         <div className="mt-2 flex flex-wrap gap-2 text-xs">
           {proposal.proposal_tags?.map((pt: any, i: number) => (
             <span key={i} className="rounded-full bg-neutral-100 px-2 py-0.5">
@@ -157,7 +162,7 @@ export default async function ProposalPage({
               placeholder="What changed and why?"
               className="input"
             />
-            <button className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white">
+            <button className="rounded-md bg-duty-blue px-3 py-1.5 text-sm text-white">
               Publish new version
             </button>
           </form>
@@ -221,7 +226,7 @@ export default async function ProposalPage({
                 className="rounded border border-neutral-300 px-2 py-1 text-sm"
               />
             </div>
-            <button className="rounded bg-neutral-900 px-3 py-1.5 text-sm text-white">
+            <button className="rounded bg-duty-blue px-3 py-1.5 text-sm text-white">
               Add
             </button>
           </form>
@@ -272,7 +277,7 @@ export default async function ProposalPage({
                     placeholder="Optional note (e.g. the contingency)"
                     className="rounded border border-neutral-300 px-2 py-1 text-xs"
                   />
-                  <button className="rounded bg-neutral-900 px-2 py-1 text-xs text-white">
+                  <button className="rounded bg-duty-blue px-2 py-1 text-xs text-white">
                     Resolve
                   </button>
                 </form>
@@ -318,7 +323,7 @@ export default async function ProposalPage({
                 className="input mt-2 font-mono text-xs"
               />
             </details>
-            <button className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white">
+            <button className="rounded-md bg-duty-blue px-3 py-1.5 text-sm text-white">
               Post comment
             </button>
           </form>

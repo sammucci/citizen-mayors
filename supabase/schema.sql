@@ -82,7 +82,11 @@ create table public.proposals (
   geography_scope text not null check (
     geography_scope in ('address', 'neighborhood', 'council_district', 'zip', 'citywide')
   ),
-  geography_label text, -- human-readable ("Fishtown", "5th Council District", "19125")
+  geography_label text, -- human-readable ("Fishtown", "19125", "Frankford & Girard")
+  -- Structured, independent of the proposer's own residence — someone can
+  -- propose something for a district they don't live in. Only set when
+  -- geography_scope = 'council_district'. Philadelphia has 10 districts.
+  council_district int check (council_district between 1 and 10),
   geography_point geography(Point, 4326),   -- dropped pin
   geography_polygon geography(Polygon, 4326), -- drawn area
 
@@ -252,7 +256,6 @@ create policy "public read proposal_versions" on public.proposal_versions for se
 create policy "public read comments" on public.comments for select using (true);
 create policy "public read reactions" on public.reactions for select using (true);
 create policy "public read flags" on public.proposal_flags for select using (true);
-
 create policy "public read zip council districts" on public.zip_council_districts for select using (true);
 
 -- Profiles: anyone can read display names; only the owner can update their own row

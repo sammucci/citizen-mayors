@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Citizen Mayors",
   description:
-    "If you were mayor of Philadelphia — propose it, discuss it, improve it.",
+    "If I were mayor of Philadelphia — propose it, discuss it, improve it.",
 };
 
 export default function RootLayout({
@@ -19,7 +19,8 @@ export default function RootLayout({
         <header className="border-b border-neutral-200 bg-white">
           <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
             <Link href="/" className="text-lg font-semibold">
-              Citizen Mayors
+              <span className="text-duty-red">Citizen</span>{" "}
+              <span className="text-duty-purple">Mayors</span>
             </Link>
             <nav className="flex items-center gap-4 text-sm">
               <Link href="/proposals/new" className="font-medium">
