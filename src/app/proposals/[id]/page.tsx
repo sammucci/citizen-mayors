@@ -15,6 +15,7 @@ import {
   updateProposalImage,
 } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
+import { VersionCarousel } from "@/components/version-carousel";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,12 @@ export default async function ProposalPage({
     .slice()
     .sort((a: any, b: any) => b.version_number - a.version_number);
   const currentVersion = versions[0];
+
+  const { data: ownerProfile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", proposal.owner_id)
+    .maybeSingle();
 
   const location =
     proposal.geography_scope === "citywide"
@@ -130,21 +137,63 @@ export default async function ProposalPage({
               />
             )}
             <div className="p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className="rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700"
-                  style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33` }}
-                >
-                  {proposal.categories?.label}
-                </span>
-                <span className="text-xs uppercase tracking-wide text-neutral-400">
-                  {proposal.type}
-                </span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700"
+                    style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33` }}
+                  >
+                    {proposal.categories?.label}
+                  </span>
+                  <span className="text-xs uppercase tracking-wide text-neutral-400">
+                    {proposal.type}
+                  </span>
+                </div>
+                <span className="shrink-0 text-xs text-neutral-500">📍 {location}</span>
               </div>
+
               <h1 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">
                 {proposal.title}
               </h1>
-              <p className="mt-1 text-sm text-neutral-600">📍 {location}</p>
+
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-xs text-neutral-500">
+                  by {ownerProfile?.display_name ?? "a resident"}
+                </span>
+                <div className="flex items-center gap-2">
+                  <form action={react}>
+                    <input type="hidden" name="proposal_id" value={proposal.id} />
+                    <input type="hidden" name="value" value="1" />
+                    <button
+                      aria-label="Upvote"
+                      className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
+                        myVote === 1
+                          ? "bg-green-600 text-white"
+                          : "bg-green-100 text-green-700 hover:bg-green-200"
+                      }`}
+                    >
+                      👍
+                    </button>
+                  </form>
+                  <form action={react}>
+                    <input type="hidden" name="proposal_id" value={proposal.id} />
+                    <input type="hidden" name="value" value="-1" />
+                    <button
+                      aria-label="Downvote"
+                      className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
+                        myVote === -1
+                          ? "bg-duty-red text-white"
+                          : "bg-red-100 text-duty-red hover:bg-red-200"
+                      }`}
+                    >
+                      👎
+                    </button>
+                  </form>
+                  <span className="text-sm font-medium">
+                    {score >= 0 ? `+${score}` : score} net support
+                  </span>
+                </div>
+              </div>
 
               {isOwner && (
                 <details className="mt-3">
@@ -166,88 +215,7 @@ export default async function ProposalPage({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <form action={react}>
-              <input type="hidden" name="proposal_id" value={proposal.id} />
-              <input type="hidden" name="value" value="1" />
-              <button
-                className={`rounded-md border px-4 py-2 text-lg ${
-                  myVote === 1
-                    ? "border-duty-purple bg-duty-purple text-white"
-                    : "border-neutral-300 hover:bg-neutral-50"
-                }`}
-              >
-                👍
-              </button>
-            </form>
-            <form action={react}>
-              <input type="hidden" name="proposal_id" value={proposal.id} />
-              <input type="hidden" name="value" value="-1" />
-              <button
-                className={`rounded-md border px-4 py-2 text-lg ${
-                  myVote === -1
-                    ? "border-duty-red bg-duty-red text-white"
-                    : "border-neutral-300 hover:bg-neutral-50"
-                }`}
-              >
-                👎
-              </button>
-            </form>
-            <span className="text-lg font-medium">
-              {score >= 0 ? `+${score}` : score}
-            </span>
-            <span className="text-sm text-neutral-500">net support</span>
-          </div>
-
-          <div className="rounded-lg border border-neutral-200 bg-white p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">
-                Version {currentVersion?.version_number ?? proposal.current_version}
-              </h2>
-              {versions.length > 1 && (
-                <span className="text-xs text-neutral-400">
-                  {versions.length} versions total
-                </span>
-              )}
-            </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm">
-              {currentVersion?.body ?? proposal.body}
-            </p>
-          </div>
-
-          {versions.length > 1 && (
-            <details className="rounded-lg border border-neutral-200 bg-white p-4">
-              <summary className="cursor-pointer text-sm font-semibold">
-                Version history
-              </summary>
-              <ul className="mt-3 space-y-3">
-                {versions.map((v: any) => (
-                  <li key={v.id} className="border-t border-neutral-100 pt-3 first:border-t-0 first:pt-0">
-                    <div className="flex items-center justify-between text-xs text-neutral-500">
-                      <span className="font-medium text-neutral-700">
-                        Version {v.version_number}
-                        {v.version_number === currentVersion.version_number && " (current)"}
-                      </span>
-                      <span>{new Date(v.created_at).toLocaleDateString()}</span>
-                    </div>
-                    {v.change_note && (
-                      <p className="mt-1 text-xs italic text-neutral-500">
-                        What changed: {v.change_note}
-                      </p>
-                    )}
-                    <details className="mt-1">
-                      <summary className="cursor-pointer text-xs text-neutral-400">
-                        View this version&apos;s text
-                      </summary>
-                      <p className="mt-1 whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs text-neutral-700">
-                        {v.body}
-                      </p>
-                    </details>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
+          <VersionCarousel versions={versions} />
 
           <div className="flex flex-wrap gap-3">
             <FlagButton
@@ -406,13 +374,18 @@ export default async function ProposalPage({
               <form action={addComment} className="mt-6 space-y-2 rounded-lg border border-neutral-200 bg-white p-3">
                 <input type="hidden" name="proposal_id" value={proposal.id} />
                 <input type="hidden" name="version_id" value={currentVersion?.id ?? ""} />
-                <textarea
-                  name="body"
-                  required
-                  rows={3}
-                  placeholder="Add a comment — be specific and respectful."
-                  className="input"
-                />
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-sm">
+                    🙂
+                  </div>
+                  <textarea
+                    name="body"
+                    required
+                    rows={3}
+                    placeholder="Add a comment — be specific and respectful."
+                    className="input"
+                  />
+                </div>
                 <details>
                   <summary className="cursor-pointer text-xs text-neutral-500">
                     Suggest specific replacement language
@@ -424,9 +397,11 @@ export default async function ProposalPage({
                     className="input mt-2 font-mono text-xs"
                   />
                 </details>
-                <button className="rounded-md bg-duty-purple px-3 py-1.5 text-sm text-white">
-                  Post comment
-                </button>
+                <div className="flex justify-end">
+                  <button className="rounded-md bg-duty-purple px-3 py-1.5 text-sm text-white">
+                    Post comment
+                  </button>
+                </div>
               </form>
             ) : (
               <p className="mt-4 text-sm text-neutral-500">
