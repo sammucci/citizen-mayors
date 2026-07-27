@@ -17,8 +17,34 @@ update public.categories set color = '#FBE968' where slug = 'governance_process'
 -- voting on a proposal directly, because comment_id is NULL in that case,
 -- and Postgres treats every NULL as unique from every other NULL — so the
 -- "prevent duplicate votes" rule silently never applied to proposal votes.
--- Two partial unique indexes (one for proposal votes, one for comment
--- votes) close that gap properly.
+
+-- First, clean up any duplicate votes the bug already let through, keeping
+-- only each person's most recent vote on a given proposal/comment.
+delete from public.reactions r
+using (
+  select id, row_number() over (
+    partition by user_id, proposal_id
+    order by created_at desc
+  ) as rn
+  from public.reactions
+  where comment_id is null
+) ranked
+where r.id = ranked.id and ranked.rn > 1;
+
+delete from public.reactions r
+using (
+  select id, row_number() over (
+    partition by user_id, comment_id
+    order by created_at desc
+  ) as rn
+  from public.reactions
+  where proposal_id is null
+) ranked
+where r.id = ranked.id and ranked.rn > 1;
+
+-- Now it's safe to add the real fix: two partial unique indexes (one for
+-- proposal votes, one for comment votes) instead of the one combined
+-- constraint that had the NULL blind spot.
 alter table public.reactions drop constraint if exists reactions_user_id_proposal_id_comment_id_key;
 
 create unique index if not exists reactions_unique_proposal_vote

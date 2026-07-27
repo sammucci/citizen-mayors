@@ -137,7 +137,7 @@ export function NewProposalForm({
 
       <button
         type="submit"
-        className="rounded-md bg-duty-blue px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+        className="rounded-md bg-duty-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
       >
         Post proposal
       </button>

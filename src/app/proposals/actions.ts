@@ -257,6 +257,16 @@ export async function flagProposal(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
+// Best-effort proper-case for a typed name ("quetcy lozada" -> "Quetcy
+// Lozada", "o'neill" -> "O'Neill"). Won't get every edge case (suffixes
+// like "Jr." stay capitalized as typed-then-lowered), but handles the
+// common case of someone typing a name in all lowercase.
+function toTitleCase(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/(^|\s|-|')([a-z])/g, (_match, sep, letter) => sep + letter.toUpperCase());
+}
+
 // Adds a decision-maker to this proposal's power tree. Looks up the shared
 // registry by name first (case-insensitive) so re-typing "Streets Department"
 // reuses the same row instead of creating a duplicate; creates a new
@@ -265,7 +275,7 @@ export async function addPowerTreeNode(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
-  const name = String(formData.get("decision_maker_name") ?? "").trim();
+  const rawName = String(formData.get("decision_maker_name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "other");
   const parentNodeId = formData.get("parent_node_id");
   const note = String(formData.get("note") ?? "").trim();
@@ -278,18 +288,18 @@ export async function addPowerTreeNode(formData: FormData) {
   if (proposal?.owner_id !== user.id) {
     throw new Error("Only the proposal owner can edit its power tree.");
   }
-  if (!name) throw new Error("Pick or name a decision-maker.");
+  if (!rawName) throw new Error("Pick or name a decision-maker.");
 
   let { data: decisionMaker } = await supabase
     .from("decision_makers")
     .select("id")
-    .ilike("name", name)
+    .ilike("name", rawName)
     .maybeSingle();
 
   if (!decisionMaker) {
     const { data: created, error } = await supabase
       .from("decision_makers")
-      .insert({ name, kind, added_by: user.id })
+      .insert({ name: toTitleCase(rawName), kind, added_by: user.id })
       .select("id")
       .single();
     if (error || !created) throw new Error(error?.message ?? "Could not add that decision-maker.");
@@ -356,6 +366,28 @@ export async function movePowerTreeNode(formData: FormData) {
     .from("proposal_power_tree_nodes")
     .update({ sort_order: current.sort_order })
     .eq("id", swapWith.id);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Removes a decision-maker from THIS proposal's tree only — the shared
+// registry entry itself stays, since other proposals may reference it.
+export async function removePowerTreeNode(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const nodeId = String(formData.get("node_id"));
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can edit its power tree.");
+  }
+
+  await supabase.from("proposal_power_tree_nodes").delete().eq("id", nodeId);
 
   revalidatePath(`/proposals/${proposalId}`);
 }
