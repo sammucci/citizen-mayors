@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   addComment,
   addPowerTreeNode,
+  addProposalTags,
   advanceVersion,
   flagProposal,
   flagUnresolved,
@@ -10,8 +11,20 @@ import {
   removePowerTreeNode,
   resolveComment,
 } from "@/app/proposals/actions";
+import { DecisionMakerField } from "@/components/decision-maker-field";
 
 export const dynamic = "force-dynamic";
+
+// Council-roster entries are stored as "Name (Role, District X)" — this
+// splits that into a bold primary name and a smaller subtitle underneath,
+// instead of showing the whole string as one flat bolded line.
+function splitDecisionMakerLabel(name: string): { primary: string; subtitle: string | null } {
+  const match = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (match) {
+    return { primary: match[1].trim(), subtitle: match[2].trim() };
+  }
+  return { primary: name, subtitle: null };
+}
 
 export default async function ProposalPage({
   params,
@@ -26,7 +39,7 @@ export default async function ProposalPage({
   const { data: proposal } = await supabase
     .from("proposals")
     .select(
-      `*, categories ( label, color ), proposal_tags ( tags ( label ) ),
+      `*, categories ( label, color ), proposal_tags ( tag_id, tags ( label ) ),
        proposal_versions ( id, version_number, body, change_note, created_at )`
     )
     .eq("id", params.id)
@@ -81,6 +94,12 @@ export default async function ProposalPage({
     .select("id, note, parent_node_id, decision_makers ( name, kind )")
     .eq("proposal_id", proposal.id)
     .order("sort_order");
+
+  const { data: allTags } = await supabase.from("tags").select("id, label").order("label");
+  const appliedTagIds = new Set(
+    (proposal.proposal_tags ?? []).map((pt: any) => pt.tag_id)
+  );
+  const availableTags = (allTags ?? []).filter((t) => !appliedTagIds.has(t.id));
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -310,7 +329,7 @@ export default async function ProposalPage({
                 />
                 <details>
                   <summary className="cursor-pointer text-xs text-neutral-500">
-                    Suggest specific replacement language instead
+                    Suggest specific replacement language
                   </summary>
                   <textarea
                     name="suggested_body"
@@ -342,22 +361,20 @@ export default async function ProposalPage({
               Who this proposal would move through, in order.
             </p>
 
-            <datalist id="decision-makers-list">
-              {allDecisionMakers?.map((dm) => (
-                <option key={dm.id} value={dm.name} />
-              ))}
-            </datalist>
-
             <ul className="mt-3 space-y-2">
-              {powerTreeNodes?.map((node: any, i: number) => (
+              {powerTreeNodes?.map((node: any, i: number) => {
+                const { primary, subtitle } = splitDecisionMakerLabel(
+                  node.decision_makers?.name ?? ""
+                );
+                return (
                 <li
                   key={node.id}
                   className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm"
                 >
                   <div>
-                    <span className="font-medium">{node.decision_makers?.name}</span>
-                    <span className="block text-xs uppercase text-neutral-400">
-                      {node.decision_makers?.kind?.replace(/_/g, " ")}
+                    <span className="text-base font-semibold">{primary}</span>
+                    <span className="block text-xs font-normal text-neutral-500">
+                      {subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ")}
                     </span>
                     {node.note && <p className="mt-1 text-xs text-neutral-500">{node.note}</p>}
                   </div>
@@ -398,7 +415,8 @@ export default async function ProposalPage({
                     </div>
                   )}
                 </li>
-              ))}
+                );
+              })}
               {(!powerTreeNodes || powerTreeNodes.length === 0) && (
                 <p className="text-sm text-neutral-500">Not mapped out yet.</p>
               )}
@@ -406,27 +424,12 @@ export default async function ProposalPage({
 
             {isOwner && (
               <form action={addPowerTreeNode} className="mt-3 space-y-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                <input type="hidden" name="proposal_id" value={proposal.id} />
+                <DecisionMakerField decisionMakers={allDecisionMakers ?? []} />
                 <div>
-                  <label className="block text-xs text-neutral-500">Decision-maker</label>
-                  <input type="hidden" name="proposal_id" value={proposal.id} />
-                  <input
-                    name="decision_maker_name"
-                    list="decision-makers-list"
-                    placeholder="Start typing, or add a new one"
-                    className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-neutral-500">If new: kind</label>
-                  <select name="kind" className="w-full rounded border border-neutral-300 px-2 py-1 text-sm">
-                    <option value="elected_official">Elected official</option>
-                    <option value="department">City department</option>
-                    <option value="board_commission">Board / commission</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-neutral-500">Role (optional)</label>
+                  <label className="block text-xs text-neutral-500">
+                    Role in decision-making process (optional)
+                  </label>
                   <input
                     name="note"
                     placeholder="e.g. final sign-off"
@@ -455,6 +458,27 @@ export default async function ProposalPage({
                 <p className="text-xs text-neutral-500">No tags on this one.</p>
               )}
             </div>
+
+            {isOwner && availableTags.length > 0 && (
+              <form
+                action={addProposalTags}
+                className="mt-3 space-y-2 border-t border-neutral-100 pt-3"
+              >
+                <input type="hidden" name="proposal_id" value={proposal.id} />
+                <p className="text-xs text-neutral-500">Add more tags</p>
+                <div className="flex flex-wrap gap-3 text-xs">
+                  {availableTags.map((t) => (
+                    <label key={t.id} className="flex items-center gap-1">
+                      <input type="checkbox" name="tag_ids" value={t.id} />
+                      {t.label}
+                    </label>
+                  ))}
+                </div>
+                <button className="rounded bg-duty-purple px-3 py-1 text-xs text-white">
+                  + Add tags
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>

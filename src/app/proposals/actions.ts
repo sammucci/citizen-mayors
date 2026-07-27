@@ -257,6 +257,34 @@ export async function flagProposal(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
+// Lets the owner tag a proposal further after it's already been posted —
+// the original post form only asked once, with no way back in.
+export async function addProposalTags(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const tagIds = formData.getAll("tag_ids").map((v) => Number(v));
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can add tags.");
+  }
+  if (tagIds.length === 0) return;
+
+  await supabase
+    .from("proposal_tags")
+    .upsert(
+      tagIds.map((tag_id) => ({ proposal_id: proposalId, tag_id })),
+      { onConflict: "proposal_id,tag_id", ignoreDuplicates: true }
+    );
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
 // Best-effort proper-case for a typed name ("quetcy lozada" -> "Quetcy
 // Lozada", "o'neill" -> "O'Neill"). Won't get every edge case (suffixes
 // like "Jr." stay capitalized as typed-then-lowered), but handles the
