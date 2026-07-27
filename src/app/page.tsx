@@ -70,7 +70,7 @@ export default async function HomePage({
         </p>
       </div>
 
-      <ul className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <ul className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {filteredProposals.map((p: any) => {
           const score = (p.reactions ?? []).reduce(
             (sum: number, r: any) => sum + r.value,
@@ -100,19 +100,20 @@ export default async function HomePage({
               )}
               <div className="flex flex-1 flex-col p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className="rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700"
+                  <Link
+                    href={`/?category=${p.categories?.slug ?? ""}`}
+                    className="rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700 hover:underline"
                     style={{ backgroundColor: `${p.categories?.color ?? "#e5e5e5"}33` }}
                   >
                     {p.categories?.label}
-                  </span>
+                  </Link>
                   <span className="text-xs uppercase tracking-wide text-neutral-400">
                     {p.type}
                   </span>
                 </div>
                 <Link
                   href={`/proposals/${p.id}`}
-                  className="mt-2 block text-xl font-bold leading-snug hover:underline"
+                  className="mt-2 block text-base font-semibold leading-snug hover:underline"
                 >
                   {p.title}
                 </Link>

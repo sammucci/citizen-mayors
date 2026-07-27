@@ -11,6 +11,7 @@ import {
   removePowerTreeNode,
   removeProposalTag,
   resolveComment,
+  updatePowerTreeNodeNote,
   updateProposalImage,
 } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
@@ -115,7 +116,10 @@ export default async function ProposalPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main column */}
         <div className="space-y-6 lg:col-span-2">
-          <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+          <div
+            className="overflow-hidden rounded-lg border bg-white"
+            style={{ borderColor: `${proposal.categories?.color ?? "#d4d4d4"}aa` }}
+          >
             {proposal.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -170,6 +174,7 @@ export default async function ProposalPage({
                           forces it to solid white so it reads as a clean
                           icon on the colored circle instead of clashing. */}
                       <span
+                        className="inline-block"
                         style={
                           myVote === 1
                             ? { filter: "brightness(0) invert(1)" }
@@ -192,6 +197,7 @@ export default async function ProposalPage({
                       }`}
                     >
                       <span
+                        className="inline-block"
                         style={
                           myVote === -1
                             ? { filter: "brightness(0) invert(1)" }
@@ -257,12 +263,22 @@ export default async function ProposalPage({
             // actually worked.
             <details
               key={versions.length}
-              className="rounded-lg border border-neutral-200 bg-white p-4"
+              className="overflow-hidden rounded-lg border border-neutral-200"
             >
-              <summary className="cursor-pointer text-sm font-semibold">
-                Advance to a new version (owner only)
+              <summary className="flex cursor-pointer items-center justify-between gap-3 bg-white p-4 text-sm font-semibold">
+                <span>Advance to a new version (owner only)</span>
+                <span className="text-xs font-normal text-neutral-400">
+                  Last updated:{" "}
+                  {new Date(
+                    currentVersion?.created_at ?? proposal.created_at
+                  ).toLocaleDateString()}
+                </span>
               </summary>
-              <p className="mt-2 text-xs text-neutral-500">
+              <div
+                className="p-4"
+                style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}22` }}
+              >
+              <p className="text-xs text-neutral-600">
                 Starts pre-filled with the current version's text — edit
                 what you need to, or select all and delete it to start
                 from scratch.
@@ -284,6 +300,7 @@ export default async function ProposalPage({
                   Publish new version
                 </button>
               </form>
+              </div>
             </details>
           )}
 
@@ -390,7 +407,13 @@ export default async function ProposalPage({
             </ul>
 
             {user ? (
+              // Keyed to the comment count so the whole form remounts
+              // after a successful post — ResettableForm's reset() clears
+              // the text, but a plain DOM reset doesn't close an already-
+              // expanded <details>, so "Suggest specific replacement
+              // language" was staying open. Remounting fixes both at once.
               <ResettableForm
+                key={comments?.length ?? 0}
                 action={addComment}
                 className="mt-6 space-y-2 rounded-lg border border-neutral-200 bg-white p-3"
               >
@@ -462,6 +485,29 @@ export default async function ProposalPage({
                       {subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ")}
                     </span>
                     {node.note && <p className="mt-1 text-xs text-neutral-500">{node.note}</p>}
+                    {isOwner && (
+                      <details key={node.note ?? ""} className="mt-1">
+                        <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
+                          Edit role
+                        </summary>
+                        <form
+                          action={updatePowerTreeNodeNote}
+                          className="mt-1 flex items-center gap-1"
+                        >
+                          <input type="hidden" name="proposal_id" value={proposal.id} />
+                          <input type="hidden" name="node_id" value={node.id} />
+                          <input
+                            name="note"
+                            defaultValue={node.note ?? ""}
+                            placeholder="e.g. final sign-off"
+                            className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-0.5 text-xs"
+                          />
+                          <button className="shrink-0 rounded bg-duty-purple px-2 py-0.5 text-xs text-white">
+                            Save
+                          </button>
+                        </form>
+                      </details>
+                    )}
                   </div>
                   {isOwner && (
                     <div className="flex shrink-0 flex-col gap-1">

@@ -44,7 +44,7 @@ export default async function RootLayout({
     <html lang="en" className={roboto.className}>
       <body>
         <header className="border-b border-neutral-200 bg-white">
-          <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
             <Link href="/" className="text-lg font-semibold">
               <span className="text-duty-red">Citizen</span>{" "}
               <span className="text-duty-purple">Mayors</span>
@@ -70,7 +70,7 @@ export default async function RootLayout({
             </nav>
           </div>
         </header>
-        <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
       </body>
     </html>
   );

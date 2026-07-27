@@ -13,22 +13,29 @@ type Version = {
 // Replaces the old "current version box" + separate expandable "Version
 // history" accordion with a single paged view — dots below the text let
 // you flip back through past versions, matching the proposal-page
-// redesign mockup. versions[0] must be the current (newest) version.
+// redesign mockup. `versions` comes in newest-first (versions[0] is
+// current).
 //
 // This renders just the inner content (no outer card/border) — the page
 // wraps it together with the header into a single continuous card, with
 // a colored divider between them, rather than this having its own
 // separate box.
 export function VersionCarousel({ versions }: { versions: Version[] }) {
-  const [index, setIndex] = useState(0);
-  const v = versions[index];
+  // Flipped to chronological order (oldest -> newest) so the dots read
+  // left-to-right the way people expect from a pager — with the incoming
+  // newest-first order, the current version's dot was showing up first
+  // (leftmost), which read backwards.
+  const chronological = versions.slice().reverse();
+  const currentIndex = chronological.length - 1;
+  const [index, setIndex] = useState(currentIndex);
+  const v = chronological[index];
   if (!v) return null;
 
   return (
     <>
       <p className="whitespace-pre-wrap text-sm">{v.body}</p>
 
-      {index !== 0 && v.change_note && (
+      {index !== currentIndex && v.change_note && (
         <p className="mt-3 text-xs italic text-neutral-500">
           What changed: {v.change_note}
         </p>
@@ -37,11 +44,11 @@ export function VersionCarousel({ versions }: { versions: Version[] }) {
       <div className="mt-4 flex items-center justify-between border-t border-neutral-100 pt-3">
         <span className="text-xs text-neutral-500">
           Version {v.version_number}
-          {index === 0 && " (current)"}
+          {index === currentIndex && " (current)"}
         </span>
-        {versions.length > 1 && (
+        {chronological.length > 1 && (
           <div className="flex items-center gap-1.5">
-            {versions.map((ver, i) => (
+            {chronological.map((ver, i) => (
               <button
                 key={ver.id}
                 type="button"

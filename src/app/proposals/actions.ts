@@ -90,30 +90,62 @@ export async function createProposal(formData: FormData) {
   }
 
   const imageFile = formData.get("image");
-  if (imageFile instanceof File && imageFile.size > 0) {
+  if (isNonEmptyFile(imageFile)) {
     await uploadProposalImage(supabase, proposal.id, imageFile);
   }
 
   redirect(`/proposals/${proposal.id}`);
 }
 
+// Duck-typed file check instead of `instanceof File`. In some server
+// runtimes the File object handed back by formData.get() isn't the same
+// File class reference the server-side code imports/expects, which makes
+// `instanceof File` unreliable — checking for the shape (has size,
+// arrayBuffer()) works regardless.
+function isNonEmptyFile(value: FormDataEntryValue | null): value is File {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as any).arrayBuffer === "function" &&
+    typeof (value as any).size === "number" &&
+    (value as any).size > 0
+  );
+}
+
 // Shared by createProposal and updateProposalImage. Always saves to the
 // same path per proposal (with upsert) so re-uploading just replaces the
-// old cover image instead of piling up orphaned files.
+// old cover image instead of piling up orphaned files. Never throws —
+// an image problem shouldn't take down the whole proposal action. If the
+// "proposal-images" bucket hasn't been created yet (migration not run),
+// this fails quietly instead of crashing; the console.error at least
+// leaves a clear trail in Vercel's function logs.
 async function uploadProposalImage(
   supabase: ReturnType<typeof createClient>,
   proposalId: string,
   file: File
 ) {
-  const ext = file.name.split(".").pop() || "jpg";
-  const path = `${proposalId}/cover.${ext}`;
-  const { error: uploadError } = await supabase.storage
-    .from("proposal-images")
-    .upload(path, file, { contentType: file.type, upsert: true });
-  if (uploadError) return;
+  try {
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${proposalId}/cover.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("proposal-images")
+      .upload(path, file, { contentType: file.type, upsert: true });
+    if (uploadError) {
+      console.error("uploadProposalImage: storage upload failed", uploadError);
+      return;
+    }
 
-  const { data: pub } = supabase.storage.from("proposal-images").getPublicUrl(path);
-  await supabase.from("proposals").update({ image_url: pub.publicUrl }).eq("id", proposalId);
+    const { data: pub } = supabase.storage.from("proposal-images").getPublicUrl(path);
+    const { error: updateError } = await supabase
+      .from("proposals")
+      .update({ image_url: pub.publicUrl })
+      .eq("id", proposalId);
+    if (updateError) {
+      console.error("uploadProposalImage: saving image_url failed", updateError);
+    }
+  } catch (err) {
+    console.error("uploadProposalImage: unexpected error", err);
+  }
 }
 
 // Lets the owner add or replace a proposal's cover image after it's
@@ -132,7 +164,7 @@ export async function updateProposalImage(formData: FormData) {
   if (proposal?.owner_id !== user.id) {
     throw new Error("Only the proposal owner can change the image.");
   }
-  if (!(imageFile instanceof File) || imageFile.size === 0) {
+  if (!isNonEmptyFile(imageFile)) {
     throw new Error("Choose an image file first.");
   }
 
@@ -403,6 +435,35 @@ export async function removeProposalTag(formData: FormData) {
     .delete()
     .eq("proposal_id", proposalId)
     .eq("tag_id", tagId);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Edits a power-tree node's role/note in place — previously the only
+// way to fix a wrong or missing role was to delete the whole entry and
+// re-add it (losing its position in the list). Reuses the same "owner
+// reorders own power tree" update policy from the arrow-reorder fix, so
+// no new migration is needed.
+export async function updatePowerTreeNodeNote(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const nodeId = String(formData.get("node_id"));
+  const note = String(formData.get("note") ?? "").trim();
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can edit its power tree.");
+  }
+
+  await supabase
+    .from("proposal_power_tree_nodes")
+    .update({ note: note || null })
+    .eq("id", nodeId);
 
   revalidatePath(`/proposals/${proposalId}`);
 }
