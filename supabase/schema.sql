@@ -226,7 +226,9 @@ insert into public.tags (slug, label) values
   ('food_access', 'Food Access'),
   ('education', 'Education'),
   ('parks_greenspace', 'Parks & Greenspace'),
-  ('trash_waste', 'Trash & Waste');
+  ('trash_waste', 'Trash & Waste'),
+  ('better_governance', 'Better Governance'),
+  ('health_wellness', 'Health & Wellness');
 
 -- Small starter list of decision-makers so the dropdown isn't empty on day
 -- one. Expand freely — this is meant to grow via "add new" in the UI, not

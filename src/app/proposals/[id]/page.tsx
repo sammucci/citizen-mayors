@@ -208,7 +208,7 @@ export default async function ProposalPage({
             </div>
           </div>
 
-          <VersionCarousel versions={versions} />
+          <VersionCarousel versions={versions} categoryColor={proposal.categories?.color} />
 
           {/* Escalation flag buttons ("ready to bring to officials" /
               "needs legal help") pulled per Samantha's request — she'd
@@ -378,7 +378,9 @@ export default async function ProposalPage({
                     className="input"
                   />
                 </div>
-                <details>
+                {/* pl-11 = avatar (w-8) + gap (gap-3), so this lines up
+                    with the textarea above instead of sitting flush left. */}
+                <details className="pl-11">
                   <summary className="cursor-pointer text-xs text-neutral-500">
                     Suggest specific replacement language
                   </summary>
