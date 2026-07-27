@@ -5,7 +5,6 @@ import {
   addProposalTags,
   advanceVersion,
   editComment,
-  flagProposal,
   flagUnresolved,
   movePowerTreeNode,
   react,
@@ -93,13 +92,6 @@ export default async function ProposalPage({
   const myVote = user
     ? reactions?.find((r) => r.user_id === user.id)?.value ?? null
     : null;
-
-  const { data: flags } = await supabase
-    .from("proposal_flags")
-    .select("flag_type")
-    .eq("proposal_id", proposal.id);
-  const escalateCount = (flags ?? []).filter((f) => f.flag_type === "ready_to_escalate").length;
-  const counselCount = (flags ?? []).filter((f) => f.flag_type === "needs_legal_counsel").length;
 
   const { data: allDecisionMakers } = await supabase
     .from("decision_makers")
@@ -218,25 +210,14 @@ export default async function ProposalPage({
 
           <VersionCarousel versions={versions} />
 
-          <div className="flex flex-wrap gap-3">
-            <FlagButton
-              proposalId={proposal.id}
-              flagType="ready_to_escalate"
-              label="🏛 I think this is ready to bring to officials"
-              count={escalateCount}
-            />
-            <FlagButton
-              proposalId={proposal.id}
-              flagType="needs_legal_counsel"
-              label="⚖️ I think this needs legal/policy help"
-              count={counselCount}
-            />
-          </div>
-          <p className="-mt-4 text-xs text-neutral-500">
-            These are just a headcount of residents who feel that way — no
-            email or legal request goes out automatically. Flagged proposals
-            get reviewed by hand ahead of scheduled council conversations.
-          </p>
+          {/* Escalation flag buttons ("ready to bring to officials" /
+              "needs legal help") pulled per Samantha's request — she'd
+              rather have a "project stage" bar instead (proposal ->
+              discussion -> petition -> ready for officials, etc.) once
+              that's designed. See project notes. The proposal_flags
+              table and flagProposal action are left in place, just
+              unused, so nothing's lost if we bring a version of this
+              back. */}
 
           {isOwner && (
             // Keyed to how many versions exist so the whole panel remounts
@@ -562,27 +543,5 @@ export default async function ProposalPage({
         </div>
       </div>
     </div>
-  );
-}
-
-function FlagButton({
-  proposalId,
-  flagType,
-  label,
-  count,
-}: {
-  proposalId: string;
-  flagType: string;
-  label: string;
-  count: number;
-}) {
-  return (
-    <form action={flagProposal}>
-      <input type="hidden" name="proposal_id" value={proposalId} />
-      <input type="hidden" name="flag_type" value={flagType} />
-      <button className="rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50">
-        {label} ({count})
-      </button>
-    </form>
   );
 }

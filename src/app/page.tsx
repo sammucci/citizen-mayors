@@ -29,8 +29,7 @@ export default async function HomePage({
       `id, title, type, summary, geography_scope, geography_label, council_district, created_at, image_url,
        categories ( slug, label, color ),
        proposal_tags ( tags ( slug, label ) ),
-       reactions ( value ),
-       proposal_flags ( flag_type )`
+       reactions ( value )`
     )
     .order("created_at", { ascending: false });
 
@@ -77,9 +76,6 @@ export default async function HomePage({
             (sum: number, r: any) => sum + r.value,
             0
           );
-          const escalateCount = (p.proposal_flags ?? []).filter(
-            (f: any) => f.flag_type === "ready_to_escalate"
-          ).length;
 
           const location =
             p.geography_scope === "citywide"
@@ -136,11 +132,6 @@ export default async function HomePage({
                     {score >= 0 ? `+${score}` : score} votes
                   </span>
                 </div>
-                {escalateCount > 0 && (
-                  <span className="mt-2 inline-block w-fit rounded-full bg-duty-yellow px-2 py-0.5 text-xs text-neutral-900">
-                    {escalateCount} flagged ready to escalate
-                  </span>
-                )}
               </div>
             </li>
           );
