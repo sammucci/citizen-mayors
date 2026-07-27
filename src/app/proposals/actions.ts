@@ -197,6 +197,10 @@ export async function flagUnresolved(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
+// Votes toggle: clicking the same reaction again removes it, clicking the
+// other one switches it. Looks up any existing reaction first rather than
+// relying purely on a database upsert, so this can't double-count votes
+// regardless of how the underlying constraint is set up.
 export async function react(formData: FormData) {
   const { supabase, user } = await requireUser();
 
@@ -204,16 +208,31 @@ export async function react(formData: FormData) {
   const commentId = formData.get("comment_id");
   const value = Number(formData.get("value"));
 
-  const target = proposalId
-    ? { proposal_id: String(proposalId), comment_id: null }
-    : { proposal_id: null, comment_id: String(commentId) };
-
-  await supabase
+  let existingQuery = supabase
     .from("reactions")
-    .upsert(
-      { user_id: user.id, value, ...target },
-      { onConflict: "user_id,proposal_id,comment_id" }
-    );
+    .select("id, value")
+    .eq("user_id", user.id);
+
+  existingQuery = proposalId
+    ? existingQuery.eq("proposal_id", String(proposalId)).is("comment_id", null)
+    : existingQuery.eq("comment_id", String(commentId)).is("proposal_id", null);
+
+  const { data: existing } = await existingQuery.maybeSingle();
+
+  if (existing) {
+    if (existing.value === value) {
+      await supabase.from("reactions").delete().eq("id", existing.id);
+    } else {
+      await supabase.from("reactions").update({ value }).eq("id", existing.id);
+    }
+  } else {
+    await supabase.from("reactions").insert({
+      user_id: user.id,
+      proposal_id: proposalId ? String(proposalId) : null,
+      comment_id: commentId ? String(commentId) : null,
+      value,
+    });
+  }
 
   if (proposalId) revalidatePath(`/proposals/${proposalId}`);
   revalidatePath("/");
@@ -277,12 +296,66 @@ export async function addPowerTreeNode(formData: FormData) {
     decisionMaker = created;
   }
 
+  const { data: existingNodes } = await supabase
+    .from("proposal_power_tree_nodes")
+    .select("sort_order")
+    .eq("proposal_id", proposalId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  const nextSortOrder = (existingNodes?.[0]?.sort_order ?? -1) + 1;
+
   await supabase.from("proposal_power_tree_nodes").insert({
     proposal_id: proposalId,
     decision_maker_id: decisionMaker.id,
     parent_node_id: parentNodeId ? String(parentNodeId) : null,
     note: note || null,
+    sort_order: nextSortOrder,
   });
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Moves a decision-maker up or down in the power tree by swapping
+// sort_order with its neighbor. Simple up/down buttons instead of
+// drag-and-drop — easier to build correctly and more reliable on phones.
+export async function movePowerTreeNode(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const nodeId = String(formData.get("node_id"));
+  const direction = String(formData.get("direction")); // "up" | "down"
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can reorder its power tree.");
+  }
+
+  const { data: nodes } = await supabase
+    .from("proposal_power_tree_nodes")
+    .select("id, sort_order")
+    .eq("proposal_id", proposalId)
+    .order("sort_order", { ascending: true });
+
+  if (!nodes) return;
+  const index = nodes.findIndex((n) => n.id === nodeId);
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (index === -1 || swapIndex < 0 || swapIndex >= nodes.length) return;
+
+  const current = nodes[index];
+  const swapWith = nodes[swapIndex];
+
+  await supabase
+    .from("proposal_power_tree_nodes")
+    .update({ sort_order: swapWith.sort_order })
+    .eq("id", current.id);
+  await supabase
+    .from("proposal_power_tree_nodes")
+    .update({ sort_order: current.sort_order })
+    .eq("id", swapWith.id);
 
   revalidatePath(`/proposals/${proposalId}`);
 }

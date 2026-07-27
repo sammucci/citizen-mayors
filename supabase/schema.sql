@@ -39,7 +39,8 @@ create table public.categories (
   label text not null,
   description text,
   requires_budget boolean not null default true, -- false for Governance & Civic Process
-  sort_order int not null default 0
+  sort_order int not null default 0,
+  color text -- hex color for the category's visual accent bar
 );
 
 create table public.tags (
@@ -161,12 +162,20 @@ create table public.reactions (
   comment_id uuid references public.comments(id) on delete cascade,
   value smallint not null check (value in (1, -1)),
   created_at timestamptz not null default now(),
-  unique (user_id, proposal_id, comment_id),
   constraint reactions_target_check check (
     (proposal_id is not null and comment_id is null) or
     (proposal_id is null and comment_id is not null)
   )
 );
+
+-- Two partial unique indexes instead of one combined constraint — Postgres
+-- treats every NULL as distinct, so a single unique(user_id, proposal_id,
+-- comment_id) constraint silently fails to stop duplicate votes on
+-- proposals (where comment_id is NULL every time). This is the fix.
+create unique index reactions_unique_proposal_vote
+  on public.reactions (user_id, proposal_id) where comment_id is null;
+create unique index reactions_unique_comment_vote
+  on public.reactions (user_id, comment_id) where proposal_id is null;
 
 -- ---------------------------------------------------------------------------
 -- Escalation flags: crowdsourced, not automatic. A proposal crossing a
@@ -187,14 +196,14 @@ create table public.proposal_flags (
 -- ---------------------------------------------------------------------------
 -- Seed reference data — first pass, editable later without a redeploy
 -- ---------------------------------------------------------------------------
-insert into public.categories (slug, label, description, requires_budget, sort_order) values
-  ('public_safety', 'Public Safety', 'Police, fire, prisons, and criminal justice.', true, 1),
-  ('benefits_pensions', 'Benefits and Pensions', 'Employee retirement contributions and health care fringe benefits.', true, 2),
-  ('general_government', 'General Government Operations', 'Administration, internal tech, legal, fleet, and facilities.', true, 3),
-  ('infrastructure_sanitation', 'Infrastructure and Sanitation', 'Streets, cleaning, and transit support.', true, 4),
-  ('culture_leisure', 'Culture and Leisure', 'Parks, recreation, libraries, and arts.', true, 5),
-  ('education_subsidies', 'Education and Subsidies', 'Support for the school district and community college.', true, 6),
-  ('governance_process', 'Governance and Civic Process', 'Structural/procedural proposals with no direct budget line — term limits, election rules, redistricting, ethics rules, charter changes.', false, 7);
+insert into public.categories (slug, label, description, requires_budget, sort_order, color) values
+  ('public_safety', 'Public Safety', 'Police, fire, prisons, and criminal justice.', true, 1, '#8358D3'),
+  ('benefits_pensions', 'Benefits and Pensions', 'Employee retirement contributions and health care fringe benefits.', true, 2, '#F86767'),
+  ('general_government', 'General Government Operations', 'Administration, internal tech, legal, fleet, and facilities.', true, 3, '#4069D9'),
+  ('infrastructure_sanitation', 'Infrastructure and Sanitation', 'Streets, cleaning, and transit support.', true, 4, '#FFAFCB'),
+  ('culture_leisure', 'Culture and Leisure', 'Parks, recreation, libraries, and arts.', true, 5, '#87D183'),
+  ('education_subsidies', 'Education and Subsidies', 'Support for the school district and community college.', true, 6, '#FFA550'),
+  ('governance_process', 'Governance and Civic Process', 'Structural/procedural proposals with no direct budget line — term limits, election rules, redistricting, ethics rules, charter changes.', false, 7, '#FBE968');
 
 insert into public.tags (slug, label) values
   ('children', 'Children'),

@@ -1,39 +1,33 @@
-# citizen mayors v5 — full replace, read this first
+# citizen mayors v6 — full replace again
 
-This is the ENTIRE project, complete — not a partial patch. Use this to
-wipe out any accumulated mess (stray files, wrong-cased folders, etc.) and
-start clean from a known-good state.
+Same drill as v5, since it worked well: in your local "citizen mayors"
+folder, select all (Cmd+A) and delete — this only touches visible files,
+.git stays untouched automatically. Then unzip this and copy everything
+from inside it into that now-empty folder. Commit, push.
 
-## Exactly what to do
+## New SQL to run
 
-1. Open your local "citizen mayors" project folder — the one GitHub
-   Desktop tracks (the folder with the `.git` info inside it, even though
-   you can't normally see that part).
+Run `supabase/migration_003_v6.sql` in the Supabase SQL Editor. This adds
+the category colors and fixes the vote-duplication bug at the database
+level. Safe to run even if you're not sure what's already been run.
 
-2. Inside that folder, select and delete everything you see EXCEPT any
-   file or folder whose name starts with a dot (like `.git`) — don't touch
-   those, ever. Concretely: delete the `src` folder entirely, delete
-   `package.json`, `README.md`, and everything else visible, including any
-   loose files like `client.ts` or `server.ts` sitting at the top level,
-   and any folder called `Supabase` (capital S) if you still see one.
+## What changed this round
 
-3. Unzip this citizen-mayors-v5.zip. Copy everything that was inside it —
-   `src`, `supabase`, `package.json`, all of it — directly into your now-
-   empty "citizen mayors" folder, so it looks exactly like the folder
-   structure in this zip.
-
-4. In GitHub Desktop, you'll see a big list of changes (a lot of "deleted"
-   and "added" entries — that's expected, since we're replacing
-   everything). Write a commit message like "Clean full replace," Commit
-   to main, Push origin.
-
-5. No new SQL to run — your database already has everything it needs from
-   before.
-
-## If you're not sure a file is "hidden" or not
-
-On a Mac, hidden files/folders (like `.git`) normally don't show up in
-Finder at all unless you've turned on "show hidden files" — so if you
-haven't done that, you likely won't even see `.git` to worry about
-accidentally deleting it. Only worry about this if you know you've enabled
-that setting.
+- **Vote bug fixed.** Votes now toggle: click again to undo your vote,
+  click the other one to switch. This was a real bug — the original
+  database rule meant to stop duplicate votes had a blind spot for votes
+  directly on proposals (as opposed to on comments), so those weren't
+  actually being blocked.
+- **Filters are now dropdowns** instead of a wall of buttons.
+- **Version history** is viewable — a "Version history" section on each
+  proposal shows every past version, its "what changed" note, and lets you
+  expand to read that version's exact text.
+- **Decision-maker reordering** via simple up/down buttons (owner only) —
+  not drag-and-drop, since buttons are simpler to get right and work
+  better on phones.
+- **Category colors** are wired in — the 7 colors you picked now show as a
+  bar across the top of each proposal card and each proposal's detail
+  page. You can change any of them later in Table Editor without a
+  redeploy.
+- Upvote/downvote buttons are now visually distinct (highlighted) when
+  they reflect your actual vote.

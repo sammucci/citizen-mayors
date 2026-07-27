@@ -5,6 +5,7 @@ import {
   advanceVersion,
   flagProposal,
   flagUnresolved,
+  movePowerTreeNode,
   react,
   resolveComment,
 } from "@/app/proposals/actions";
@@ -24,7 +25,7 @@ export default async function ProposalPage({
   const { data: proposal } = await supabase
     .from("proposals")
     .select(
-      `*, categories ( label ), proposal_tags ( tags ( label ) ),
+      `*, categories ( label, color ), proposal_tags ( tags ( label ) ),
        proposal_versions ( id, version_number, body, change_note, created_at )`
     )
     .eq("id", params.id)
@@ -35,9 +36,10 @@ export default async function ProposalPage({
   }
 
   const isOwner = user?.id === proposal.owner_id;
-  const currentVersion = proposal.proposal_versions
-    ?.slice()
-    .sort((a: any, b: any) => b.version_number - a.version_number)[0];
+  const versions = (proposal.proposal_versions ?? [])
+    .slice()
+    .sort((a: any, b: any) => b.version_number - a.version_number);
+  const currentVersion = versions[0];
 
   const location =
     proposal.geography_scope === "citywide"
@@ -54,9 +56,12 @@ export default async function ProposalPage({
 
   const { data: reactions } = await supabase
     .from("reactions")
-    .select("value")
+    .select("user_id, value")
     .eq("proposal_id", proposal.id);
   const score = (reactions ?? []).reduce((sum, r) => sum + r.value, 0);
+  const myVote = user
+    ? reactions?.find((r) => r.user_id === user.id)?.value ?? null
+    : null;
 
   const { data: flags } = await supabase
     .from("proposal_flags")
@@ -78,39 +83,58 @@ export default async function ProposalPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      <div>
-        <span className="text-xs uppercase tracking-wide text-neutral-500">
-          {proposal.type} · {proposal.categories?.label}
-        </span>
-        <h1 className="mt-1 text-2xl font-semibold">{proposal.title}</h1>
-        <p className="mt-1 text-sm text-neutral-600">📍 {location}</p>
-        <div className="mt-2 flex flex-wrap gap-2 text-xs">
-          {proposal.proposal_tags?.map((pt: any, i: number) => (
-            <span key={i} className="rounded-full bg-neutral-100 px-2 py-0.5">
-              #{pt.tags?.label}
-            </span>
-          ))}
+      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+        <div
+          className="h-3"
+          style={{ backgroundColor: proposal.categories?.color ?? "#e5e5e5" }}
+        />
+        <div className="p-4">
+          <span className="text-xs uppercase tracking-wide text-neutral-500">
+            {proposal.type} · {proposal.categories?.label}
+          </span>
+          <h1 className="mt-1 text-2xl font-semibold">{proposal.title}</h1>
+          <p className="mt-1 text-sm text-neutral-600">📍 {location}</p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            {proposal.proposal_tags?.map((pt: any, i: number) => (
+              <span key={i} className="rounded-full bg-neutral-100 px-2 py-0.5">
+                #{pt.tags?.label}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <form action={react}>
           <input type="hidden" name="proposal_id" value={proposal.id} />
           <input type="hidden" name="value" value="1" />
-          <button className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50">
-            ▲ Upvote
+          <button
+            className={`rounded-md border px-4 py-2 text-lg ${
+              myVote === 1
+                ? "border-duty-blue bg-duty-blue text-white"
+                : "border-neutral-300 hover:bg-neutral-50"
+            }`}
+          >
+            ▲
           </button>
         </form>
         <form action={react}>
           <input type="hidden" name="proposal_id" value={proposal.id} />
           <input type="hidden" name="value" value="-1" />
-          <button className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50">
-            ▼ Downvote
+          <button
+            className={`rounded-md border px-4 py-2 text-lg ${
+              myVote === -1
+                ? "border-duty-red bg-duty-red text-white"
+                : "border-neutral-300 hover:bg-neutral-50"
+            }`}
+          >
+            ▼
           </button>
         </form>
-        <span className="text-sm text-neutral-600">
-          {score >= 0 ? `+${score}` : score} net support
+        <span className="text-lg font-medium">
+          {score >= 0 ? `+${score}` : score}
         </span>
+        <span className="text-sm text-neutral-500">net support</span>
       </div>
 
       <div className="rounded-lg border border-neutral-200 bg-white p-4">
@@ -118,11 +142,50 @@ export default async function ProposalPage({
           <h2 className="text-sm font-semibold">
             Version {currentVersion?.version_number ?? proposal.current_version}
           </h2>
+          {versions.length > 1 && (
+            <span className="text-xs text-neutral-400">
+              {versions.length} versions total
+            </span>
+          )}
         </div>
         <p className="mt-2 whitespace-pre-wrap text-sm">
           {currentVersion?.body ?? proposal.body}
         </p>
       </div>
+
+      {versions.length > 1 && (
+        <details className="rounded-lg border border-neutral-200 bg-white p-4">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Version history
+          </summary>
+          <ul className="mt-3 space-y-3">
+            {versions.map((v: any) => (
+              <li key={v.id} className="border-t border-neutral-100 pt-3 first:border-t-0 first:pt-0">
+                <div className="flex items-center justify-between text-xs text-neutral-500">
+                  <span className="font-medium text-neutral-700">
+                    Version {v.version_number}
+                    {v.version_number === currentVersion.version_number && " (current)"}
+                  </span>
+                  <span>{new Date(v.created_at).toLocaleDateString()}</span>
+                </div>
+                {v.change_note && (
+                  <p className="mt-1 text-xs italic text-neutral-500">
+                    What changed: {v.change_note}
+                  </p>
+                )}
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-xs text-neutral-400">
+                    View this version&apos;s text
+                  </summary>
+                  <p className="mt-1 whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs text-neutral-700">
+                    {v.body}
+                  </p>
+                </details>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <FlagButton
@@ -183,13 +246,44 @@ export default async function ProposalPage({
         </datalist>
 
         <ul className="mt-3 space-y-2">
-          {powerTreeNodes?.map((node: any) => (
-            <li key={node.id} className="rounded-lg border border-neutral-200 bg-white p-3 text-sm">
-              <span className="font-medium">{node.decision_makers?.name}</span>
-              <span className="ml-2 text-xs uppercase text-neutral-400">
-                {node.decision_makers?.kind?.replace(/_/g, " ")}
-              </span>
-              {node.note && <p className="mt-1 text-xs text-neutral-500">{node.note}</p>}
+          {powerTreeNodes?.map((node: any, i: number) => (
+            <li
+              key={node.id}
+              className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white p-3 text-sm"
+            >
+              <div>
+                <span className="font-medium">{node.decision_makers?.name}</span>
+                <span className="ml-2 text-xs uppercase text-neutral-400">
+                  {node.decision_makers?.kind?.replace(/_/g, " ")}
+                </span>
+                {node.note && <p className="mt-1 text-xs text-neutral-500">{node.note}</p>}
+              </div>
+              {isOwner && (
+                <div className="flex gap-1">
+                  <form action={movePowerTreeNode}>
+                    <input type="hidden" name="proposal_id" value={proposal.id} />
+                    <input type="hidden" name="node_id" value={node.id} />
+                    <input type="hidden" name="direction" value="up" />
+                    <button
+                      disabled={i === 0}
+                      className="rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-30"
+                    >
+                      ▲
+                    </button>
+                  </form>
+                  <form action={movePowerTreeNode}>
+                    <input type="hidden" name="proposal_id" value={proposal.id} />
+                    <input type="hidden" name="node_id" value={node.id} />
+                    <input type="hidden" name="direction" value="down" />
+                    <button
+                      disabled={i === powerTreeNodes.length - 1}
+                      className="rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-30"
+                    >
+                      ▼
+                    </button>
+                  </form>
+                </div>
+              )}
             </li>
           ))}
           {(!powerTreeNodes || powerTreeNodes.length === 0) && (
