@@ -161,11 +161,23 @@ export default async function ProposalPage({
                       aria-label="Upvote"
                       className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
                         myVote === 1
-                          ? "bg-green-600 text-white"
-                          : "bg-green-100 text-green-700 hover:bg-green-200"
+                          ? "bg-green-600"
+                          : "bg-green-100 hover:bg-green-200"
                       }`}
                     >
-                      👍
+                      {/* CSS trick: emoji render with their own built-in
+                          color (thumbs-up is yellow by default) — this
+                          forces it to solid white so it reads as a clean
+                          icon on the colored circle instead of clashing. */}
+                      <span
+                        style={
+                          myVote === 1
+                            ? { filter: "brightness(0) invert(1)" }
+                            : undefined
+                        }
+                      >
+                        👍
+                      </span>
                     </button>
                   </form>
                   <form action={react}>
@@ -175,11 +187,19 @@ export default async function ProposalPage({
                       aria-label="Downvote"
                       className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
                         myVote === -1
-                          ? "bg-duty-red text-white"
-                          : "bg-red-100 text-duty-red hover:bg-red-200"
+                          ? "bg-duty-red"
+                          : "bg-red-100 hover:bg-red-200"
                       }`}
                     >
-                      👎
+                      <span
+                        style={
+                          myVote === -1
+                            ? { filter: "brightness(0) invert(1)" }
+                            : undefined
+                        }
+                      >
+                        👎
+                      </span>
                     </button>
                   </form>
                   <span className="text-sm font-medium">
@@ -206,9 +226,19 @@ export default async function ProposalPage({
                 </details>
               )}
             </div>
-          </div>
 
-          <VersionCarousel versions={versions} categoryColor={proposal.categories?.color} />
+            {/* Thin colored divider, same category color as the top —
+                keeps the header and the version text as one continuous
+                card instead of two separate boxes, matching the mockup. */}
+            <div
+              className="h-[3px]"
+              style={{ backgroundColor: proposal.categories?.color ?? "#e5e5e5" }}
+            />
+
+            <div className="p-4">
+              <VersionCarousel versions={versions} />
+            </div>
+          </div>
 
           {/* Escalation flag buttons ("ready to bring to officials" /
               "needs legal help") pulled per Samantha's request — she'd
@@ -501,8 +531,11 @@ export default async function ProposalPage({
               {proposal.proposal_tags?.map((pt: any) => (
                 <span
                   key={pt.tag_id}
-                  className="flex items-center gap-1 rounded-full px-3 py-1 text-xs text-neutral-800"
-                  style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33` }}
+                  className="flex items-center gap-1 rounded-full border px-3 py-1 text-xs text-neutral-800"
+                  style={{
+                    backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33`,
+                    borderColor: `${proposal.categories?.color ?? "#e5e5e5"}88`,
+                  }}
                 >
                   {pt.tags?.label}
                   {isOwner && (
