@@ -1,0 +1,139 @@
+"use client";
+
+import { useState } from "react";
+import { updateProposalDetails } from "@/app/proposals/actions";
+
+type Category = { id: number; label: string };
+
+const DISTRICTS = Array.from({ length: 10 }, (_, i) => i + 1);
+
+// Owner-only "edit the basics" form — title, type, category, and geography.
+// Body text has its own versioned flow ("Advance to a new version") and
+// tags have their own add/remove UI, so neither lives here; this is just
+// for the details that used to require deleting and reposting to change.
+export function EditProposalForm({
+  proposalId,
+  categories,
+  initial,
+}: {
+  proposalId: string;
+  categories: Category[];
+  initial: {
+    title: string;
+    type: string;
+    category_id: number | null;
+    geography_scope: string;
+    geography_label: string | null;
+    council_district: number | null;
+  };
+}) {
+  const [scope, setScope] = useState(initial.geography_scope ?? "citywide");
+
+  return (
+    <form action={updateProposalDetails} className="mt-2 space-y-3 text-sm">
+      <input type="hidden" name="proposal_id" value={proposalId} />
+
+      <Field label="Title">
+        <input name="title" required defaultValue={initial.title} className="input" />
+      </Field>
+
+      <Field label="Type">
+        <select name="type" className="input" defaultValue={initial.type}>
+          <option value="policy">Policy</option>
+          <option value="project">Project</option>
+        </select>
+      </Field>
+
+      <Field label="Category">
+        <select name="category_id" required className="input" defaultValue={initial.category_id ?? ""}>
+          {categories?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label="Geographic scope">
+        <select
+          name="geography_scope"
+          className="input"
+          value={scope}
+          onChange={(e) => setScope(e.target.value)}
+        >
+          <option value="citywide">Citywide</option>
+          <option value="council_district">Council district</option>
+          <option value="neighborhood">Neighborhood</option>
+          <option value="zip">Zip code</option>
+          <option value="address">Specific address / intersection</option>
+        </select>
+      </Field>
+
+      {scope === "council_district" && (
+        <Field label="Which council district">
+          <select
+            name="council_district"
+            required
+            className="input"
+            defaultValue={initial.council_district ?? ""}
+          >
+            {DISTRICTS.map((d) => (
+              <option key={d} value={d}>
+                District {d}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+
+      {scope === "neighborhood" && (
+        <Field label="Neighborhood name">
+          <input
+            name="geography_label"
+            required
+            defaultValue={initial.geography_label ?? ""}
+            className="input"
+            placeholder="e.g. Fishtown"
+          />
+        </Field>
+      )}
+
+      {scope === "zip" && (
+        <Field label="Zip code">
+          <input
+            name="geography_label"
+            required
+            defaultValue={initial.geography_label ?? ""}
+            className="input"
+            placeholder="e.g. 19125"
+          />
+        </Field>
+      )}
+
+      {scope === "address" && (
+        <Field label="Address or intersection">
+          <input
+            name="geography_label"
+            required
+            defaultValue={initial.geography_label ?? ""}
+            className="input"
+            placeholder="e.g. Frankford & Girard"
+          />
+        </Field>
+      )}
+
+      <button className="rounded-md bg-duty-purple px-3 py-1.5 text-xs font-medium text-white">
+        Save changes
+      </button>
+    </form>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-neutral-700">{label}</span>
+      {children}
+    </label>
+  );
+}

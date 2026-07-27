@@ -23,11 +23,17 @@ export default async function HomePage({
     supabase.from("tags").select("*").order("label"),
   ]);
 
+  // categories!inner forces an actual inner join, which is what makes the
+  // .eq("categories.slug", ...) filter below exclude non-matching proposals
+  // entirely. Without "!inner", Postgrest treats categories as an optional
+  // left join — the filter just nulled out the categories field on
+  // non-matching rows instead of removing them, which is why the category
+  // filter used to grey cards out instead of actually filtering the list.
   let query = supabase
     .from("proposals")
     .select(
       `id, title, type, summary, geography_scope, geography_label, council_district, created_at, image_url,
-       categories ( slug, label, color ),
+       categories!inner ( slug, label, color ),
        proposal_tags ( tags ( slug, label ) ),
        reactions ( value )`
     )

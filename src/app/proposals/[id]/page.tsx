@@ -15,8 +15,10 @@ import {
   updateProposalImage,
 } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
+import { EditProposalForm } from "@/components/edit-proposal-form";
 import { ResettableForm } from "@/components/resettable-form";
 import { VersionCarousel } from "@/components/version-carousel";
+import { statusColorClasses } from "@/lib/status-colors";
 
 export const dynamic = "force-dynamic";
 
@@ -111,8 +113,13 @@ export default async function ProposalPage({
   );
   const availableTags = (allTags ?? []).filter((t) => !appliedTagIds.has(t.id));
 
+  const { data: allCategories } = await supabase
+    .from("categories")
+    .select("id, label")
+    .order("sort_order");
+
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto max-w-4xl">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main column */}
         <div className="space-y-6 lg:col-span-2">
@@ -171,15 +178,14 @@ export default async function ProposalPage({
                     >
                       {/* CSS trick: emoji render with their own built-in
                           color (thumbs-up is yellow by default) — this
-                          forces it to solid white so it reads as a clean
-                          icon on the colored circle instead of clashing. */}
+                          forces it to solid white always, in both the
+                          voted and unvoted state, so no yellow ever shows
+                          up. The colored circle (green/red) is what
+                          signals voted vs. not, so the icon itself stays
+                          one consistent white regardless. */}
                       <span
                         className="inline-block"
-                        style={
-                          myVote === 1
-                            ? { filter: "brightness(0) invert(1)" }
-                            : undefined
-                        }
+                        style={{ filter: "brightness(0) invert(1)" }}
                       >
                         👍
                       </span>
@@ -198,11 +204,7 @@ export default async function ProposalPage({
                     >
                       <span
                         className="inline-block"
-                        style={
-                          myVote === -1
-                            ? { filter: "brightness(0) invert(1)" }
-                            : undefined
-                        }
+                        style={{ filter: "brightness(0) invert(1)" }}
                       >
                         👎
                       </span>
@@ -231,6 +233,35 @@ export default async function ProposalPage({
                   </form>
                 </details>
               )}
+
+              {isOwner && (
+                // Lets the owner change title/type/category/geography after
+                // posting — previously the only way to fix a wrong category
+                // was to delete the whole proposal and repost it. Keyed to
+                // the fields it edits so it remounts (picking up the saved
+                // values, and re-syncing its internal scope state) right
+                // after a successful save.
+                <details
+                  key={`${proposal.title}-${proposal.category_id}-${proposal.geography_scope}-${proposal.geography_label}-${proposal.council_district}`}
+                  className="mt-2"
+                >
+                  <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
+                    Edit proposal details
+                  </summary>
+                  <EditProposalForm
+                    proposalId={proposal.id}
+                    categories={allCategories ?? []}
+                    initial={{
+                      title: proposal.title,
+                      type: proposal.type,
+                      category_id: proposal.category_id,
+                      geography_scope: proposal.geography_scope,
+                      geography_label: proposal.geography_label,
+                      council_district: proposal.council_district,
+                    }}
+                  />
+                </details>
+              )}
             </div>
 
             {/* Thin colored divider, same category color as the top —
@@ -242,7 +273,12 @@ export default async function ProposalPage({
             />
 
             <div className="p-4">
-              <VersionCarousel versions={versions} />
+              {/* Keyed to how many versions exist so the carousel remounts
+                  and its internal index recalculates to the newest version
+                  right after "Advance to a new version" — otherwise it kept
+                  showing whatever version was selected before the publish,
+                  which read as if the new version hadn't shown up. */}
+              <VersionCarousel key={versions.length} versions={versions} />
             </div>
           </div>
 
@@ -276,7 +312,7 @@ export default async function ProposalPage({
               </summary>
               <div
                 className="p-4"
-                style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}22` }}
+                style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33` }}
               >
               <p className="text-xs text-neutral-600">
                 Starts pre-filled with the current version's text — edit
@@ -312,7 +348,9 @@ export default async function ProposalPage({
                   <div className="flex items-center justify-between text-xs text-neutral-500">
                     <span>{c.profiles?.display_name ?? "A resident"}</span>
                     {c.is_suggested_edit && (
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
+                      <span
+                        className={`rounded-full px-2 py-0.5 ${statusColorClasses(c.status)}`}
+                      >
                         Suggested edit · {c.status.replace(/_/g, " ")}
                       </span>
                     )}
@@ -334,30 +372,69 @@ export default async function ProposalPage({
                     </p>
                   )}
 
-                  {isOwner && c.is_suggested_edit && (
-                    <form action={resolveComment} className="mt-2 flex flex-wrap items-center gap-2">
-                      <input type="hidden" name="comment_id" value={c.id} />
-                      <input type="hidden" name="proposal_id" value={proposal.id} />
-                      <select
-                        name="status"
-                        defaultValue={c.status === "open" ? "accepted" : c.status}
-                        className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-xs"
-                      >
-                        <option value="accepted">Accept</option>
-                        <option value="accepted_with_contingency">Accept with contingency</option>
-                        <option value="rejected">Reject</option>
-                      </select>
-                      <input
-                        name="status_note"
-                        defaultValue={c.status_note ?? ""}
-                        placeholder="Optional note (e.g. the contingency)"
-                        className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
-                      />
-                      <button className="shrink-0 rounded bg-duty-purple px-2 py-1 text-xs text-white">
-                        {c.status === "open" ? "Resolve" : "Change decision"}
-                      </button>
-                    </form>
-                  )}
+                  {isOwner && c.is_suggested_edit && (() => {
+                    const defaultStatus = c.status === "open" ? "accepted" : c.status;
+                    return (
+                      <form action={resolveComment} className="mt-2 space-y-2">
+                        <input type="hidden" name="comment_id" value={c.id} />
+                        <input type="hidden" name="proposal_id" value={proposal.id} />
+                        {/* Color-coded pill toggles instead of a plain
+                            dropdown — green/amber/red reads at a glance
+                            instead of needing to open a select to see the
+                            options. Plain radio inputs, so this still works
+                            as an ordinary form post with no extra JS. */}
+                        <div className="flex flex-wrap gap-1.5">
+                          <label>
+                            <input
+                              type="radio"
+                              name="status"
+                              value="accepted"
+                              defaultChecked={defaultStatus === "accepted"}
+                              className="peer sr-only"
+                            />
+                            <span className="cursor-pointer rounded-full border border-green-300 bg-green-50 px-2 py-1 text-xs text-green-700 peer-checked:bg-green-600 peer-checked:text-white">
+                              Accept
+                            </span>
+                          </label>
+                          <label>
+                            <input
+                              type="radio"
+                              name="status"
+                              value="accepted_with_contingency"
+                              defaultChecked={defaultStatus === "accepted_with_contingency"}
+                              className="peer sr-only"
+                            />
+                            <span className="cursor-pointer rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-700 peer-checked:bg-amber-500 peer-checked:text-white">
+                              Accept with contingency
+                            </span>
+                          </label>
+                          <label>
+                            <input
+                              type="radio"
+                              name="status"
+                              value="rejected"
+                              defaultChecked={defaultStatus === "rejected"}
+                              className="peer sr-only"
+                            />
+                            <span className="cursor-pointer rounded-full border border-red-300 bg-red-50 px-2 py-1 text-xs text-duty-red peer-checked:bg-duty-red peer-checked:text-white">
+                              Reject
+                            </span>
+                          </label>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            name="status_note"
+                            defaultValue={c.status_note ?? ""}
+                            placeholder="Optional note (e.g. the contingency)"
+                            className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+                          />
+                          <button className="shrink-0 rounded bg-duty-purple px-2 py-1 text-xs text-white">
+                            {c.status === "open" ? "Resolve" : "Change decision"}
+                          </button>
+                        </div>
+                      </form>
+                    );
+                  })()}
 
                   {!isOwner && c.status !== "open" && !c.unresolved_flagged && (
                     <form action={flagUnresolved} className="mt-2">

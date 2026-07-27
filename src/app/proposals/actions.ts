@@ -13,6 +13,40 @@ async function requireUser() {
   return { supabase, user };
 }
 
+// Council district resolution shared by createProposal and
+// updateProposalDetails. Citywide always means "every district," so it's
+// left null and handled as a wildcard in filtering, never stored as a fixed
+// value. For the council_district scope, the person picked it directly.
+// For zip, we auto-populate it from the zip -> district crosswalk when that
+// zip maps to exactly one district. Address/neighborhood don't have a
+// reliable auto-lookup yet (needs real geocoding — see README), so they
+// stay unset for now rather than guessing.
+async function resolveCouncilDistrict(
+  supabase: ReturnType<typeof createClient>,
+  formData: FormData,
+  geographyScope: string,
+  geographyLabel: string
+): Promise<number | null> {
+  if (geographyScope === "council_district") {
+    const picked = Number(formData.get("council_district"));
+    return picked >= 1 && picked <= 10 ? picked : null;
+  }
+  if (geographyScope === "zip" && geographyLabel) {
+    const { data: matches } = await supabase
+      .from("zip_council_districts")
+      .select("council_district")
+      .eq("zip_code", geographyLabel);
+
+    if (matches && matches.length === 1) {
+      return matches[0].council_district;
+    }
+    // If it matches 0 or several districts, we leave it null rather than
+    // guess wrong — the crosswalk table needs real data loaded before this
+    // gets more precise (see README "Deferred to a fast-follow").
+  }
+  return null;
+}
+
 export async function createProposal(formData: FormData) {
   const { supabase, user } = await requireUser();
 
@@ -29,31 +63,12 @@ export async function createProposal(formData: FormData) {
     throw new Error("Title, summary, and body text are all required.");
   }
 
-  // Council district: citywide always means "every district," so it's left
-  // null and handled as a wildcard in filtering, never stored as a fixed
-  // value. For the council_district scope, the person picked it directly.
-  // For zip, we auto-populate it from the zip -> district crosswalk when
-  // that zip maps to exactly one district. Address/neighborhood don't have
-  // a reliable auto-lookup yet (needs real geocoding — see README), so they
-  // stay unset for now rather than guessing.
-  let councilDistrict: number | null = null;
-
-  if (geographyScope === "council_district") {
-    const picked = Number(formData.get("council_district"));
-    councilDistrict = picked >= 1 && picked <= 10 ? picked : null;
-  } else if (geographyScope === "zip" && geographyLabel) {
-    const { data: matches } = await supabase
-      .from("zip_council_districts")
-      .select("council_district")
-      .eq("zip_code", geographyLabel);
-
-    if (matches && matches.length === 1) {
-      councilDistrict = matches[0].council_district;
-    }
-    // If it matches 0 or several districts, we leave it null rather than
-    // guess wrong — the crosswalk table needs real data loaded before this
-    // gets more precise (see README "Deferred to a fast-follow").
-  }
+  const councilDistrict = await resolveCouncilDistrict(
+    supabase,
+    formData,
+    geographyScope,
+    geographyLabel
+  );
 
   const { data: proposal, error } = await supabase
     .from("proposals")
@@ -169,6 +184,57 @@ export async function updateProposalImage(formData: FormData) {
   }
 
   await uploadProposalImage(supabase, proposalId, imageFile);
+
+  revalidatePath(`/proposals/${proposalId}`);
+  revalidatePath("/");
+}
+
+// Lets the owner edit the proposal's basic details (title, type, category,
+// geography) after it's already been posted — previously the only way to
+// change any of this, including the category, was to delete and repost.
+// Deliberately does NOT touch the proposal's body text or tags — the body
+// has its own versioned "Advance to a new version" flow, and tags have
+// their own add/remove UI, both to keep this one form simple.
+export async function updateProposalDetails(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const title = String(formData.get("title") ?? "").trim();
+  const type = String(formData.get("type") ?? "policy");
+  const categoryId = Number(formData.get("category_id"));
+  const geographyScope = String(formData.get("geography_scope") ?? "citywide");
+  const geographyLabel = String(formData.get("geography_label") ?? "").trim();
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can edit its details.");
+  }
+  if (!title) throw new Error("Title can't be empty.");
+
+  const councilDistrict = await resolveCouncilDistrict(
+    supabase,
+    formData,
+    geographyScope,
+    geographyLabel
+  );
+
+  const { error } = await supabase
+    .from("proposals")
+    .update({
+      title,
+      type,
+      category_id: categoryId,
+      geography_scope: geographyScope,
+      geography_label: geographyScope === "citywide" ? null : geographyLabel || null,
+      council_district: councilDistrict,
+    })
+    .eq("id", proposalId);
+
+  if (error) throw new Error(error.message);
 
   revalidatePath(`/proposals/${proposalId}`);
   revalidatePath("/");

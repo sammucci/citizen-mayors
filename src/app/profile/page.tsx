@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { updateProfile } from "@/app/actions";
+import { statusColorClasses } from "@/lib/status-colors";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function ProfilePage() {
 
   const { data: myProposals } = await supabase
     .from("proposals")
-    .select("id, title, type, created_at")
+    .select("id, title, type, created_at, categories ( label, color )")
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -167,11 +168,23 @@ export default async function ProfilePage() {
       <div>
         <h2 className="text-lg font-semibold">Your proposals</h2>
         <ul className="mt-3 space-y-2">
-          {myProposals?.map((p) => (
-            <li key={p.id} className="rounded-lg border border-neutral-200 bg-white p-3 text-sm">
+          {myProposals?.map((p: any) => (
+            <li
+              key={p.id}
+              className="rounded-lg border p-3 text-sm"
+              style={{
+                backgroundColor: `${p.categories?.color ?? "#e5e5e5"}33`,
+                borderColor: `${p.categories?.color ?? "#e5e5e5"}88`,
+              }}
+            >
               <Link href={`/proposals/${p.id}`} className="font-medium hover:underline">
                 {p.title}
               </Link>
+              {p.categories?.label && (
+                <span className="ml-2 text-xs uppercase text-neutral-500">
+                  {p.categories.label}
+                </span>
+              )}
               <span className="ml-2 text-xs uppercase text-neutral-400">{p.type}</span>
             </li>
           ))}
@@ -193,7 +206,9 @@ export default async function ProfilePage() {
               </Link>
               <p className="mt-1 text-neutral-600">{c.body}</p>
               {c.is_suggested_edit && (
-                <span className="mt-1 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                <span
+                  className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs ${statusColorClasses(c.status)}`}
+                >
                   Suggested edit · {c.status.replace(/_/g, " ")}
                 </span>
               )}
