@@ -4,6 +4,7 @@ import {
   addPowerTreeNode,
   addProposalTags,
   advanceVersion,
+  editComment,
   flagProposal,
   flagUnresolved,
   movePowerTreeNode,
@@ -11,6 +12,7 @@ import {
   removePowerTreeNode,
   removeProposalTag,
   resolveComment,
+  updateProposalImage,
 } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
 
@@ -68,6 +70,12 @@ export default async function ProposalPage({
     .select("*, profiles ( display_name )")
     .eq("proposal_id", proposal.id)
     .order("created_at", { ascending: true });
+  // Only the single most recent comment on the whole proposal is still
+  // editable by its author — once anything else gets posted after it,
+  // editing locks so nobody can retroactively change context others have
+  // already responded to.
+  const latestCommentId =
+    comments && comments.length > 0 ? comments[comments.length - 1].id : null;
 
   const { data: reactions } = await supabase
     .from("reactions")
@@ -108,16 +116,53 @@ export default async function ProposalPage({
         {/* Main column */}
         <div className="space-y-6 lg:col-span-2">
           <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-            <div
-              className="h-3"
-              style={{ backgroundColor: proposal.categories?.color ?? "#e5e5e5" }}
-            />
+            {proposal.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={proposal.image_url}
+                alt=""
+                className="h-48 w-full object-cover sm:h-64"
+              />
+            ) : (
+              <div
+                className="h-3"
+                style={{ backgroundColor: proposal.categories?.color ?? "#e5e5e5" }}
+              />
+            )}
             <div className="p-4">
-              <span className="text-xs uppercase tracking-wide text-neutral-500">
-                {proposal.type} · {proposal.categories?.label}
-              </span>
-              <h1 className="mt-1 text-2xl font-semibold">{proposal.title}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className="rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700"
+                  style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33` }}
+                >
+                  {proposal.categories?.label}
+                </span>
+                <span className="text-xs uppercase tracking-wide text-neutral-400">
+                  {proposal.type}
+                </span>
+              </div>
+              <h1 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">
+                {proposal.title}
+              </h1>
               <p className="mt-1 text-sm text-neutral-600">📍 {location}</p>
+
+              {isOwner && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
+                    {proposal.image_url ? "Change cover image" : "Add a cover image"}
+                  </summary>
+                  <form
+                    action={updateProposalImage}
+                    className="mt-2 flex flex-wrap items-center gap-2"
+                  >
+                    <input type="hidden" name="proposal_id" value={proposal.id} />
+                    <input type="file" name="image" accept="image/*" className="text-xs" />
+                    <button className="rounded bg-duty-purple px-3 py-1 text-xs text-white">
+                      Upload
+                    </button>
+                  </form>
+                </details>
+              )}
             </div>
           </div>
 
@@ -229,9 +274,15 @@ export default async function ProposalPage({
               <summary className="cursor-pointer text-sm font-semibold">
                 Advance to a new version (owner only)
               </summary>
+              <p className="mt-2 text-xs text-neutral-500">
+                Starts pre-filled with the current version's text — edit
+                what you need to, or select all and delete it to start
+                from scratch.
+              </p>
               <form action={advanceVersion} className="mt-3 space-y-3">
                 <input type="hidden" name="proposal_id" value={proposal.id} />
                 <textarea
+                  key={currentVersion?.id ?? "initial"}
                   name="body"
                   defaultValue={currentVersion?.body ?? proposal.body}
                   rows={8}
@@ -279,22 +330,27 @@ export default async function ProposalPage({
                     </p>
                   )}
 
-                  {isOwner && c.is_suggested_edit && c.status === "open" && (
+                  {isOwner && c.is_suggested_edit && (
                     <form action={resolveComment} className="mt-2 flex flex-wrap items-center gap-2">
                       <input type="hidden" name="comment_id" value={c.id} />
                       <input type="hidden" name="proposal_id" value={proposal.id} />
-                      <select name="status" className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-xs">
+                      <select
+                        name="status"
+                        defaultValue={c.status === "open" ? "accepted" : c.status}
+                        className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-xs"
+                      >
                         <option value="accepted">Accept</option>
                         <option value="accepted_with_contingency">Accept with contingency</option>
                         <option value="rejected">Reject</option>
                       </select>
                       <input
                         name="status_note"
+                        defaultValue={c.status_note ?? ""}
                         placeholder="Optional note (e.g. the contingency)"
                         className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
                       />
                       <button className="shrink-0 rounded bg-duty-purple px-2 py-1 text-xs text-white">
-                        Resolve
+                        {c.status === "open" ? "Resolve" : "Change decision"}
                       </button>
                     </form>
                   )}
@@ -307,6 +363,35 @@ export default async function ProposalPage({
                         Still not addressed
                       </button>
                     </form>
+                  )}
+
+                  {user?.id === c.author_id && c.id === latestCommentId && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
+                        Edit your comment
+                      </summary>
+                      <form action={editComment} className="mt-2 space-y-2">
+                        <input type="hidden" name="comment_id" value={c.id} />
+                        <input type="hidden" name="proposal_id" value={proposal.id} />
+                        <textarea
+                          name="body"
+                          defaultValue={c.body}
+                          rows={2}
+                          className="input text-sm"
+                        />
+                        {c.is_suggested_edit && (
+                          <textarea
+                            name="suggested_body"
+                            defaultValue={c.suggested_body ?? ""}
+                            rows={3}
+                            className="input font-mono text-xs"
+                          />
+                        )}
+                        <button className="rounded bg-duty-purple px-2 py-1 text-xs text-white">
+                          Save edit
+                        </button>
+                      </form>
+                    </details>
                   )}
                 </li>
               ))}

@@ -26,7 +26,7 @@ export default async function HomePage({
   let query = supabase
     .from("proposals")
     .select(
-      `id, title, type, summary, geography_scope, geography_label, council_district, created_at,
+      `id, title, type, summary, geography_scope, geography_label, council_district, created_at, image_url,
        categories ( slug, label, color ),
        proposal_tags ( tags ( slug, label ) ),
        reactions ( value ),
@@ -71,7 +71,7 @@ export default async function HomePage({
         </p>
       </div>
 
-      <ul className="mt-8 space-y-4">
+      <ul className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2">
         {filteredProposals.map((p: any) => {
           const score = (p.reactions ?? []).reduce(
             (sum: number, r: any) => sum + r.value,
@@ -91,41 +91,56 @@ export default async function HomePage({
           return (
             <li
               key={p.id}
-              className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
+              className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white"
             >
-              <div
-                className="h-2"
-                style={{ backgroundColor: p.categories?.color ?? "#e5e5e5" }}
-              />
-              <div className="p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-wide text-neutral-500">
-                    {p.type} · {p.categories?.label}
+              {p.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.image_url} alt="" className="h-36 w-full object-cover" />
+              ) : (
+                <div
+                  className="h-2"
+                  style={{ backgroundColor: p.categories?.color ?? "#e5e5e5" }}
+                />
+              )}
+              <div className="flex flex-1 flex-col p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700"
+                    style={{ backgroundColor: `${p.categories?.color ?? "#e5e5e5"}33` }}
+                  >
+                    {p.categories?.label}
                   </span>
-                  <span className="text-sm text-neutral-500">
-                    {score >= 0 ? `+${score}` : score} votes
+                  <span className="text-xs uppercase tracking-wide text-neutral-400">
+                    {p.type}
                   </span>
                 </div>
                 <Link
                   href={`/proposals/${p.id}`}
-                  className="mt-1 block text-lg font-medium hover:underline"
+                  className="mt-2 block text-xl font-bold leading-snug hover:underline"
                 >
                   {p.title}
                 </Link>
-                <p className="mt-1 text-sm text-neutral-600">{p.summary}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-                  <span>📍 {location}</span>
+                <p className="mt-1 line-clamp-2 text-sm text-neutral-600">{p.summary}</p>
+
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {p.proposal_tags?.map((pt: any) => (
-                    <span key={pt.tags?.slug} className="rounded-full bg-neutral-100 px-2 py-0.5">
+                    <span key={pt.tags?.slug} className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
                       #{pt.tags?.label}
                     </span>
                   ))}
-                  {escalateCount > 0 && (
-                    <span className="rounded-full bg-duty-yellow px-2 py-0.5 text-neutral-900">
-                      {escalateCount} flagged ready to escalate
-                    </span>
-                  )}
                 </div>
+
+                <div className="mt-auto flex items-center justify-between pt-3 text-xs text-neutral-500">
+                  <span>📍 {location}</span>
+                  <span className="font-medium text-neutral-700">
+                    {score >= 0 ? `+${score}` : score} votes
+                  </span>
+                </div>
+                {escalateCount > 0 && (
+                  <span className="mt-2 inline-block w-fit rounded-full bg-duty-yellow px-2 py-0.5 text-xs text-neutral-900">
+                    {escalateCount} flagged ready to escalate
+                  </span>
+                )}
               </div>
             </li>
           );

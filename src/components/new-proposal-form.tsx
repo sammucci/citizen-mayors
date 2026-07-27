@@ -135,6 +135,10 @@ export function NewProposalForm({
         />
       </Field>
 
+      <Field label="Cover image (optional)">
+        <input type="file" name="image" accept="image/*" className="text-sm" />
+      </Field>
+
       <button
         type="submit"
         className="rounded-md bg-duty-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"

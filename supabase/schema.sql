@@ -93,6 +93,7 @@ create table public.proposals (
   council_district int check (council_district between 1 and 10),
   geography_point geography(Point, 4326),   -- dropped pin
   geography_polygon geography(Polygon, 4326), -- drawn area
+  image_url text, -- optional cover image, stored in the "proposal-images" bucket
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -293,6 +294,8 @@ create policy "authenticated create comments" on public.comments for insert
   with check (auth.uid() = author_id);
 create policy "owner resolves comments on own proposal" on public.comments for update
   using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
+create policy "author edits own comment" on public.comments for update
+  using (auth.uid() = author_id);
 
 create policy "authenticated create reactions" on public.reactions for insert
   with check (auth.uid() = user_id);
@@ -312,3 +315,19 @@ create policy "owner builds own power tree" on public.proposal_power_tree_nodes 
   with check (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
 create policy "owner edits own power tree" on public.proposal_power_tree_nodes for delete
   using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
+create policy "owner reorders own power tree" on public.proposal_power_tree_nodes for update
+  using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
+
+-- ---------------------------------------------------------------------------
+-- Storage: proposal cover images
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('proposal-images', 'proposal-images', true)
+on conflict (id) do nothing;
+
+create policy "public read proposal images" on storage.objects for select
+  using (bucket_id = 'proposal-images');
+create policy "authenticated upload proposal images" on storage.objects for insert
+  with check (bucket_id = 'proposal-images' and auth.role() = 'authenticated');
+create policy "authenticated update own proposal images" on storage.objects for update
+  using (bucket_id = 'proposal-images' and auth.role() = 'authenticated');

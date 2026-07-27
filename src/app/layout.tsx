@@ -1,8 +1,18 @@
 import type { Metadata } from "next";
+import { Roboto } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/actions";
+
+// Was falling back to the browser's default sans-serif (Arial-ish on a
+// lot of systems) since nothing set a font. Roboto, loaded via
+// next/font so it's self-hosted and doesn't need a runtime fetch.
+const roboto = Roboto({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Citizen Mayors",
@@ -31,7 +41,7 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className={roboto.className}>
       <body>
         <header className="border-b border-neutral-200 bg-white">
           <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">

@@ -89,7 +89,57 @@ export async function createProposal(formData: FormData) {
       .insert(tagIds.map((tag_id) => ({ proposal_id: proposal.id, tag_id })));
   }
 
+  const imageFile = formData.get("image");
+  if (imageFile instanceof File && imageFile.size > 0) {
+    await uploadProposalImage(supabase, proposal.id, imageFile);
+  }
+
   redirect(`/proposals/${proposal.id}`);
+}
+
+// Shared by createProposal and updateProposalImage. Always saves to the
+// same path per proposal (with upsert) so re-uploading just replaces the
+// old cover image instead of piling up orphaned files.
+async function uploadProposalImage(
+  supabase: ReturnType<typeof createClient>,
+  proposalId: string,
+  file: File
+) {
+  const ext = file.name.split(".").pop() || "jpg";
+  const path = `${proposalId}/cover.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("proposal-images")
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) return;
+
+  const { data: pub } = supabase.storage.from("proposal-images").getPublicUrl(path);
+  await supabase.from("proposals").update({ image_url: pub.publicUrl }).eq("id", proposalId);
+}
+
+// Lets the owner add or replace a proposal's cover image after it's
+// already been posted — the create form only asks once.
+export async function updateProposalImage(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const imageFile = formData.get("image");
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can change the image.");
+  }
+  if (!(imageFile instanceof File) || imageFile.size === 0) {
+    throw new Error("Choose an image file first.");
+  }
+
+  await uploadProposalImage(supabase, proposalId, imageFile);
+
+  revalidatePath(`/proposals/${proposalId}`);
+  revalidatePath("/");
 }
 
 export async function addComment(formData: FormData) {
@@ -112,6 +162,52 @@ export async function addComment(formData: FormData) {
     is_suggested_edit: Boolean(suggestedBody),
     suggested_body: suggestedBody || null,
   });
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Lets someone edit their own comment — but only while it's still the
+// single most recent comment on the proposal. As soon as anything else
+// gets posted after it (by anyone), it locks, so edits can't retroactively
+// change context other people have already responded to.
+export async function editComment(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const commentId = String(formData.get("comment_id"));
+  const proposalId = String(formData.get("proposal_id"));
+  const body = String(formData.get("body") ?? "").trim();
+  const suggestedBody = String(formData.get("suggested_body") ?? "").trim();
+
+  if (!body) throw new Error("Comment can't be empty.");
+
+  const { data: comment } = await supabase
+    .from("comments")
+    .select("author_id")
+    .eq("id", commentId)
+    .single();
+  if (comment?.author_id !== user.id) {
+    throw new Error("You can only edit your own comment.");
+  }
+
+  const { data: latest } = await supabase
+    .from("comments")
+    .select("id")
+    .eq("proposal_id", proposalId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+  if (latest?.id !== commentId) {
+    throw new Error("This comment can no longer be edited — others have commented since.");
+  }
+
+  await supabase
+    .from("comments")
+    .update({
+      body,
+      is_suggested_edit: Boolean(suggestedBody),
+      suggested_body: suggestedBody || null,
+    })
+    .eq("id", commentId);
 
   revalidatePath(`/proposals/${proposalId}`);
 }
