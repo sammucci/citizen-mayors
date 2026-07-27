@@ -93,6 +93,71 @@ export default async function ProfilePage() {
               ))}
             </select>
           </label>
+
+          <div className="rounded-md bg-neutral-50 p-3">
+            <p className="text-xs text-neutral-500">
+              The fields below are entirely optional. We ask so we — and
+              eventually the public — can see whether who's actually
+              showing up to propose, comment, and vote roughly reflects
+              Philadelphia's real population and council districts. They're
+              never required, never shown next to your name, and never
+              used for anything else.
+            </p>
+          </div>
+
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-neutral-700">
+              Age range (optional)
+            </span>
+            <select name="age_range" defaultValue={profile?.age_range ?? ""} className="input">
+              <option value="">Prefer not to say</option>
+              <option value="18-24">18–24</option>
+              <option value="25-34">25–34</option>
+              <option value="35-44">35–44</option>
+              <option value="45-54">45–54</option>
+              <option value="55-64">55–64</option>
+              <option value="65+">65+</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-neutral-700">
+              Race / ethnicity (optional)
+            </span>
+            <select
+              name="race_ethnicity"
+              defaultValue={profile?.race_ethnicity ?? ""}
+              className="input"
+            >
+              <option value="">Prefer not to say</option>
+              <option value="Black or African American">Black or African American</option>
+              <option value="White">White</option>
+              <option value="Hispanic or Latino">Hispanic or Latino (any race)</option>
+              <option value="Asian">Asian</option>
+              <option value="American Indian or Alaska Native">
+                American Indian or Alaska Native
+              </option>
+              <option value="Native Hawaiian or Other Pacific Islander">
+                Native Hawaiian or Other Pacific Islander
+              </option>
+              <option value="Two or more races">Two or more races</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-neutral-700">
+              Gender (optional)
+            </span>
+            <select name="gender" defaultValue={profile?.gender ?? ""} className="input">
+              <option value="">Prefer not to say</option>
+              <option value="Woman">Woman</option>
+              <option value="Man">Man</option>
+              <option value="Non-binary">Non-binary</option>
+              <option value="Prefer to self-describe">Prefer to self-describe</option>
+            </select>
+          </label>
+
           <button className="rounded-md bg-duty-purple px-4 py-2 text-sm font-medium text-white">
             Save
           </button>

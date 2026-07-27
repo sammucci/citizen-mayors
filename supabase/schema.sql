@@ -13,6 +13,9 @@ create table public.profiles (
   display_name text not null,
   zip_code text,
   council_district int, -- self-reported; checked for plausibility, not geocoded from an address
+  age_range text, -- optional self-reported demographics, used only to gauge
+  race_ethnicity text, -- how well participation reflects Philadelphia's real
+  gender text, -- population and council districts. Never required.
   accepted_guidelines_at timestamptz, -- respectful-dialogue prompt acknowledgment
   created_at timestamptz not null default now()
 );

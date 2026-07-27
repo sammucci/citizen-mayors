@@ -24,6 +24,9 @@ export async function updateProfile(formData: FormData) {
   const zipCode = String(formData.get("zip_code") ?? "").trim();
   const councilDistrictRaw = formData.get("council_district");
   const councilDistrict = councilDistrictRaw ? Number(councilDistrictRaw) : null;
+  const ageRange = String(formData.get("age_range") ?? "").trim();
+  const raceEthnicity = String(formData.get("race_ethnicity") ?? "").trim();
+  const gender = String(formData.get("gender") ?? "").trim();
 
   await supabase
     .from("profiles")
@@ -31,6 +34,9 @@ export async function updateProfile(formData: FormData) {
       display_name: displayName || undefined,
       zip_code: zipCode || null,
       council_district: councilDistrict,
+      age_range: ageRange || null,
+      race_ethnicity: raceEthnicity || null,
+      gender: gender || null,
     })
     .eq("id", user.id);
 
