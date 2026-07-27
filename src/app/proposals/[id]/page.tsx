@@ -15,6 +15,7 @@ import {
   updateProposalImage,
 } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
+import { ResettableForm } from "@/components/resettable-form";
 import { VersionCarousel } from "@/components/version-carousel";
 
 export const dynamic = "force-dynamic";
@@ -238,7 +239,15 @@ export default async function ProposalPage({
           </p>
 
           {isOwner && (
-            <details className="rounded-lg border border-neutral-200 bg-white p-4">
+            // Keyed to how many versions exist so the whole panel remounts
+            // (and collapses back down) right after a successful publish —
+            // otherwise it just sat open with what looked like the same
+            // text still in the box, and there was no clear sign it had
+            // actually worked.
+            <details
+              key={versions.length}
+              className="rounded-lg border border-neutral-200 bg-white p-4"
+            >
               <summary className="cursor-pointer text-sm font-semibold">
                 Advance to a new version (owner only)
               </summary>
@@ -250,7 +259,6 @@ export default async function ProposalPage({
               <form action={advanceVersion} className="mt-3 space-y-3">
                 <input type="hidden" name="proposal_id" value={proposal.id} />
                 <textarea
-                  key={currentVersion?.id ?? "initial"}
                   name="body"
                   defaultValue={currentVersion?.body ?? proposal.body}
                   rows={8}
@@ -371,7 +379,10 @@ export default async function ProposalPage({
             </ul>
 
             {user ? (
-              <form action={addComment} className="mt-6 space-y-2 rounded-lg border border-neutral-200 bg-white p-3">
+              <ResettableForm
+                action={addComment}
+                className="mt-6 space-y-2 rounded-lg border border-neutral-200 bg-white p-3"
+              >
                 <input type="hidden" name="proposal_id" value={proposal.id} />
                 <input type="hidden" name="version_id" value={currentVersion?.id ?? ""} />
                 <div className="flex items-start gap-3">
@@ -402,7 +413,7 @@ export default async function ProposalPage({
                     Post comment
                   </button>
                 </div>
-              </form>
+              </ResettableForm>
             ) : (
               <p className="mt-4 text-sm text-neutral-500">
                 <a href="/login" className="underline">
@@ -486,7 +497,14 @@ export default async function ProposalPage({
             {isOwner && (
               <form action={addPowerTreeNode} className="mt-3 space-y-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
                 <input type="hidden" name="proposal_id" value={proposal.id} />
-                <DecisionMakerField decisionMakers={allDecisionMakers ?? []} />
+                {/* Keyed to the node count so this fully remounts (and
+                    clears back to blank) right after a successful add —
+                    it's a controlled component internally, so a plain
+                    form.reset() wouldn't touch its React state. */}
+                <DecisionMakerField
+                  key={powerTreeNodes?.length ?? 0}
+                  decisionMakers={allDecisionMakers ?? []}
+                />
                 <button className="w-full rounded bg-duty-purple px-3 py-1.5 text-sm text-white">
                   + Add decision maker
                 </button>
