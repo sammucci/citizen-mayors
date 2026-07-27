@@ -4,12 +4,16 @@ import { useEffect, useRef, useState } from "react";
 
 type DecisionMaker = { id: string; name: string; kind: string };
 
-const KIND_LABELS: Record<string, string> = {
-  elected_official: "Elected official",
-  department: "City department",
-  board_commission: "Board / commission",
-  other: "Other",
-};
+// Council-roster entries are stored as "Name (Role, District X)" — split
+// that into a bold primary name and a smaller subtitle, so long entries
+// read cleanly on two lines instead of one cramped, overflowing line.
+function splitLabel(name: string): { primary: string; subtitle: string | null } {
+  const match = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (match) {
+    return { primary: match[1].trim(), subtitle: match[2].trim() };
+  }
+  return { primary: name, subtitle: null };
+}
 
 // Replaces a native <input list="..."> datalist combo, which has real bugs
 // across browsers: once a value is picked, clicking back in shows nothing,
@@ -18,10 +22,10 @@ const KIND_LABELS: Record<string, string> = {
 // value instead of leaving it blank. This is a fully controlled component
 // instead, so it always starts empty and always stays editable.
 //
-// It also auto-fills (and hides) the "kind" field whenever the typed name
-// exactly matches someone already in the registry, since we already know
-// what kind of decision-maker they are — the kind picker only needs to
-// show up when you're genuinely adding someone new.
+// It also auto-fills the "kind" field (and hides the picker entirely)
+// whenever the typed name exactly matches someone already in the
+// registry, since we already know what kind of decision-maker they are —
+// the kind picker only shows up when you're genuinely adding someone new.
 export function DecisionMakerField({
   decisionMakers,
 }: {
@@ -57,59 +61,66 @@ export function DecisionMakerField({
     <>
       <div ref={wrapRef} className="relative">
         <label className="block text-xs text-neutral-500">Decision-maker</label>
-        <input
-          name="decision_maker_name"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          autoComplete="off"
-          placeholder="Start typing, or add a new one"
-          className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
-        />
-        {query && (
-          <button
-            type="button"
-            onClick={() => {
-              setQuery("");
-              setOpen(false);
+        <div className="flex items-center gap-1.5">
+          <input
+            name="decision_maker_name"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
             }}
-            className="absolute right-1.5 top-[26px] text-xs text-neutral-400 hover:text-neutral-600"
-            aria-label="Clear"
-          >
-            ✕
-          </button>
-        )}
+            onFocus={() => setOpen(true)}
+            autoComplete="off"
+            placeholder="Start typing, or add a new one"
+            className="w-full min-w-0 rounded border border-neutral-300 px-2 py-1 text-sm"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                setOpen(false);
+              }}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white text-xs text-neutral-500 hover:border-duty-red hover:text-duty-red"
+              aria-label="Clear decision-maker"
+              title="Clear"
+            >
+              ✕
+            </button>
+          )}
+        </div>
         {open && matches.length > 0 && (
-          <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded border border-neutral-200 bg-white text-sm shadow-md">
-            {matches.map((dm) => (
-              <li key={dm.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuery(dm.name);
-                    setOpen(false);
-                  }}
-                  className="block w-full px-2 py-1 text-left hover:bg-neutral-50"
-                >
-                  {dm.name}
-                </button>
-              </li>
-            ))}
+          <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded border border-neutral-200 bg-white shadow-md">
+            {matches.map((dm) => {
+              const { primary, subtitle } = splitLabel(dm.name);
+              return (
+                <li key={dm.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery(dm.name);
+                      setOpen(false);
+                    }}
+                    className="block w-full px-2 py-1.5 text-left hover:bg-neutral-50"
+                  >
+                    <span className="block truncate text-sm font-medium text-neutral-800">
+                      {primary}
+                    </span>
+                    {subtitle && (
+                      <span className="block truncate text-xs text-neutral-500">
+                        {subtitle}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
 
       {exactMatch ? (
-        <div>
-          <label className="block text-xs text-neutral-500">Kind</label>
-          <input type="hidden" name="kind" value={exactMatch.kind} />
-          <p className="rounded bg-neutral-100 px-2 py-1 text-sm text-neutral-600">
-            {KIND_LABELS[exactMatch.kind] ?? exactMatch.kind}
-          </p>
-        </div>
+        <input type="hidden" name="kind" value={exactMatch.kind} />
       ) : (
         <div>
           <label className="block text-xs text-neutral-500">

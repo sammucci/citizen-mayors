@@ -283,6 +283,8 @@ create policy "owner updates own proposal" on public.proposals for update
 
 create policy "authenticated create proposal_tags" on public.proposal_tags for insert
   with check (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
+create policy "owner removes own proposal_tags" on public.proposal_tags for delete
+  using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
 
 create policy "authenticated create versions" on public.proposal_versions for insert
   with check (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));

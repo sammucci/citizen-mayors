@@ -9,6 +9,7 @@ import {
   movePowerTreeNode,
   react,
   removePowerTreeNode,
+  removeProposalTag,
   resolveComment,
 } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
@@ -282,7 +283,7 @@ export default async function ProposalPage({
                     <form action={resolveComment} className="mt-2 flex flex-wrap items-center gap-2">
                       <input type="hidden" name="comment_id" value={c.id} />
                       <input type="hidden" name="proposal_id" value={proposal.id} />
-                      <select name="status" className="rounded border border-neutral-300 px-2 py-1 text-xs">
+                      <select name="status" className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-xs">
                         <option value="accepted">Accept</option>
                         <option value="accepted_with_contingency">Accept with contingency</option>
                         <option value="rejected">Reject</option>
@@ -290,9 +291,9 @@ export default async function ProposalPage({
                       <input
                         name="status_note"
                         placeholder="Optional note (e.g. the contingency)"
-                        className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                        className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
                       />
-                      <button className="rounded bg-duty-purple px-2 py-1 text-xs text-white">
+                      <button className="shrink-0 rounded bg-duty-purple px-2 py-1 text-xs text-white">
                         Resolve
                       </button>
                     </form>
@@ -446,12 +447,25 @@ export default async function ProposalPage({
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
             <h2 className="text-base font-semibold">Tags</h2>
             <div className="mt-3 flex flex-wrap gap-2">
-              {proposal.proposal_tags?.map((pt: any, i: number) => (
+              {proposal.proposal_tags?.map((pt: any) => (
                 <span
-                  key={i}
-                  className="rounded-full bg-duty-yellow/30 px-3 py-1 text-xs text-neutral-800"
+                  key={pt.tag_id}
+                  className="flex items-center gap-1 rounded-full bg-duty-yellow/30 px-3 py-1 text-xs text-neutral-800"
                 >
                   {pt.tags?.label}
+                  {isOwner && (
+                    <form action={removeProposalTag}>
+                      <input type="hidden" name="proposal_id" value={proposal.id} />
+                      <input type="hidden" name="tag_id" value={pt.tag_id} />
+                      <button
+                        className="flex h-4 w-4 items-center justify-center rounded-full text-neutral-500 hover:bg-white hover:text-duty-red"
+                        title="Remove tag"
+                        aria-label={`Remove ${pt.tags?.label}`}
+                      >
+                        ✕
+                      </button>
+                    </form>
+                  )}
                 </span>
               ))}
               {(!proposal.proposal_tags || proposal.proposal_tags.length === 0) && (
@@ -460,24 +474,20 @@ export default async function ProposalPage({
             </div>
 
             {isOwner && availableTags.length > 0 && (
-              <form
-                action={addProposalTags}
-                className="mt-3 space-y-2 border-t border-neutral-100 pt-3"
-              >
-                <input type="hidden" name="proposal_id" value={proposal.id} />
-                <p className="text-xs text-neutral-500">Add more tags</p>
-                <div className="flex flex-wrap gap-3 text-xs">
+              <div className="mt-3 border-t border-neutral-100 pt-3">
+                <p className="text-xs text-neutral-500">Add a tag</p>
+                <div className="mt-2 flex flex-wrap gap-2">
                   {availableTags.map((t) => (
-                    <label key={t.id} className="flex items-center gap-1">
-                      <input type="checkbox" name="tag_ids" value={t.id} />
-                      {t.label}
-                    </label>
+                    <form key={t.id} action={addProposalTags}>
+                      <input type="hidden" name="proposal_id" value={proposal.id} />
+                      <input type="hidden" name="tag_ids" value={t.id} />
+                      <button className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-duty-purple hover:text-duty-purple">
+                        + {t.label}
+                      </button>
+                    </form>
                   ))}
                 </div>
-                <button className="rounded bg-duty-purple px-3 py-1 text-xs text-white">
-                  + Add tags
-                </button>
-              </form>
+              </div>
             )}
           </div>
         </div>

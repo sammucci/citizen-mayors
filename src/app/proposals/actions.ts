@@ -285,6 +285,32 @@ export async function addProposalTags(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
+// Removes a single tag from this proposal (owner only). The tag itself
+// stays in the shared tags table — this only removes the link.
+export async function removeProposalTag(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const tagId = Number(formData.get("tag_id"));
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can remove tags.");
+  }
+
+  await supabase
+    .from("proposal_tags")
+    .delete()
+    .eq("proposal_id", proposalId)
+    .eq("tag_id", tagId);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
 // Best-effort proper-case for a typed name ("quetcy lozada" -> "Quetcy
 // Lozada", "o'neill" -> "O'Neill"). Won't get every edge case (suffixes
 // like "Jr." stay capitalized as typed-then-lowered), but handles the
