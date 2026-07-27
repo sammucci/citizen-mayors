@@ -427,16 +427,6 @@ export default async function ProposalPage({
               <form action={addPowerTreeNode} className="mt-3 space-y-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
                 <input type="hidden" name="proposal_id" value={proposal.id} />
                 <DecisionMakerField decisionMakers={allDecisionMakers ?? []} />
-                <div>
-                  <label className="block text-xs text-neutral-500">
-                    Role in decision-making process (optional)
-                  </label>
-                  <input
-                    name="note"
-                    placeholder="e.g. final sign-off"
-                    className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
-                  />
-                </div>
                 <button className="w-full rounded bg-duty-purple px-3 py-1.5 text-sm text-white">
                   + Add decision maker
                 </button>
@@ -450,7 +440,8 @@ export default async function ProposalPage({
               {proposal.proposal_tags?.map((pt: any) => (
                 <span
                   key={pt.tag_id}
-                  className="flex items-center gap-1 rounded-full bg-duty-yellow/30 px-3 py-1 text-xs text-neutral-800"
+                  className="flex items-center gap-1 rounded-full px-3 py-1 text-xs text-neutral-800"
+                  style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33` }}
                 >
                   {pt.tags?.label}
                   {isOwner && (

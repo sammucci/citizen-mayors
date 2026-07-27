@@ -15,17 +15,16 @@ function splitLabel(name: string): { primary: string; subtitle: string | null } 
   return { primary: name, subtitle: null };
 }
 
-// Replaces a native <input list="..."> datalist combo, which has real bugs
-// across browsers: once a value is picked, clicking back in shows nothing,
-// backspacing can get stuck, and on a fresh form (after a full-page reload
-// following a server action) some browsers auto-refill the last submitted
-// value instead of leaving it blank. This is a fully controlled component
-// instead, so it always starts empty and always stays editable.
+// A progressively-disclosed replacement for the old native <input
+// list="..."> datalist combo, which had real cross-browser bugs (stuck
+// suggestions, backspace not working, values bleeding over between adds).
 //
-// It also auto-fills the "kind" field (and hides the picker entirely)
-// whenever the typed name exactly matches someone already in the
-// registry, since we already know what kind of decision-maker they are —
-// the kind picker only shows up when you're genuinely adding someone new.
+// Flow: only the name field shows at first. Once you type or pick a
+// name, one of two things happens — if it exactly matches someone
+// already in the registry, we already know their kind, so we skip
+// straight to the role field. If it's a brand-new name, the kind picker
+// appears; only once you've actually chosen a kind does the role field
+// show up. Nothing appears before it's actually relevant.
 export function DecisionMakerField({
   decisionMakers,
 }: {
@@ -33,6 +32,7 @@ export function DecisionMakerField({
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState(""); // only used for brand-new names
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,6 +56,10 @@ export function DecisionMakerField({
   const exactMatch = decisionMakers.find(
     (dm) => dm.name.toLowerCase() === trimmed
   );
+  const hasName = query.trim().length > 0;
+  const isNewName = hasName && !exactMatch;
+  const kindResolved = Boolean(exactMatch) || (isNewName && kind !== "");
+  const showRole = hasName && kindResolved;
 
   return (
     <>
@@ -67,11 +71,12 @@ export function DecisionMakerField({
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
+              setKind("");
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
             autoComplete="off"
-            placeholder="Start typing, or add a new one"
+            placeholder="Start typing a name..."
             className="w-full min-w-0 rounded border border-neutral-300 px-2 py-1 text-sm"
           />
           {query && (
@@ -79,6 +84,7 @@ export function DecisionMakerField({
               type="button"
               onClick={() => {
                 setQuery("");
+                setKind("");
                 setOpen(false);
               }}
               className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white text-xs text-neutral-500 hover:border-duty-red hover:text-duty-red"
@@ -119,19 +125,40 @@ export function DecisionMakerField({
         )}
       </div>
 
-      {exactMatch ? (
-        <input type="hidden" name="kind" value={exactMatch.kind} />
-      ) : (
+      {exactMatch && <input type="hidden" name="kind" value={exactMatch.kind} />}
+
+      {isNewName && (
         <div>
           <label className="block text-xs text-neutral-500">
             New person/office — what kind is this?
           </label>
-          <select name="kind" className="w-full rounded border border-neutral-300 px-2 py-1 text-sm">
+          <select
+            name="kind"
+            value={kind}
+            onChange={(e) => setKind(e.target.value)}
+            className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+          >
+            <option value="" disabled>
+              Select a kind...
+            </option>
             <option value="elected_official">Elected official</option>
             <option value="department">City department</option>
             <option value="board_commission">Board / commission</option>
             <option value="other">Other</option>
           </select>
+        </div>
+      )}
+
+      {showRole && (
+        <div>
+          <label className="block text-xs text-neutral-500">
+            Role in decision-making process (optional)
+          </label>
+          <input
+            name="note"
+            placeholder="e.g. final sign-off"
+            className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+          />
         </div>
       )}
     </>
