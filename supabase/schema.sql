@@ -422,8 +422,13 @@ create table public.civic_logs (
   log_type text not null check (log_type in ('letter_to_editor', 'community_meeting', 'volunteer_hours', 'testimony')),
   occurred_on date not null default current_date,
   -- letter_to_editor only:
+  title text,
   published boolean not null default false,
   published_link text,
+  -- community_meeting only — free text for now; a future iteration
+  -- links this to a real organization profile (see
+  -- platform-future-iterations notes).
+  organization text,
   -- volunteer_hours only:
   hours numeric,
   category text,

@@ -13,39 +13,55 @@ async function requireUser() {
   return { supabase, user };
 }
 
+// Shared field extraction — every one of these actions reads the same
+// set of fields off the same form, just with different validation and
+// a different destination (insert vs. update, draft vs. published).
+function readFields(formData: FormData) {
+  return {
+    logType: String(formData.get("log_type") ?? ""),
+    occurredOn: String(formData.get("occurred_on") ?? "").trim(),
+    note: String(formData.get("note") ?? "").trim(),
+    title: String(formData.get("title") ?? "").trim(),
+    published: formData.get("published") === "on",
+    publishedLink: String(formData.get("published_link") ?? "").trim(),
+    organization: String(formData.get("organization") ?? "").trim(),
+    hoursRaw: String(formData.get("hours") ?? "").trim(),
+    category: String(formData.get("category") ?? "").trim(),
+  };
+}
+
+function buildRow(f: ReturnType<typeof readFields>, status: "draft" | "published") {
+  return {
+    log_type: f.logType,
+    occurred_on: f.occurredOn || new Date().toISOString().slice(0, 10),
+    title: f.logType === "letter_to_editor" && f.title ? f.title : null,
+    published: f.logType === "letter_to_editor" ? f.published : false,
+    published_link: f.logType === "letter_to_editor" && f.publishedLink ? f.publishedLink : null,
+    organization: f.logType === "community_meeting" && f.organization ? f.organization : null,
+    hours: f.logType === "volunteer_hours" && f.hoursRaw ? Number(f.hoursRaw) : null,
+    category: f.logType === "volunteer_hours" && f.category ? f.category : null,
+    note: f.note || null,
+    status,
+  };
+}
+
+const LOG_TYPES = ["letter_to_editor", "community_meeting", "volunteer_hours", "testimony"];
+
 // Adds one finished, "published" log entry — this is the normal
 // deliberate submit path (as opposed to saveDraftCivicLog, which is
 // the auto-save-on-close safety net for an unfinished one).
 export async function addCivicLog(formData: FormData): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
+  const f = readFields(formData);
 
-  const logType = String(formData.get("log_type") ?? "");
-  if (!["letter_to_editor", "community_meeting", "volunteer_hours", "testimony"].includes(logType)) {
-    return { error: "Pick what kind of log this is." };
-  }
-
-  const occurredOn = String(formData.get("occurred_on") ?? "").trim();
-  const note = String(formData.get("note") ?? "").trim();
-  const published = formData.get("published") === "on";
-  const publishedLink = String(formData.get("published_link") ?? "").trim();
-  const hoursRaw = String(formData.get("hours") ?? "").trim();
-  const category = String(formData.get("category") ?? "").trim();
-
-  if (logType === "volunteer_hours" && (!hoursRaw || Number(hoursRaw) <= 0)) {
+  if (!LOG_TYPES.includes(f.logType)) return { error: "Pick what kind of log this is." };
+  if (f.logType === "volunteer_hours" && (!f.hoursRaw || Number(f.hoursRaw) <= 0)) {
     return { error: "Enter how many hours you volunteered." };
   }
 
-  const { error } = await supabase.from("civic_logs").insert({
-    user_id: user.id,
-    log_type: logType,
-    occurred_on: occurredOn || new Date().toISOString().slice(0, 10),
-    published: logType === "letter_to_editor" ? published : false,
-    published_link: logType === "letter_to_editor" && publishedLink ? publishedLink : null,
-    hours: logType === "volunteer_hours" ? Number(hoursRaw) : null,
-    category: logType === "volunteer_hours" && category ? category : null,
-    note: note || null,
-    status: "published",
-  });
+  const { error } = await supabase
+    .from("civic_logs")
+    .insert({ user_id: user.id, ...buildRow(f, "published") });
 
   if (error) return { error: "Couldn't save that log entry. Try again." };
 
@@ -55,36 +71,40 @@ export async function addCivicLog(formData: FormData): Promise<{ error?: string 
 
 // Auto-save safety net: called when the add-a-log window closes
 // (backdrop click, Escape, or the ✕) while there's unsaved content in
-// the form, so a half-finished log never just vanishes. Landed as a
-// 'draft' — visible only on your own profile, with an easy way to
-// finish or delete it, and excluded from your public report card
-// counts until you do.
+// a BRAND NEW entry, so a half-finished log never just vanishes.
+// Landed as a 'draft' — visible only on your own profile, excluded
+// from your public report card counts until you finish it.
 export async function saveDraftCivicLog(formData: FormData): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
+  const f = readFields(formData);
+  if (!LOG_TYPES.includes(f.logType)) return {};
 
-  const logType = String(formData.get("log_type") ?? "");
-  if (!["letter_to_editor", "community_meeting", "volunteer_hours", "testimony"].includes(logType)) {
-    return {};
-  }
+  const { error } = await supabase
+    .from("civic_logs")
+    .insert({ user_id: user.id, ...buildRow(f, "draft") });
 
-  const occurredOn = String(formData.get("occurred_on") ?? "").trim();
-  const note = String(formData.get("note") ?? "").trim();
-  const published = formData.get("published") === "on";
-  const publishedLink = String(formData.get("published_link") ?? "").trim();
-  const hoursRaw = String(formData.get("hours") ?? "").trim();
-  const category = String(formData.get("category") ?? "").trim();
+  if (error) return { error: "Couldn't save that draft." };
 
-  const { error } = await supabase.from("civic_logs").insert({
-    user_id: user.id,
-    log_type: logType,
-    occurred_on: occurredOn || new Date().toISOString().slice(0, 10),
-    published: logType === "letter_to_editor" ? published : false,
-    published_link: logType === "letter_to_editor" && publishedLink ? publishedLink : null,
-    hours: logType === "volunteer_hours" && hoursRaw ? Number(hoursRaw) : null,
-    category: logType === "volunteer_hours" && category ? category : null,
-    note: note || null,
-    status: "draft",
-  });
+  revalidatePath("/profile");
+  return {};
+}
+
+// Same auto-save safety net, but for an EXISTING draft you reopened to
+// finish — updates that same row instead of inserting a new one. Every
+// edit to an unfinished log used to insert yet another draft row on
+// close, so the list of "unfinished" logs kept growing instead of just
+// reflecting the one you were actually working on.
+export async function updateDraftCivicLog(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const id = String(formData.get("id"));
+  const f = readFields(formData);
+  if (!id || !LOG_TYPES.includes(f.logType)) return {};
+
+  const { error } = await supabase
+    .from("civic_logs")
+    .update(buildRow(f, "draft"))
+    .eq("id", id)
+    .eq("user_id", user.id);
 
   if (error) return { error: "Couldn't save that draft." };
 
@@ -97,31 +117,16 @@ export async function saveDraftCivicLog(formData: FormData): Promise<{ error?: s
 // orphaned duplicate behind.
 export async function publishCivicLogDraft(formData: FormData): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
-
   const id = String(formData.get("id"));
-  const logType = String(formData.get("log_type") ?? "");
-  const occurredOn = String(formData.get("occurred_on") ?? "").trim();
-  const note = String(formData.get("note") ?? "").trim();
-  const published = formData.get("published") === "on";
-  const publishedLink = String(formData.get("published_link") ?? "").trim();
-  const hoursRaw = String(formData.get("hours") ?? "").trim();
-  const category = String(formData.get("category") ?? "").trim();
+  const f = readFields(formData);
 
-  if (logType === "volunteer_hours" && (!hoursRaw || Number(hoursRaw) <= 0)) {
+  if (f.logType === "volunteer_hours" && (!f.hoursRaw || Number(f.hoursRaw) <= 0)) {
     return { error: "Enter how many hours you volunteered." };
   }
 
   const { error } = await supabase
     .from("civic_logs")
-    .update({
-      occurred_on: occurredOn || new Date().toISOString().slice(0, 10),
-      published: logType === "letter_to_editor" ? published : false,
-      published_link: logType === "letter_to_editor" && publishedLink ? publishedLink : null,
-      hours: logType === "volunteer_hours" ? Number(hoursRaw) : null,
-      category: logType === "volunteer_hours" && category ? category : null,
-      note: note || null,
-      status: "published",
-    })
+    .update(buildRow(f, "published"))
     .eq("id", id)
     .eq("user_id", user.id);
 

@@ -64,27 +64,41 @@ export default async function ProfilePage() {
         : Promise.resolve({ data: [] as { author_id: string }[] }),
       supabase
         .from("power_tree_node_updates")
-        .select("proposal_power_tree_nodes ( decision_maker_id )")
+        .select("proposal_power_tree_nodes ( decision_maker_id, decision_makers ( name ) )")
         .eq("author_id", user.id),
     ]);
 
-  const peopleConversedWith = new Set(
-    [...(repliesToMe ?? []), ...(peopleIRepliedTo ?? [])]
-      .map((r: any) => r.author_id)
-      .filter((id: string) => id !== user.id)
-  ).size;
+  const peopleConversedWithIds = [
+    ...new Set(
+      [...(repliesToMe ?? []), ...(peopleIRepliedTo ?? [])]
+        .map((r: any) => r.author_id)
+        .filter((id: string) => id !== user.id)
+    ),
+  ];
+  const peopleConversedWith = peopleConversedWithIds.length;
 
-  const decisionMakersEngaged = new Set(
-    (myPowerTreeUpdates ?? [])
-      .map((u: any) => u.proposal_power_tree_nodes?.decision_maker_id)
-      .filter(Boolean)
-  ).size;
+  const { data: conversedProfiles } =
+    peopleConversedWithIds.length > 0
+      ? await supabase.from("profiles").select("id, display_name").in("id", peopleConversedWithIds)
+      : { data: [] as { id: string; display_name: string | null }[] };
 
-  const contributedToOthers = new Set(
-    (myComments ?? [])
-      .filter((c: any) => c.is_suggested_edit && c.proposals?.owner_id && c.proposals.owner_id !== user.id)
-      .map((c: any) => c.proposal_id)
-  ).size;
+  const decisionMakerNamesById = new Map<string, string>();
+  for (const u of (myPowerTreeUpdates ?? []) as any[]) {
+    const dmId = u.proposal_power_tree_nodes?.decision_maker_id;
+    const dmName = u.proposal_power_tree_nodes?.decision_makers?.name;
+    if (dmId && dmName && !decisionMakerNamesById.has(dmId)) {
+      decisionMakerNamesById.set(dmId, dmName);
+    }
+  }
+  const decisionMakersEngaged = decisionMakerNamesById.size;
+
+  const contributedProposals = new Map<string, string>();
+  for (const c of (myComments ?? []) as any[]) {
+    if (c.is_suggested_edit && c.proposals?.owner_id && c.proposals.owner_id !== user.id) {
+      contributedProposals.set(c.proposal_id, c.proposals?.title ?? "A proposal");
+    }
+  }
+  const contributedToOthers = contributedProposals.size;
 
   const { data: civicLogsRaw } = await supabase
     .from("civic_logs")
@@ -96,8 +110,10 @@ export default async function ProfilePage() {
     id: l.id,
     logType: l.log_type,
     occurredOn: l.occurred_on,
+    title: l.title,
     published: l.published,
     publishedLink: l.published_link,
+    organization: l.organization,
     hours: l.hours,
     category: l.category,
     note: l.note,
@@ -119,6 +135,30 @@ export default async function ProfilePage() {
       .filter((l) => l.logType === "volunteer_hours")
       .reduce((sum, l) => sum + (l.hours ?? 0), 0),
     testimonyGiven: publishedLogs.filter((l) => l.logType === "testimony").length,
+  };
+
+  // Feeds the "click a stat tile to see what's behind it" popups for
+  // the platform-engagement half (the four self-reported log types
+  // just use the `logs` list directly on the client, no extra data
+  // needed for those).
+  const civicDetails = {
+    proposalsMade: (myProposals ?? []).map((p: any) => ({
+      label: p.title,
+      href: `/proposals/${p.id}`,
+    })),
+    contributedToOthers: [...contributedProposals.entries()].map(([id, title]) => ({
+      label: title,
+      href: `/proposals/${id}`,
+    })),
+    commentsMade: (myComments ?? []).map((c: any) => ({
+      label: c.body.length > 80 ? `${c.body.slice(0, 80)}…` : c.body,
+      sublabel: c.proposals?.title ?? undefined,
+      href: `/proposals/${c.proposal_id}`,
+    })),
+    peopleConversedWith: (conversedProfiles ?? []).map((p: any) => ({
+      label: p.display_name ?? "A resident",
+    })),
+    decisionMakersEngaged: [...decisionMakerNamesById.values()].map((name) => ({ label: name })),
   };
 
   // Grouped by proposal so "Your comments" reads as one row per
@@ -152,7 +192,12 @@ export default async function ProfilePage() {
 
       <ProfileInfoCard profile={profile} />
 
-      <CivicReportCard stats={civicStats} logs={civicLogs} categoryColor="#6C3FD1" />
+      <CivicReportCard
+        stats={civicStats}
+        logs={civicLogs}
+        details={civicDetails}
+        categoryColor="#6C3FD1"
+      />
 
       <div>
         <h2 className="text-lg font-semibold">Your proposals</h2>
