@@ -191,17 +191,51 @@ export async function addVolunteerCategoryAdmin(formData: FormData): Promise<{ e
   return {};
 }
 
-// Thin wrapper around addVolunteerCategoryAdmin for the "orphaned
-// categories" recovery form on the admin page — that form is rendered
-// directly in a Server Component (no client-side error state to show),
-// so it's wired straight to a form action rather than through the
-// useState wrapper the combobox-style add form uses. Plain <form
-// action={fn}> requires the action to return void, not the
-// {error?}-shaped result addVolunteerCategoryAdmin normally returns, so
-// this just calls through and discards it — if it fails (name already
-// exists), the row simply stays in the orphaned list to try again.
-export async function addVolunteerCategoryFromOrphan(formData: FormData): Promise<void> {
-  await addVolunteerCategoryAdmin(formData);
+// Recovery action for the "used in logs, but no longer a tag" section:
+// an orphaned label is civic_logs.category text with no matching
+// volunteer_categories row (almost always because the tag was deleted,
+// or — as turned out to be the actual cause the first time this showed
+// up — a near-duplicate got created with different capitalization,
+// e.g. typing "Civic and Government" into the "add a log" combobox
+// while the real tag was "Civic & Government", so the two never
+// matched as the same tag).
+//
+// This does NOT always insert a new row. It first checks (case-
+// insensitively) whether a tag already exists that's just a
+// capitalization/spelling variant of this orphaned text. If so, it
+// merges: every civic_logs row using the orphaned text gets bulk-
+// updated to that existing tag's exact label (same cascade
+// renameVolunteerCategory already does), so the hours join the
+// existing tag instead of creating a duplicate. Only if nothing close
+// enough already exists does it create a brand-new tag, same as before.
+// Previously this just called addVolunteerCategoryAdmin directly and
+// silently discarded its {error?} result to satisfy the plain <form
+// action={fn}> void-return requirement — which meant clicking "add
+// back as a tag" did nothing and gave no clue why, in exactly this
+// already-exists case.
+export async function resolveOrphanedVolunteerCategory(formData: FormData): Promise<void> {
+  const { supabase } = await requireAdmin();
+
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return;
+
+  const { data: existingTag } = await supabase
+    .from("volunteer_categories")
+    .select("id, label")
+    .ilike("label", label)
+    .maybeSingle();
+
+  if (existingTag) {
+    if (existingTag.label !== label) {
+      await supabase.from("civic_logs").update({ category: existingTag.label }).eq("category", label);
+    }
+  } else {
+    await supabase.from("volunteer_categories").insert({ label });
+  }
+
+  revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/profile");
+  revalidatePath("/community-dashboard");
 }
 
 // Renames a category label in place. Past civic_logs rows store the

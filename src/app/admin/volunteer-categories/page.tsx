@@ -4,7 +4,7 @@ import { AddVolunteerCategoryForm } from "@/components/add-volunteer-category-fo
 import { AddVolunteerCategoryGroupForm } from "@/components/add-volunteer-category-group-form";
 import { VolunteerCategoryRow } from "@/components/volunteer-category-row";
 import { VolunteerCategoryGroupRow } from "@/components/volunteer-category-group-row";
-import { addVolunteerCategoryFromOrphan } from "@/app/admin/actions";
+import { resolveOrphanedVolunteerCategory } from "@/app/admin/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -67,13 +67,23 @@ export default async function VolunteerCategoriesAdminPage() {
   // row to show. This surfaces them explicitly so they can be re-added
   // (and then assigned to a group) instead of silently sitting there.
   const knownLabels = new Set((categories ?? []).map((c: any) => c.label));
+  const labelsByLowercase = new Map(
+    (categories ?? []).map((c: any) => [c.label.toLowerCase(), c.label as string])
+  );
   const orphanedLabels = [
     ...new Set(
       (logCategoryRows ?? [])
         .map((r: any) => r.category as string)
         .filter((label) => label && !knownLabels.has(label))
     ),
-  ].sort();
+  ]
+    .sort()
+    // A near-duplicate that only differs by capitalization/spacing (e.g.
+    // "Civic and Government" vs. "Civic & Government") already has a
+    // real tag to merge into — surfaced separately so the button copy
+    // can say "merge into X" instead of the more generic "add back",
+    // and so it's clear this won't create a second, confusing tag.
+    .map((label) => ({ label, mergeInto: labelsByLowercase.get(label.toLowerCase()) ?? null }));
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -156,22 +166,33 @@ export default async function VolunteerCategoriesAdminPage() {
               <p className="text-xs text-amber-700">
                 These show up as "Ungrouped" hours on the community dashboard because someone
                 logged hours under them before the tag was deleted — deleting a tag never touches
-                past logs, so the text stuck around even though the tag didn't. Add one back to
-                give it a home, then assign it to a group above.
+                past logs, so the text stuck around even though the tag didn't. Some are just a
+                capitalization or wording variant of a tag that already exists (often from typing a
+                slightly different version into "Add a log" before the real tag existed, or a rename
+                that landed as a near-duplicate instead of updating in place) — those merge into the
+                existing tag instead of creating a second one. Anything else gets recreated fresh, so
+                you can then assign it to a group above.
               </p>
-              {orphanedLabels.map((label) => (
+              {orphanedLabels.map(({ label, mergeInto }) => (
                 <form
                   key={label}
-                  action={addVolunteerCategoryFromOrphan}
+                  action={resolveOrphanedVolunteerCategory}
                   className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm"
                 >
                   <input type="hidden" name="label" value={label} />
-                  <span className="text-neutral-700">{label}</span>
+                  <span className="text-neutral-700">
+                    {label}
+                    {mergeInto && (
+                      <span className="ml-1.5 text-[11px] text-neutral-400">
+                        → matches existing tag "{mergeInto}"
+                      </span>
+                    )}
+                  </span>
                   <button
                     type="submit"
                     className="shrink-0 rounded border border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
                   >
-                    + Add back as a tag
+                    {mergeInto ? `Merge into "${mergeInto}"` : "+ Add back as a tag"}
                   </button>
                 </form>
               ))}
