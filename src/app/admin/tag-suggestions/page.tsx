@@ -39,7 +39,7 @@ export default async function TagSuggestionsAdminPage() {
   const { data: suggestions } = await supabase
     .from("tag_suggestions")
     .select(
-      "id, label, status, created_at, proposal_id, proposals ( title ), profiles:suggested_by ( display_name )"
+      "id, label, status, created_at, proposal_id, suggested_by, proposals ( title ), profiles:suggested_by ( display_name )"
     )
     .eq("status", "pending")
     .order("created_at", { ascending: true });
@@ -61,7 +61,11 @@ export default async function TagSuggestionsAdminPage() {
             <div>
               <span className="text-base font-semibold">{s.label}</span>
               <p className="mt-0.5 text-xs text-neutral-500">
-                Suggested by {s.profiles?.display_name ?? "a resident"} on{" "}
+                Suggested by{" "}
+                <Link href={`/u/${s.suggested_by}`} className="underline">
+                  {s.profiles?.display_name ?? "a resident"}
+                </Link>{" "}
+                on{" "}
                 <Link
                   href={`/proposals/${s.proposal_id}`}
                   className="underline"

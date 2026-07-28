@@ -61,6 +61,14 @@ export default async function AdminHomePage() {
             Everyone who's registered on the platform.
           </p>
         </li>
+        <li className="rounded-lg border border-neutral-200 bg-white p-4">
+          <Link href="/admin/volunteer-categories" className="text-sm font-semibold underline">
+            Volunteer categories
+          </Link>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            The shared list people pick from when logging volunteer hours.
+          </p>
+        </li>
       </ul>
     </div>
   );

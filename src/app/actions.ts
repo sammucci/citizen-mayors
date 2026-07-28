@@ -33,6 +33,12 @@ export async function updateProfile(formData: FormData): Promise<{ error?: strin
   const ageRange = String(formData.get("age_range") ?? "").trim();
   const raceEthnicity = String(formData.get("race_ethnicity") ?? "").trim();
   const gender = String(formData.get("gender") ?? "").trim();
+  const housingStatus = String(formData.get("housing_status") ?? "").trim();
+  // Shown on the person's PUBLIC profile (/u/[id]) — the one free-text
+  // field on this form that isn't treated as private demographic data.
+  // Capped well short of the input's own good sense, just so a pasted
+  // wall of text can't blow out the public profile card's layout.
+  const bio = String(formData.get("bio") ?? "").trim().slice(0, 280);
 
   if (zipCode && councilDistrict) {
     const { data: matches } = await supabase
@@ -64,10 +70,13 @@ export async function updateProfile(formData: FormData): Promise<{ error?: strin
       age_range: ageRange || null,
       race_ethnicity: raceEthnicity || null,
       gender: gender || null,
+      housing_status: housingStatus || null,
+      bio: bio || null,
     })
     .eq("id", user.id);
 
   revalidatePath("/profile");
+  revalidatePath(`/u/${user.id}`);
   revalidatePath("/");
   return {};
 }

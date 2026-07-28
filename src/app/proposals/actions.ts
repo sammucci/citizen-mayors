@@ -21,6 +21,21 @@ async function requireUser() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Blocked members can still sign in and read everything (their past
+  // posts stay up, matching the non-destructive approach used
+  // elsewhere) — this just stops any NEW write: proposals, comments,
+  // votes, tags, decision-chain contributions, all of which funnel
+  // through this same requireUser().
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_blocked")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profile?.is_blocked) {
+    throw new Error("Your account has been blocked from posting. Contact the site admin if you think this is a mistake.");
+  }
+
   return { supabase, user };
 }
 
@@ -69,6 +84,11 @@ export async function createProposal(formData: FormData) {
   const geographyScope = String(formData.get("geography_scope") ?? "citywide");
   const geographyLabel = String(formData.get("geography_label") ?? "").trim();
   const tagIds = formData.getAll("tag_ids").map((v) => Number(v));
+  // Two submit buttons on the form share the "published" field name with
+  // different values — only the one actually clicked ends up in
+  // formData, so this reads as "publish now" unless "Save as draft" was
+  // the one pressed.
+  const published = formData.get("published") !== "false";
 
   if (!title || !summary || !body) {
     throw new Error("Title, summary, and body text are all required.");
@@ -93,6 +113,7 @@ export async function createProposal(formData: FormData) {
       geography_scope: geographyScope,
       geography_label: geographyScope === "citywide" ? null : geographyLabel || null,
       council_district: councilDistrict,
+      published,
     })
     .select("id")
     .single();
@@ -287,6 +308,60 @@ export async function updateProposalDetails(formData: FormData) {
     .eq("id", proposalId);
 
   if (error) throw new Error(error.message);
+
+  revalidatePath(`/proposals/${proposalId}`);
+  revalidatePath("/");
+}
+
+// Permanently removes a proposal — previously the only option was
+// editing; there was no way back out short of asking Samantha to do it
+// by hand in the database. Every child table (comments, tags, versions,
+// the whole decision-power-tree, reactions, flags, tag suggestions) is
+// declared "on delete cascade" back to proposals in the schema, so this
+// one delete cleans up all of it — no separate cleanup queries needed.
+export async function deleteProposal(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can delete it.");
+  }
+
+  const { error } = await supabase.from("proposals").delete().eq("id", proposalId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+// Reversible alternative to deleting — takes a proposal down from
+// public view (or brings it back) without touching its comments,
+// decision chain, versions, or votes. The RLS select policy on
+// proposals is what actually enforces the hiding (see schema); this
+// just flips the flag it reads. Also doubles as a way to publish a
+// proposal that was originally saved as a draft.
+export async function toggleProposalPublished(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const nextPublished = formData.get("published") === "true";
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can publish or unpublish it.");
+  }
+
+  await supabase.from("proposals").update({ published: nextPublished }).eq("id", proposalId);
 
   revalidatePath(`/proposals/${proposalId}`);
   revalidatePath("/");

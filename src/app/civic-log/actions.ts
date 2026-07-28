@@ -4,6 +4,27 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+// Same "grows as you use it" idea as decision_makers: if the category
+// someone typed for volunteer hours isn't already in the shared
+// registry, add it (case-insensitive match reused if it exists) so the
+// next person logging hours sees it as a suggestion instead of
+// retyping a near-duplicate. Best-effort — a failure here shouldn't
+// block saving the actual log entry, so errors are swallowed.
+async function ensureVolunteerCategory(
+  supabase: ReturnType<typeof createClient>,
+  category: string
+) {
+  if (!category) return;
+  const { data: existing } = await supabase
+    .from("volunteer_categories")
+    .select("id")
+    .ilike("label", category)
+    .maybeSingle();
+  if (!existing) {
+    await supabase.from("volunteer_categories").insert({ label: category });
+  }
+}
+
 async function requireUser() {
   const supabase = createClient();
   const {
@@ -64,6 +85,10 @@ export async function addCivicLog(formData: FormData): Promise<{ error?: string 
     .insert({ user_id: user.id, ...buildRow(f, "published") });
 
   if (error) return { error: "Couldn't save that log entry. Try again." };
+
+  if (f.logType === "volunteer_hours" && f.category) {
+    await ensureVolunteerCategory(supabase, f.category);
+  }
 
   revalidatePath("/profile");
   return {};
@@ -131,6 +156,10 @@ export async function publishCivicLogDraft(formData: FormData): Promise<{ error?
     .eq("user_id", user.id);
 
   if (error) return { error: "Couldn't save that log entry. Try again." };
+
+  if (f.logType === "volunteer_hours" && f.category) {
+    await ensureVolunteerCategory(supabase, f.category);
+  }
 
   revalidatePath("/profile");
   return {};

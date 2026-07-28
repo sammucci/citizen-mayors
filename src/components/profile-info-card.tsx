@@ -1,16 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { updateProfile } from "@/app/actions";
 import { AvatarUploadControl } from "@/components/avatar-upload-control";
 
 type Profile = {
+  id: string;
   display_name: string | null;
   zip_code: string | null;
   council_district: number | null;
   age_range: string | null;
   race_ethnicity: string | null;
   gender: string | null;
+  housing_status: string | null;
+  bio: string | null;
   avatar_url: string | null;
 } | null;
 
@@ -29,6 +33,7 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
     ["Age range", profile?.age_range],
     ["Race / ethnicity", profile?.race_ethnicity],
     ["Gender", profile?.gender],
+    ["Housing status", profile?.housing_status],
   ].filter(([, value]) => value) as [string, string][];
 
   if (!editing) {
@@ -64,6 +69,21 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             Edit
           </button>
         </div>
+
+        {profile?.bio && (
+          <p className="mt-3 border-t border-neutral-100 pt-3 text-sm text-neutral-700">
+            {profile.bio}
+          </p>
+        )}
+
+        {profile?.id && (
+          <Link
+            href={`/u/${profile.id}`}
+            className="mt-2 inline-block text-xs text-duty-purple underline"
+          >
+            View your public profile
+          </Link>
+        )}
 
         {demographicRows.length > 0 ? (
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-neutral-100 pt-3 text-sm">
@@ -141,6 +161,24 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             className="input"
             placeholder="e.g. 19125"
           />
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-neutral-700">
+            Short civic bio (optional)
+          </span>
+          <textarea
+            name="bio"
+            rows={2}
+            maxLength={280}
+            defaultValue={profile?.bio ?? ""}
+            placeholder="A sentence or two about what you're civically into — this is the one thing here that shows on your public profile."
+            className="input text-sm"
+          />
+          <span className="mt-1 block text-[11px] text-neutral-400">
+            Shown on your public profile, alongside your name, proposals, and comments. Everything
+            else on this page stays private.
+          </span>
         </label>
         {error && (
           <p className="rounded-md bg-duty-red/10 px-3 py-2 text-xs text-duty-red">{error}</p>
@@ -223,6 +261,22 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             <option value="Man">Man</option>
             <option value="Non-binary">Non-binary</option>
             <option value="Prefer to self-describe">Prefer to self-describe</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-neutral-700">
+            Housing status (optional)
+          </span>
+          <select
+            name="housing_status"
+            defaultValue={profile?.housing_status ?? ""}
+            className="input"
+          >
+            <option value="">Prefer not to say</option>
+            <option value="Homeowner">Homeowner</option>
+            <option value="Renter">Renter</option>
+            <option value="Unhoused">Unhoused</option>
           </select>
         </label>
 

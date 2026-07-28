@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   addPowerTreeNodeUpdate,
   approvePowerTreeNode,
@@ -54,6 +55,7 @@ export function PowerTreeNodeCard({
     note: string | null;
     status: "pending" | "approved";
     submittedByName: string;
+    submittedById: string | null;
     updates: Update[];
   };
   isFinal: boolean;
@@ -489,7 +491,10 @@ export function PowerTreeNodeCard({
                       </div>
                       <div className="mt-1 flex items-center gap-2 text-neutral-400">
                         <span>
-                          {u.authorName} · {formatDate(u.created_at)}
+                          <Link href={`/u/${u.authorId}`} className="hover:underline">
+                            {u.authorName}
+                          </Link>{" "}
+                          · {formatDate(u.created_at)}
                         </span>
                         {canContribute && (
                           <button
@@ -515,7 +520,10 @@ export function PowerTreeNodeCard({
                                 )}
                               </div>
                               <p className="mt-1 text-neutral-400">
-                                {r.authorName} · {formatDate(r.created_at)}
+                                <Link href={`/u/${r.authorId}`} className="hover:underline">
+                                  {r.authorName}
+                                </Link>{" "}
+                                · {formatDate(r.created_at)}
                               </p>
                             </li>
                           ))}

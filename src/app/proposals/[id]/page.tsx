@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   addComment,
@@ -12,6 +13,7 @@ import { CollapsibleReplies } from "@/components/collapsible-replies";
 import { CommentBody } from "@/components/comment-body";
 import { CoverImageControl } from "@/components/cover-image-control";
 import { EditProposalForm } from "@/components/edit-proposal-form";
+import { PublishToggleButton } from "@/components/publish-toggle-button";
 import { PowerTreeChain } from "@/components/power-tree-chain";
 import { RepositionableImage } from "@/components/repositionable-image";
 import { ReplyToggle } from "@/components/reply-toggle";
@@ -218,7 +220,9 @@ export default async function ProposalPage({
                 </span>
               )}
             </span>
-            {c.profiles?.display_name ?? "A resident"}
+            <Link href={`/u/${c.author_id}`} className="hover:underline">
+              {c.profiles?.display_name ?? "A resident"}
+            </Link>
           </span>
           <div className="flex items-center gap-2">
             {c.is_suggested_edit && (
@@ -408,6 +412,11 @@ export default async function ProposalPage({
                 </RepositionableImage>
               )}
               <div className="p-4">
+                {!proposal.published && isOwner && (
+                  <p className="mb-2 inline-block rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-white">
+                    Draft — only you can see this
+                  </p>
+                )}
                 <span className="text-xs text-neutral-500">📍 {location}</span>
 
                 <h1 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">
@@ -416,7 +425,10 @@ export default async function ProposalPage({
 
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                    {proposal.type} by {ownerProfile?.display_name ?? "a resident"}
+                    {proposal.type} by{" "}
+                    <Link href={`/u/${proposal.owner_id}`} className="hover:underline">
+                      {ownerProfile?.display_name ?? "a resident"}
+                    </Link>
                   </span>
                   {/* Stacked back to buttons-on-top, count-below (how
                       this looked before, and how it's drawn in your
@@ -526,6 +538,8 @@ export default async function ProposalPage({
                         }}
                       />
                     </details>
+
+                    <PublishToggleButton proposalId={proposal.id} published={proposal.published} />
                   </div>
                 )}
               </div>
@@ -778,6 +792,7 @@ export default async function ProposalPage({
                   note: node.note,
                   status: node.status === "pending" ? "pending" : "approved",
                   submittedByName: node.profiles?.display_name ?? "A resident",
+                  submittedById: node.submitted_by ?? null,
                   updates: (node.power_tree_node_updates ?? [])
                     .slice()
                     .sort(

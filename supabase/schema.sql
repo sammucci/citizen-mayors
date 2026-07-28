@@ -16,9 +16,17 @@ create table public.profiles (
   age_range text, -- optional self-reported demographics, used only to gauge
   race_ethnicity text, -- how well participation reflects Philadelphia's real
   gender text, -- population and council districts. Never required.
+  housing_status text, -- homeowner / renter / unhoused / prefer not to say — same treatment as the other demographics: optional, aggregate-only, never shown on a public profile
+  bio text, -- short, optional civic summary shown on the person's PUBLIC profile (/u/[id]) — the only free-text field that's ever public
   accepted_guidelines_at timestamptz, -- respectful-dialogue prompt acknowledgment
   is_admin boolean not null default false, -- gates admin-only screens, e.g. tag-suggestion review
+  is_blocked boolean not null default false, -- admin-set; stops new writes only, never hides past content
   avatar_url text, -- optional profile picture, stored in the "avatars" bucket
+  -- Read on /profile, then immediately bumped to now() right after —
+  -- lets the profile page show "what's new since you were last here"
+  -- (new comments/replies on your stuff, unresolved suggested edits)
+  -- without a separate notifications table.
+  notifications_seen_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
 
@@ -71,6 +79,20 @@ create table public.decision_makers (
 create unique index decision_makers_name_kind_idx
   on public.decision_makers (lower(name), kind);
 
+-- Shared, crowdsourced list of volunteer-hours categories (Environment,
+-- Youth, Food security, etc.) — same "grows via add-new" pattern as
+-- decision_makers and tags. Exists so "hours by category" reporting on
+-- the community dashboard is actually meaningful instead of splitting
+-- across "Environment" / "environment" / "enviro" as separate buckets.
+-- civic_logs.category stores the label as plain text (not a foreign
+-- key) — deleting a category from this registry only removes it as a
+-- future suggestion, it never rewrites or orphans past log entries.
+create table public.volunteer_categories (
+  id serial primary key,
+  label text unique not null,
+  created_at timestamptz not null default now()
+);
+
 -- ---------------------------------------------------------------------------
 -- Proposals
 -- ---------------------------------------------------------------------------
@@ -101,6 +123,14 @@ create table public.proposals (
   -- part of the photo visible instead of always cropping dead-center.
   image_position_x smallint not null default 50 check (image_position_x between 0 and 100),
   image_position_y smallint not null default 50 check (image_position_y between 0 and 100),
+
+  -- Lets an owner take a proposal down from public view without
+  -- permanently destroying it (comments, decision chain, and votes all
+  -- stay intact underneath) — a reversible alternative to deleting.
+  -- The owner can still see and re-publish their own unpublished
+  -- proposals; the public-read policy below is what actually hides it
+  -- from everyone else.
+  published boolean not null default true,
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -302,6 +332,7 @@ alter table public.zip_council_districts enable row level security;
 alter table public.categories enable row level security;
 alter table public.tags enable row level security;
 alter table public.decision_makers enable row level security;
+alter table public.volunteer_categories enable row level security;
 alter table public.proposals enable row level security;
 alter table public.proposal_tags enable row level security;
 alter table public.proposal_versions enable row level security;
@@ -316,9 +347,26 @@ alter table public.tag_suggestions enable row level security;
 create policy "public read categories" on public.categories for select using (true);
 create policy "public read tags" on public.tags for select using (true);
 create policy "public read decision makers" on public.decision_makers for select using (true);
+create policy "public read volunteer categories" on public.volunteer_categories for select using (true);
+-- Anyone signed in can add a brand-new category while logging volunteer
+-- hours (same "grows as you use it" idea as decision_makers) — but only
+-- an admin can rename or remove one, same split as the decision-maker
+-- registry.
+create policy "authenticated add volunteer categories" on public.volunteer_categories for insert
+  with check (auth.role() = 'authenticated');
+create policy "admin updates volunteer categories" on public.volunteer_categories for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin deletes volunteer categories" on public.volunteer_categories for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 create policy "public read proposal power tree" on public.proposal_power_tree_nodes for select using (true);
 create policy "public read power_tree_node_updates" on public.power_tree_node_updates for select using (true);
-create policy "public read proposals" on public.proposals for select using (true);
+-- Unpublished proposals are only visible to their own owner — everyone
+-- else (including signed-out visitors) gets exactly the same result as
+-- if the row didn't exist. This is the ONLY thing that makes
+-- "unpublish" actually hide a proposal; the app layer never filters
+-- this out itself.
+create policy "public read published proposals" on public.proposals for select
+  using (published or auth.uid() = owner_id);
 create policy "public read proposal_tags" on public.proposal_tags for select using (true);
 create policy "public read proposal_versions" on public.proposal_versions for select using (true);
 create policy "public read comments" on public.comments for select using (true);
@@ -336,6 +384,14 @@ create policy "user creates own profile" on public.profiles for insert with chec
 create policy "authenticated create proposals" on public.proposals for insert
   with check (auth.uid() = owner_id);
 create policy "owner updates own proposal" on public.proposals for update
+  using (auth.uid() = owner_id);
+-- Previously the only way in was creating one — no way to remove one
+-- short of asking Samantha to do it by hand. Every child table
+-- (comments, proposal_tags, proposal_versions, proposal_power_tree_nodes,
+-- reactions, proposal_flags, tag_suggestions) already references
+-- proposals with "on delete cascade", so this one delete cleans up the
+-- whole proposal's data with no separate cleanup step needed.
+create policy "owner deletes own proposal" on public.proposals for delete
   using (auth.uid() = owner_id);
 
 create policy "authenticated create proposal_tags" on public.proposal_tags for insert

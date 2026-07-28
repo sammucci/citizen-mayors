@@ -8,6 +8,8 @@ import {
   saveDraftCivicLog,
   updateDraftCivicLog,
 } from "@/app/civic-log/actions";
+import { VolunteerCategoryField } from "@/components/volunteer-category-field";
+import { CivicReportCardExport } from "@/components/civic-report-card-export";
 
 export type CivicStats = {
   proposalsMade: number;
@@ -80,14 +82,19 @@ export function CivicReportCard({
   logs,
   details,
   categoryColor,
+  volunteerCategories,
+  displayName,
 }: {
   stats: CivicStats;
   logs: CivicLog[];
   details: CivicDetails;
   categoryColor: string;
+  volunteerCategories: string[];
+  displayName: string;
 }) {
   const [modalMode, setModalMode] = useState<null | "new" | CivicLog>(null);
   const [detailKey, setDetailKey] = useState<ClickableStatKey | null>(null);
+  const [exporting, setExporting] = useState(false);
   const dirtyRef = useRef(false);
 
   const drafts = logs.filter((l) => l.status === "draft");
@@ -102,13 +109,22 @@ export function CivicReportCard({
             A year-in-review of what you've actually done — shareable, so far.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setModalMode("new")}
-          className="shrink-0 rounded-full bg-duty-purple px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
-        >
-          + Add a log
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setExporting(true)}
+            className="rounded-full border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50"
+          >
+            Export
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalMode("new")}
+            className="rounded-full bg-duty-purple px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+          >
+            + Add a log
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -219,6 +235,7 @@ export function CivicReportCard({
         <AddLogModal
           existing={modalMode === "new" ? null : modalMode}
           categoryColor={categoryColor}
+          volunteerCategories={volunteerCategories}
           onDirty={() => {
             dirtyRef.current = true;
           }}
@@ -227,6 +244,16 @@ export function CivicReportCard({
             setModalMode(null);
           }}
           isDirty={() => dirtyRef.current}
+        />
+      )}
+
+      {exporting && (
+        <CivicReportCardExport
+          displayName={displayName}
+          stats={stats}
+          proposals={details.proposalsMade}
+          comments={details.commentsMade}
+          onClose={() => setExporting(false)}
         />
       )}
 
@@ -467,12 +494,14 @@ function StatTile({
 function AddLogModal({
   existing,
   categoryColor,
+  volunteerCategories,
   onDirty,
   onClose,
   isDirty,
 }: {
   existing: CivicLog | null;
   categoryColor: string;
+  volunteerCategories: string[];
   onDirty: () => void;
   onClose: () => void;
   isDirty: () => boolean;
@@ -656,10 +685,9 @@ function AddLogModal({
                 <span className="mb-1 block text-xs text-neutral-500">
                   Category (optional) — e.g. Environment, Youth, Food security
                 </span>
-                <input
-                  name="category"
+                <VolunteerCategoryField
+                  categories={volunteerCategories}
                   defaultValue={existing?.category ?? ""}
-                  className="input"
                 />
               </label>
             </>

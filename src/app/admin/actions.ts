@@ -164,3 +164,87 @@ export async function deleteDecisionMaker(
   revalidatePath("/admin/decision-makers");
   return {};
 }
+
+// The volunteer-category registry (Environment, Youth, Food security,
+// etc.) — same shared, crowdsourced idea as decision_makers, but there's
+// no foreign key from civic_logs.category back to it (category is
+// stored as plain text on each log entry), so renaming or deleting here
+// never touches, orphans, or breaks any past log entry. It only changes
+// what shows up as a suggestion the next time someone logs hours.
+export async function addVolunteerCategoryAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Give it a name first." };
+
+  const { data: existing } = await supabase
+    .from("volunteer_categories")
+    .select("id")
+    .ilike("label", label)
+    .maybeSingle();
+  if (existing) return { error: "That category already exists." };
+
+  const { error } = await supabase.from("volunteer_categories").insert({ label });
+  if (error) return { error: "Something went wrong adding that category." };
+
+  revalidatePath("/admin/volunteer-categories");
+  return {};
+}
+
+// Renames a category label in place — every past civic_logs row that
+// used the old text stays exactly as it was (it's plain text, not a
+// foreign key), so this only changes what future entries pick from,
+// not history.
+export async function renameVolunteerCategory(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Category name can't be empty." };
+
+  const { error } = await supabase.from("volunteer_categories").update({ label }).eq("id", id);
+  if (error) {
+    return {
+      error: /duplicate|unique/i.test(error.message)
+        ? "That name's already used by another category."
+        : "Something went wrong renaming that category.",
+    };
+  }
+
+  revalidatePath("/admin/volunteer-categories");
+  return {};
+}
+
+// Blocks or unblocks a member from posting. This only stops NEW writes
+// (every proposals/actions.ts action checks is_blocked via
+// requireUser()) — it deliberately does not hide, unpublish, or delete
+// anything the person already posted, matching the reversible/
+// non-destructive approach used for proposals in this same round. An
+// admin can't block themselves out from here (own row excluded in the
+// UI) to avoid an easy self-lockout.
+export async function toggleMemberBlocked(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const memberId = String(formData.get("member_id"));
+  const nextBlocked = formData.get("blocked") === "true";
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ is_blocked: nextBlocked })
+    .eq("id", memberId);
+  if (error) return { error: "Something went wrong updating that member." };
+
+  revalidatePath("/admin/members");
+  return {};
+}
+
+export async function deleteVolunteerCategory(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const { error } = await supabase.from("volunteer_categories").delete().eq("id", id);
+  if (error) return { error: "Something went wrong deleting that category." };
+
+  revalidatePath("/admin/volunteer-categories");
+  return {};
+}

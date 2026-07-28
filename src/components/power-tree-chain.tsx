@@ -23,6 +23,7 @@ type Node = {
   note: string | null;
   status: "pending" | "approved";
   submittedByName: string;
+  submittedById: string | null;
   updates: Update[];
 };
 

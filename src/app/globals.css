@@ -9,3 +9,17 @@ body {
 .input {
   @apply w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm;
 }
+
+/* "Save as PDF" for the civic report card export uses the browser's own
+   print dialog rather than a new PDF-generation dependency — free,
+   already built into every browser. #civic-export-print only exists in
+   the DOM while the export modal's print mode is active, so this rule
+   is otherwise inert. */
+@media print {
+  body.civic-export-printing > *:not(#civic-export-print-root) {
+    display: none !important;
+  }
+  #civic-export-print-root {
+    position: static !important;
+  }
+}

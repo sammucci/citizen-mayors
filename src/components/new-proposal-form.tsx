@@ -184,13 +184,28 @@ export function NewProposalForm({
         <input type="file" name="image" accept="image/*" className="text-sm" />
       </Field>
 
-      <button
-        type="submit"
-        className="rounded-md px-4 py-2 text-sm font-medium hover:opacity-90"
-        style={{ backgroundColor: selectedColor, color: readableTextColor(selectedColor) }}
-      >
-        Post proposal
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="submit"
+          name="published"
+          value="true"
+          className="rounded-md px-4 py-2 text-sm font-medium hover:opacity-90"
+          style={{ backgroundColor: selectedColor, color: readableTextColor(selectedColor) }}
+        >
+          Post proposal
+        </button>
+        <button
+          type="submit"
+          name="published"
+          value="false"
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+        >
+          Save as draft
+        </button>
+        <span className="text-xs text-neutral-500">
+          A draft is only visible to you — publish it whenever it's ready.
+        </span>
+      </div>
     </form>
   );
 }

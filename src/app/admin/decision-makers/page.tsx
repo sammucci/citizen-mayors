@@ -40,7 +40,7 @@ export default async function DecisionMakersAdminPage() {
 
   const { data: decisionMakers } = await supabase
     .from("decision_makers")
-    .select("id, name, kind, created_at, profiles:added_by ( display_name )")
+    .select("id, name, kind, created_at, added_by, profiles:added_by ( display_name )")
     .order("name");
 
   return (
@@ -68,7 +68,15 @@ export default async function DecisionMakersAdminPage() {
                 <span className="text-sm font-semibold">{primary}</span>
                 <p className="mt-0.5 text-xs text-neutral-500">
                   {subtitle ?? dm.kind.replace(/_/g, " ")}
-                  {dm.profiles?.display_name && ` · added by ${dm.profiles.display_name}`}
+                  {dm.profiles?.display_name && (
+                    <>
+                      {" "}
+                      · added by{" "}
+                      <Link href={`/u/${dm.added_by}`} className="hover:underline">
+                        {dm.profiles.display_name}
+                      </Link>
+                    </>
+                  )}
                 </p>
               </div>
               <DeleteDecisionMakerButton id={dm.id} name={dm.name} />

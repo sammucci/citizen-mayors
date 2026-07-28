@@ -47,6 +47,41 @@ function breakdown(rows: { value: string | null }[]) {
     }));
 }
 
+// Volunteer hours by category — separate from BreakdownList above
+// because this weighs by total hours logged, not by percent of people
+// who answered a demographic question. Straightforward "here's where
+// the hours are actually going" ranking instead.
+function HoursByCategory({ rows }: { rows: { category: string | null; hours: number | null }[] }) {
+  const totals = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.category) continue;
+    totals.set(r.category, (totals.get(r.category) ?? 0) + (r.hours ?? 0));
+  }
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const max = sorted.length > 0 ? sorted[0][1] : 0;
+
+  if (sorted.length === 0) {
+    return <p className="mt-1 text-xs text-neutral-400">No categorized volunteer hours logged yet.</p>;
+  }
+
+  return (
+    <ul className="mt-1.5 space-y-1">
+      {sorted.map(([category, hours]) => (
+        <li key={category} className="flex items-center gap-2 text-xs">
+          <span className="w-28 shrink-0 truncate text-neutral-600">{category}</span>
+          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
+            <span
+              className="block h-full rounded-full"
+              style={{ width: `${max > 0 ? (hours / max) * 100 : 0}%`, backgroundColor: STAT_COLORS.volunteerHours }}
+            />
+          </span>
+          <span className="w-16 shrink-0 text-right text-neutral-500">{hours} hrs</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function BreakdownList({ title, items, respondedCount, totalCount }: {
   title: string;
   items: { label: string; count: number; pct: number }[];
@@ -110,9 +145,11 @@ export default async function CommunityDashboardPage({
     supabase.from("power_tree_node_updates").select("proposal_power_tree_nodes ( decision_maker_id )"),
     supabase
       .from("civic_logs")
-      .select("log_type, published, hours")
+      .select("log_type, published, hours, category")
       .eq("status", "published"),
-    supabase.from("profiles").select("age_range, race_ethnicity, gender, council_district"),
+    supabase
+      .from("profiles")
+      .select("age_range, race_ethnicity, gender, housing_status, council_district"),
   ]);
 
   const contributedToOthers = (suggestedEdits ?? []).filter(
@@ -142,6 +179,7 @@ export default async function CommunityDashboardPage({
   const ageBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.age_range })));
   const raceBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.race_ethnicity })));
   const genderBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.gender })));
+  const housingBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.housing_status })));
 
   const districts = Array.from({ length: 10 }, (_, i) => i + 1);
 
@@ -180,7 +218,23 @@ export default async function CommunityDashboardPage({
 
       <div className="mt-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Who's showing up</h2>
+          <h2 className="group relative inline-flex items-center gap-1.5 text-lg font-semibold">
+            Who's showing up
+            <span
+              tabIndex={0}
+              className="flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full border border-neutral-300 text-[11px] font-normal leading-none text-neutral-500 hover:border-neutral-500"
+              aria-label="What this section means"
+            >
+              ⓘ
+            </span>
+            <span className="pointer-events-none absolute left-0 top-full z-10 mt-1.5 hidden w-72 rounded-md border border-neutral-200 bg-white p-2.5 text-xs font-normal normal-case text-neutral-600 shadow-md group-hover:block group-focus-within:block">
+              Self-reported, optional demographics — never required, never geocoded from an
+              address.{" "}
+              {selectedDistrict
+                ? `Showing the ${districtProfiles.length} member${districtProfiles.length === 1 ? "" : "s"} who put themselves in District ${selectedDistrict}.`
+                : `Showing all ${totalMembers} registered members.`}
+            </span>
+          </h2>
           <div className="flex flex-wrap gap-1.5">
             <Link
               href="/community-dashboard"
@@ -207,14 +261,7 @@ export default async function CommunityDashboardPage({
             ))}
           </div>
         </div>
-        <p className="mt-1 text-xs text-neutral-500">
-          Self-reported, optional demographics — never required, never geocoded from an address.
-          {selectedDistrict
-            ? ` Showing the ${districtProfiles.length} member${districtProfiles.length === 1 ? "" : "s"} who put themselves in District ${selectedDistrict}.`
-            : ` Showing all ${totalMembers} registered members.`}
-        </p>
-
-        <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-4">
           <BreakdownList
             title="Age range"
             items={ageBreakdown}
@@ -233,6 +280,21 @@ export default async function CommunityDashboardPage({
             respondedCount={genderBreakdown.reduce((s, i) => s + i.count, 0)}
             totalCount={districtProfiles.length}
           />
+          <BreakdownList
+            title="Housing status"
+            items={housingBreakdown}
+            respondedCount={housingBreakdown.reduce((s, i) => s + i.count, 0)}
+            totalCount={districtProfiles.length}
+          />
+        </div>
+
+        <div className="mt-5">
+          <p className="text-xs font-semibold text-neutral-700">Volunteer hours by category</p>
+          <p className="text-[11px] text-neutral-400">
+            Ranked by total hours logged citywide (not affected by the district filter above) —
+            same category list people pick from in "Add a log."
+          </p>
+          <HoursByCategory rows={logs.filter((l: any) => l.log_type === "volunteer_hours")} />
         </div>
 
         {/* Honest gap, not a guess: comparing "who's showing up" against

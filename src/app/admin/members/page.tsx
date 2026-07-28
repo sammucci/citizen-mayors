@@ -1,12 +1,18 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { BlockMemberButton } from "@/components/block-member-button";
 
 export const dynamic = "force-dynamic";
 
 // The third piece of the admin dashboard, alongside tag suggestions
-// and the decision-maker registry — just a plain list of who's signed
-// up. Read-only for now (no editing/banning/promoting-to-admin here
-// yet — that can grow into its own thing if it's ever needed).
+// and the decision-maker registry. Also where an admin can block a
+// member if they spot abuse — blocking stops new posts/comments/votes
+// but never retroactively hides or deletes anything already posted
+// (same reversible philosophy as the proposal publish/unpublish
+// toggle). Full ban/delete-account is intentionally NOT built here —
+// blocking future activity while leaving history intact is the safer
+// default; ask if you also want a way to remove someone's account
+// entirely.
 export default async function AdminMembersPage() {
   const supabase = createClient();
   const {
@@ -36,7 +42,7 @@ export default async function AdminMembersPage() {
 
   const { data: members } = await supabase
     .from("profiles")
-    .select("id, display_name, zip_code, council_district, is_admin, created_at, avatar_url")
+    .select("id, display_name, zip_code, council_district, is_admin, is_blocked, created_at, avatar_url")
     .order("created_at", { ascending: false });
 
   return (
@@ -71,6 +77,11 @@ export default async function AdminMembersPage() {
                       Admin
                     </span>
                   )}
+                  {m.is_blocked && (
+                    <span className="ml-1.5 rounded-full bg-duty-red/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-duty-red">
+                      Blocked
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-neutral-500">
                   {m.zip_code ? `Zip ${m.zip_code}` : "No zip shared"}
@@ -78,9 +89,18 @@ export default async function AdminMembersPage() {
                 </p>
               </div>
             </div>
-            <span className="shrink-0 text-xs text-neutral-400">
-              Joined {new Date(m.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                href={`/u/${m.id}`}
+                className="rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+              >
+                View
+              </Link>
+              {m.id !== user.id && <BlockMemberButton memberId={m.id} blocked={Boolean(m.is_blocked)} />}
+              <span className="text-xs text-neutral-400">
+                Joined {new Date(m.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+            </div>
           </li>
         ))}
         {(!members || members.length === 0) && (
