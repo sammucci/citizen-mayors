@@ -10,6 +10,27 @@ export async function signOut() {
   redirect("/");
 }
 
+// Marks everything the notification bell knows about right now as
+// "seen" — called when the dropdown is opened (see NotificationBell),
+// not automatically on every page load, so the badge doesn't clear
+// itself before you've actually looked. Revalidating the whole layout
+// (not just one path) because the bell lives in the root layout and
+// renders on every page.
+export async function markNotificationsSeen() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("profiles")
+    .update({ notifications_seen_at: new Date().toISOString() })
+    .eq("id", user.id);
+
+  revalidatePath("/", "layout");
+}
+
 // Self-reported, optional. Not geocoded or verified against an address —
 // just what someone tells us. But zip and district are both meant to
 // describe the SAME place, and nothing stopped someone from picking a

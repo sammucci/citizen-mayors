@@ -191,16 +191,29 @@ export async function addVolunteerCategoryAdmin(formData: FormData): Promise<{ e
   return {};
 }
 
-// Renames a category label in place — every past civic_logs row that
-// used the old text stays exactly as it was (it's plain text, not a
-// foreign key), so this only changes what future entries pick from,
-// not history.
+// Renames a category label in place. Past civic_logs rows store the
+// category as plain text (not a foreign key from category), so a rename
+// here doesn't automatically follow through to them — this explicitly
+// updates every existing civic_logs row that had the OLD label to the
+// new one, so a correction (fixing capitalization, a typo) shows up
+// everywhere that category is displayed: someone's own log, their
+// report card, and the community dashboard's "hours by category." A
+// rename that just merges two near-duplicates into one label is treated
+// the same way, on purpose — their hours combine under the corrected
+// name.
 export async function renameVolunteerCategory(formData: FormData): Promise<{ error?: string }> {
   const { supabase } = await requireAdmin();
 
   const id = String(formData.get("id"));
   const label = String(formData.get("label") ?? "").trim();
   if (!label) return { error: "Category name can't be empty." };
+
+  const { data: current } = await supabase
+    .from("volunteer_categories")
+    .select("label")
+    .eq("id", id)
+    .maybeSingle();
+  const oldLabel = current?.label ?? null;
 
   const { error } = await supabase.from("volunteer_categories").update({ label }).eq("id", id);
   if (error) {
@@ -211,7 +224,13 @@ export async function renameVolunteerCategory(formData: FormData): Promise<{ err
     };
   }
 
+  if (oldLabel && oldLabel !== label) {
+    await supabase.from("civic_logs").update({ category: label }).eq("category", oldLabel);
+  }
+
   revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/profile");
+  revalidatePath("/community-dashboard");
   return {};
 }
 
@@ -244,6 +263,85 @@ export async function deleteVolunteerCategory(formData: FormData): Promise<{ err
   const id = String(formData.get("id"));
   const { error } = await supabase.from("volunteer_categories").delete().eq("id", id);
   if (error) return { error: "Something went wrong deleting that category." };
+
+  revalidatePath("/admin/volunteer-categories");
+  return {};
+}
+
+// Groups (Environmental, Animals, Social Impact, ...) are a small,
+// curated list Samantha manages herself — unlike volunteer_categories,
+// this list never grows on its own from what people type. Assigning a
+// tag to a group happens separately (setVolunteerCategoryGroup below) so
+// a brand-new tag can land ungrouped without blocking anyone's form.
+export async function addVolunteerCategoryGroup(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Give it a name first." };
+
+  const { error } = await supabase.from("volunteer_category_groups").insert({ label });
+  if (error) {
+    return {
+      error: /duplicate|unique/i.test(error.message)
+        ? "That group already exists."
+        : "Something went wrong adding that group.",
+    };
+  }
+
+  revalidatePath("/admin/volunteer-categories");
+  return {};
+}
+
+export async function renameVolunteerCategoryGroup(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Group name can't be empty." };
+
+  const { error } = await supabase.from("volunteer_category_groups").update({ label }).eq("id", id);
+  if (error) {
+    return {
+      error: /duplicate|unique/i.test(error.message)
+        ? "That name's already used by another group."
+        : "Something went wrong renaming that group.",
+    };
+  }
+
+  revalidatePath("/admin/volunteer-categories");
+  return {};
+}
+
+// Deleting a group never deletes the tags underneath it — they just
+// fall back to ungrouped (the foreign key is `on delete set null`),
+// same reversible spirit as everything else in this admin panel.
+export async function deleteVolunteerCategoryGroup(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const { error } = await supabase.from("volunteer_category_groups").delete().eq("id", id);
+  if (error) return { error: "Something went wrong deleting that group." };
+
+  revalidatePath("/admin/volunteer-categories");
+  return {};
+}
+
+// Assigns (or clears, if group_id is empty) which group a single tag
+// belongs to — the other half of "tags grow on their own, groups don't":
+// this is how a freshly-typed tag actually gets sorted into one of
+// Samantha's buckets.
+export async function setVolunteerCategoryGroup(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const groupIdRaw = String(formData.get("group_id") ?? "").trim();
+  const groupId = groupIdRaw ? Number(groupIdRaw) : null;
+
+  const { error } = await supabase
+    .from("volunteer_categories")
+    .update({ group_id: groupId })
+    .eq("id", id);
+  if (error) return { error: "Something went wrong updating that category's group." };
 
   revalidatePath("/admin/volunteer-categories");
   return {};

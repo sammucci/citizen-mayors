@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { CENSUS_DISTRICT_DEMOGRAPHICS, citywideCensusStats } from "@/lib/census-district-demographics";
 
 export const dynamic = "force-dynamic";
 
@@ -47,15 +48,25 @@ function breakdown(rows: { value: string | null }[]) {
     }));
 }
 
-// Volunteer hours by category — separate from BreakdownList above
+// Volunteer hours by category group — separate from BreakdownList above
 // because this weighs by total hours logged, not by percent of people
-// who answered a demographic question. Straightforward "here's where
-// the hours are actually going" ranking instead.
-function HoursByCategory({ rows }: { rows: { category: string | null; hours: number | null }[] }) {
+// who answered a demographic question. Rolls individual tags up to
+// Samantha's curated groups (Environmental, Animals, ...) so this stays
+// a handful of readable buckets even as the tag list underneath grows;
+// a tag with no group yet (or a category string from before groups
+// existed) falls into "Ungrouped."
+function HoursByCategory({
+  rows,
+  categoryToGroup,
+}: {
+  rows: { category: string | null; hours: number | null }[];
+  categoryToGroup: Map<string, string>;
+}) {
   const totals = new Map<string, number>();
   for (const r of rows) {
     if (!r.category) continue;
-    totals.set(r.category, (totals.get(r.category) ?? 0) + (r.hours ?? 0));
+    const group = categoryToGroup.get(r.category) ?? "Ungrouped";
+    totals.set(group, (totals.get(group) ?? 0) + (r.hours ?? 0));
   }
   const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
   const max = sorted.length > 0 ? sorted[0][1] : 0;
@@ -66,9 +77,9 @@ function HoursByCategory({ rows }: { rows: { category: string | null; hours: num
 
   return (
     <ul className="mt-1.5 space-y-1">
-      {sorted.map(([category, hours]) => (
-        <li key={category} className="flex items-center gap-2 text-xs">
-          <span className="w-28 shrink-0 truncate text-neutral-600">{category}</span>
+      {sorted.map(([group, hours]) => (
+        <li key={group} className="flex items-center gap-2 text-xs">
+          <span className="w-28 shrink-0 truncate text-neutral-600">{group}</span>
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
             <span
               className="block h-full rounded-full"
@@ -79,6 +90,112 @@ function HoursByCategory({ rows }: { rows: { category: string | null; hours: num
         </li>
       ))}
     </ul>
+  );
+}
+
+// Side-by-side comparison of the self-reported member breakdown above
+// against real Philadelphia population data (see
+// lib/census-district-demographics.ts for sourcing). Two bars per row
+// instead of one — "you" vs. "Philly" — so the gap (or lack of one) is
+// visible at a glance instead of needing to compare two separate lists.
+function ComparisonRow({
+  label,
+  memberPct,
+  censusPct,
+}: {
+  label: string;
+  memberPct: number;
+  censusPct: number;
+}) {
+  return (
+    <li className="text-xs">
+      <div className="flex items-center justify-between">
+        <span className="truncate font-medium text-neutral-700">{label}</span>
+        <span className="shrink-0 text-neutral-500">
+          {memberPct}% here · {censusPct}% Philly
+        </span>
+      </div>
+      <div className="mt-1 space-y-0.5">
+        <span className="block h-1.5 overflow-hidden rounded-full bg-neutral-100">
+          <span className="block h-full rounded-full bg-duty-purple" style={{ width: `${memberPct}%` }} />
+        </span>
+        <span className="block h-1.5 overflow-hidden rounded-full bg-neutral-100">
+          <span className="block h-full rounded-full bg-neutral-400" style={{ width: `${censusPct}%` }} />
+        </span>
+      </div>
+    </li>
+  );
+}
+
+// The profile form's own options don't use the same words as the
+// Census's categories (a member picks "Woman"/"Man"; ACS reports
+// "Female"/"Male" — same underlying question, different label) or split
+// things more finely than ACS's own "Other" bucket does (American
+// Indian/Alaska Native, Native Hawaiian/Pacific Islander, and
+// multiracial residents are each their own option here, but grouped
+// together in the ACS numbers this dashboard pulls from). These two
+// remaps exist purely so the comparison lines up two versions of the
+// SAME category instead of silently showing two different ones side by
+// side — "Non-binary" and "Prefer to self-describe" are left as their
+// own bars on purpose, correctly showing 0% on the Census side, since
+// ACS doesn't collect that as a category at all.
+function remapGenderForComparison(label: string): string {
+  if (label === "Woman") return "Female";
+  if (label === "Man") return "Male";
+  return label;
+}
+function remapRaceForComparison(label: string): string {
+  if (
+    label === "American Indian or Alaska Native" ||
+    label === "Native Hawaiian or Other Pacific Islander" ||
+    label === "Two or more races"
+  ) {
+    return "Other";
+  }
+  return label;
+}
+
+function regroup(items: { label: string; count: number }[], remap: (label: string) => string) {
+  const totals = new Map<string, number>();
+  for (const i of items) {
+    const label = remap(i.label);
+    totals.set(label, (totals.get(label) ?? 0) + i.count);
+  }
+  return [...totals.entries()].map(([label, count]) => ({ label, count }));
+}
+
+function CensusComparisonSection({
+  title,
+  memberItems,
+  censusItems,
+}: {
+  title: string;
+  memberItems: { label: string; count: number }[];
+  censusItems: { label: string; count: number }[];
+}) {
+  const memberTotal = memberItems.reduce((s, i) => s + i.count, 0);
+  const censusTotal = censusItems.reduce((s, i) => s + i.count, 0);
+  // Union of labels from both sides, in census-count order, so a label
+  // members use but Philly's data doesn't track (or vice versa) still
+  // shows up rather than silently disappearing.
+  const censusByLabel = new Map(censusItems.map((i) => [i.label, i.count]));
+  const memberByLabel = new Map(memberItems.map((i) => [i.label, i.count]));
+  const labels = [...new Set([...censusItems.map((i) => i.label), ...memberItems.map((i) => i.label)])];
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-neutral-700">{title}</p>
+      <ul className="mt-2 space-y-2">
+        {labels.map((label) => (
+          <ComparisonRow
+            key={label}
+            label={label}
+            memberPct={memberTotal > 0 ? Math.round(((memberByLabel.get(label) ?? 0) / memberTotal) * 100) : 0}
+            censusPct={censusTotal > 0 ? Math.round(((censusByLabel.get(label) ?? 0) / censusTotal) * 100) : 0}
+          />
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -131,6 +248,7 @@ export default async function CommunityDashboardPage({
     { data: powerTreeUpdates },
     civicTotals,
     { data: allProfiles },
+    { data: volunteerCategoryRows },
   ] = await Promise.all([
     supabase.from("proposals").select("id", { count: "exact", head: true }),
     supabase.from("comments").select("id", { count: "exact", head: true }),
@@ -149,8 +267,17 @@ export default async function CommunityDashboardPage({
       .eq("status", "published"),
     supabase
       .from("profiles")
-      .select("age_range, race_ethnicity, gender, housing_status, council_district"),
+      .select("age_range, race_ethnicity, gender, housing_status, zip_code, council_district"),
+    supabase
+      .from("volunteer_categories")
+      .select("label, volunteer_category_groups ( label )"),
   ]);
+
+  const categoryToGroup = new Map<string, string>(
+    (volunteerCategoryRows ?? [])
+      .filter((c: any) => c.volunteer_category_groups?.label)
+      .map((c: any) => [c.label, c.volunteer_category_groups.label])
+  );
 
   const contributedToOthers = (suggestedEdits ?? []).filter(
     (c: any) => c.proposals?.owner_id && c.proposals.owner_id !== c.author_id
@@ -172,6 +299,14 @@ export default async function CommunityDashboardPage({
     .reduce((sum: number, l: any) => sum + (l.hours ?? 0), 0);
 
   const totalMembers = allProfiles?.length ?? 0;
+  const zipCodesRepresented = new Set(
+    (allProfiles ?? []).map((p: any) => p.zip_code).filter((z: string | null) => z && z.trim() !== "")
+  ).size;
+  const districtsRepresented = new Set(
+    (allProfiles ?? [])
+      .map((p: any) => p.council_district)
+      .filter((d: number | null) => d !== null && d !== undefined)
+  ).size;
   const districtProfiles = selectedDistrict
     ? (allProfiles ?? []).filter((p: any) => p.council_district === selectedDistrict)
     : allProfiles ?? [];
@@ -193,12 +328,12 @@ export default async function CommunityDashboardPage({
 
       <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <Tile label="Proposals made" value={proposalsMade ?? 0} color={STAT_COLORS.proposals} />
-        <Tile label="Comments made" value={commentsMade ?? 0} color={STAT_COLORS.comments} />
         <Tile
           label="Contributed to others'"
           value={contributedToOthers}
           color={STAT_COLORS.contributed}
         />
+        <Tile label="Comments made" value={commentsMade ?? 0} color={STAT_COLORS.comments} />
         <Tile
           label="Decision-makers engaged"
           value={decisionMakersEngaged}
@@ -214,6 +349,8 @@ export default async function CommunityDashboardPage({
         <Tile label="Volunteer hours" value={volunteerHours} color={STAT_COLORS.volunteerHours} />
         <Tile label="Testimony given" value={testimonyGiven} color={STAT_COLORS.testimony} />
         <Tile label="Registered members" value={totalMembers} color={STAT_COLORS.members} />
+        <Tile label="Zip codes represented" value={zipCodesRepresented} color={STAT_COLORS.members} />
+        <Tile label="Council districts represented" value={`${districtsRepresented} / 10`} color={STAT_COLORS.members} />
       </div>
 
       <div className="mt-8">
@@ -291,23 +428,58 @@ export default async function CommunityDashboardPage({
         <div className="mt-5">
           <p className="text-xs font-semibold text-neutral-700">Volunteer hours by category</p>
           <p className="text-[11px] text-neutral-400">
-            Ranked by total hours logged citywide (not affected by the district filter above) —
-            same category list people pick from in "Add a log."
+            Ranked by group (citywide, not affected by the district filter above) — individual
+            tags people pick from in "Add a log" roll up to whichever group Samantha's assigned
+            them to on the admin page; anything not yet assigned shows as "Ungrouped."
           </p>
-          <HoursByCategory rows={logs.filter((l: any) => l.log_type === "volunteer_hours")} />
+          <HoursByCategory
+            rows={logs.filter((l: any) => l.log_type === "volunteer_hours")}
+            categoryToGroup={categoryToGroup}
+          />
         </div>
 
-        {/* Honest gap, not a guess: comparing "who's showing up" against
-            Philadelphia's actual population by council district needs
-            real Census/ACS demographic data joined to district
-            boundaries — the same kind of real-data problem as the zip
-            crosswalk. Flagging it instead of inventing numbers that
-            would look authoritative but aren't. */}
-        <div className="mt-4 rounded-md border border-dashed border-neutral-300 bg-neutral-50 p-3 text-xs text-neutral-500">
-          Not built yet: comparing this against Philadelphia's actual population by district.
-          That needs real Census/ACS demographic data joined to council district boundaries —
-          similar to the zip-code crosswalk work. Worth doing properly with real sourced data
-          rather than an estimate, whenever it's time to prioritize it.
+        {/* Real comparison now, not a placeholder: Philadelphia's actual
+            2022 ACS population data, joined to council districts the
+            same way as the zip crosswalk (tract centroid vs. district
+            polygon). See lib/census-district-demographics.ts for the
+            full sourcing note and known limitations (no non-binary
+            category in Census data, "Other" groups several small race
+            categories together, "Unhoused" isn't something ACS housing
+            tenure can measure). Age isn't included yet — same data
+            source, just needs one more processing pass. */}
+        <div className="mt-5 rounded-md border border-neutral-200 bg-white p-4">
+          <p className="text-sm font-semibold text-neutral-800">
+            How this compares to Philadelphia's real population
+          </p>
+          <p className="mt-1 text-[11px] text-neutral-400">
+            Real 2022 Census (ACS5) data by council district, not an estimate.{" "}
+            {selectedDistrict ? `Comparing District ${selectedDistrict} only.` : "Citywide comparison."}{" "}
+            Race/ethnicity and gender categories don't map 1:1 to the options above — see the note
+            in the code for specifics. Age isn't in this comparison yet.
+          </p>
+          <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <CensusComparisonSection
+              title="Race / ethnicity"
+              memberItems={regroup(raceBreakdown, remapRaceForComparison)}
+              censusItems={
+                (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.race : citywideCensusStats().race) ?? []
+              }
+            />
+            <CensusComparisonSection
+              title="Gender"
+              memberItems={regroup(genderBreakdown, remapGenderForComparison)}
+              censusItems={
+                (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.gender : citywideCensusStats().gender) ?? []
+              }
+            />
+            <CensusComparisonSection
+              title="Housing status"
+              memberItems={housingBreakdown.map((i) => ({ label: i.label, count: i.count }))}
+              censusItems={
+                (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.housing : citywideCensusStats().housing) ?? []
+              }
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CivicDetailItem, CivicStats } from "@/components/civic-report-card";
+import type { CivicDetailItem, CivicLog, CivicStats } from "@/components/civic-report-card";
+
+function formatDate(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 // Export flow for the civic report card — a checklist of what to
 // include (stat tiles are always in; proposals made and comments made
@@ -20,14 +28,29 @@ export function CivicReportCardExport({
   stats,
   proposals,
   comments,
+  logs,
   onClose,
 }: {
   displayName: string;
   stats: CivicStats;
   proposals: CivicDetailItem[];
   comments: CivicDetailItem[];
+  logs: CivicLog[];
   onClose: () => void;
 }) {
+  // The report has no built-in start date (your account might, but not
+  // every stat on it does — comments and proposals aren't logged
+  // entries), so the most honest "date range" is the span of your own
+  // logged activity: earliest to latest occurred_on among published
+  // logs. Falls back to just "Generated on X" if nothing's logged yet.
+  const logDates = logs.map((l) => l.occurredOn).filter(Boolean).sort();
+  const dateRangeText =
+    logDates.length > 0
+      ? logDates[0] === logDates[logDates.length - 1]
+        ? formatDate(logDates[0])
+        : `${formatDate(logDates[0])} – ${formatDate(logDates[logDates.length - 1])}`
+      : null;
+
   const [mounted, setMounted] = useState(false);
   const [includeProposals, setIncludeProposals] = useState(true);
   const [includeComments, setIncludeComments] = useState(true);
@@ -143,6 +166,7 @@ export function CivicReportCardExport({
               <h2 className="text-lg font-bold text-neutral-900">{displayName}'s civic report card</h2>
               <p className="mt-0.5 text-xs text-neutral-500">
                 Generated {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
+                {dateRangeText ? ` · Covers ${dateRangeText}` : ""}
               </p>
 
               <div className="mt-4 grid grid-cols-3 gap-2.5">
@@ -170,7 +194,10 @@ export function CivicReportCardExport({
                   ) : (
                     <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-neutral-700">
                       {proposals.map((p, i) => (
-                        <li key={i}>{p.label}</li>
+                        <li key={i}>
+                          {p.label}
+                          {p.sublabel ? ` — ${p.sublabel}` : ""}
+                        </li>
                       ))}
                     </ul>
                   )}

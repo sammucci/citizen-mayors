@@ -32,7 +32,7 @@ export default async function ProfilePage() {
   const { data: myProposals } = await supabase
     .from("proposals")
     .select(
-      "id, title, type, created_at, image_url, image_position_x, image_position_y, categories ( label, color )"
+      "id, title, type, geography_scope, geography_label, created_at, image_url, image_position_x, image_position_y, categories ( label, color )"
     )
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
@@ -45,41 +45,13 @@ export default async function ProfilePage() {
     .eq("author_id", user.id)
     .order("created_at", { ascending: false });
 
-  // --- "What's new since you were last here": read the OLD
-  // notifications_seen_at first (so this visit's banner reflects
-  // "since last time," not "since right now"), then bump it to now()
-  // near the end of this render. There was previously no way to tell
-  // a brand-new comment/reply apart from an old one you'd already
-  // seen — this is the simplest fix that doesn't need a whole separate
-  // notifications table.
-  const lastSeenAt = profile?.notifications_seen_at ?? new Date(0).toISOString();
-  const myProposalIds = (myProposals ?? []).map((p: any) => p.id);
-  const myCommentIdsForNotifications = (myComments ?? []).map((c: any) => c.id);
-
-  const [{ data: newCommentsOnMyProposals }, { data: newRepliesToMe }] = await Promise.all([
-    myProposalIds.length > 0
-      ? supabase
-          .from("comments")
-          .select("id, created_at, proposal_id, proposals ( title )")
-          .in("proposal_id", myProposalIds)
-          .neq("author_id", user.id)
-          .gt("created_at", lastSeenAt)
-      : Promise.resolve({ data: [] as any[] }),
-    myCommentIdsForNotifications.length > 0
-      ? supabase
-          .from("comments")
-          .select("id, created_at, proposal_id, proposals ( title )")
-          .in("parent_comment_id", myCommentIdsForNotifications)
-          .neq("author_id", user.id)
-          .gt("created_at", lastSeenAt)
-      : Promise.resolve({ data: [] as any[] }),
-  ]);
-  const newCommentsById = new Map<string, { title: string; proposalId: string }>();
-  for (const c of [...(newCommentsOnMyProposals ?? []), ...(newRepliesToMe ?? [])] as any[]) {
-    newCommentsById.set(c.id, { title: c.proposals?.title ?? "A proposal", proposalId: c.proposal_id });
-  }
-  const newComments = [...newCommentsById.entries()].map(([id, v]) => ({ id, ...v }));
-
+  // "New since last visit" (comments, decision-chain activity) now lives
+  // in the header's notification bell, computed the same way for every
+  // page via getNotifications() — no need to duplicate that here.
+  // Unresolved contributions below is different in kind, not a "what's
+  // new" event but an ongoing status ("still waiting"), so it stays as
+  // its own persistent panel on this page rather than moving to the
+  // bell's time-gated list.
   const unresolvedContributions = (myComments ?? []).filter(
     (c: any) => c.is_suggested_edit && c.status === "open"
   );
@@ -189,6 +161,9 @@ export default async function ProfilePage() {
   const civicDetails = {
     proposalsMade: (myProposals ?? []).map((p: any) => ({
       label: p.title,
+      sublabel: `${p.type === "policy" ? "Policy" : "Project"}${
+        p.geography_label ? ` · ${p.geography_label}` : p.geography_scope === "citywide" ? " · Citywide" : ""
+      }`,
       href: `/proposals/${p.id}`,
     })),
     contributedToOthers: [...contributedProposals.entries()].map(([id, title]) => ({
@@ -229,15 +204,6 @@ export default async function ProfilePage() {
     commentsByProposal.get(key)!.comments.push(c);
   }
 
-  // Fire-and-forget: bump the "last seen" marker to now so the NEXT
-  // visit's banner only shows what's happened since this one. Uses the
-  // value read above for this render's own banner, so this update
-  // doesn't affect what's shown right now.
-  await supabase
-    .from("profiles")
-    .update({ notifications_seen_at: new Date().toISOString() })
-    .eq("id", user.id);
-
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
@@ -245,25 +211,8 @@ export default async function ProfilePage() {
         <p className="mt-1 text-sm text-neutral-600">{user.email}</p>
       </div>
 
-      {(newComments.length > 0 || unresolvedContributions.length > 0) && (
+      {unresolvedContributions.length > 0 && (
         <div className="space-y-2 rounded-lg border border-duty-purple/30 bg-duty-purple/5 p-3">
-          {newComments.length > 0 && (
-            <div>
-              <p className="text-sm font-medium text-neutral-800">
-                🔔 {newComments.length} new comment{newComments.length === 1 ? "" : "s"} since you
-                were last here
-              </p>
-              <ul className="mt-1 space-y-0.5">
-                {newComments.map((c) => (
-                  <li key={c.id}>
-                    <Link href={`/proposals/${c.proposalId}`} className="text-xs text-duty-purple underline">
-                      {c.title}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
           {unresolvedContributions.length > 0 && (
             <div>
               <p className="text-sm font-medium text-neutral-800">

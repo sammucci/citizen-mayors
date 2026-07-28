@@ -4,6 +4,8 @@ import Link from "next/link";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import { UserMenu } from "@/components/user-menu";
+import { NotificationBell } from "@/components/notification-bell";
+import { getNotifications } from "@/lib/notifications";
 
 // Was falling back to the browser's default sans-serif (Arial-ish on a
 // lot of systems) since nothing set a font. Roboto, loaded via
@@ -32,6 +34,7 @@ export default async function RootLayout({
 
   let displayName: string | null = null;
   let isAdmin = false;
+  let notificationItems: Awaited<ReturnType<typeof getNotifications>>["items"] = [];
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -40,6 +43,8 @@ export default async function RootLayout({
       .maybeSingle();
     displayName = profile?.display_name ?? user.email ?? null;
     isAdmin = profile?.is_admin ?? false;
+    const notifications = await getNotifications(supabase, user.id);
+    notificationItems = notifications.items;
   }
 
   return (
@@ -61,6 +66,7 @@ export default async function RootLayout({
               >
                 New proposal
               </Link>
+              {user && <NotificationBell items={notificationItems} />}
               {user ? (
                 <UserMenu displayName={displayName ?? "there"} isAdmin={isAdmin} />
               ) : (

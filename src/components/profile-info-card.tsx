@@ -201,13 +201,13 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
           </select>
         </label>
 
-        <div className="rounded-md bg-neutral-50 p-3">
-          <p className="text-xs text-neutral-500">
-            The fields below are entirely optional. We ask so we — and
-            eventually the public — can see whether who's actually showing up
-            to propose, comment, and vote roughly reflects Philadelphia's
-            real population and council districts. They're never required,
-            never shown next to your name, and never used for anything else.
+        <div className="rounded-md border border-duty-purple/30 bg-duty-purple/10 p-3">
+          <p className="text-xs font-medium text-neutral-700">
+            The fields below are entirely optional. This helps us see if who's
+            actually showing up to propose, comment, and vote roughly reflects
+            Philadelphia's real population and council districts. They're
+            never required, never shown next to your name, and never used for
+            anything else.
           </p>
         </div>
 

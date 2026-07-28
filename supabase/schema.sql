@@ -91,9 +91,26 @@ create unique index decision_makers_name_kind_idx
 -- civic_logs.category stores the label as plain text (not a foreign
 -- key) — deleting a category from this registry only removes it as a
 -- future suggestion, it never rewrites or orphans past log entries.
+-- Curated, admin-managed grouping layer above volunteer_categories (e.g.
+-- "Environmental" containing Permaculture, Farming, Ecovillages, ...) — a
+-- fixed, small list Samantha manages herself, unlike volunteer_categories
+-- below which grows on its own as people type new ones. Lets "hours by
+-- category" on the community dashboard roll up to a handful of readable
+-- buckets instead of dozens of individual tags.
+create table public.volunteer_category_groups (
+  id serial primary key,
+  label text unique not null,
+  created_at timestamptz not null default now()
+);
+
 create table public.volunteer_categories (
   id serial primary key,
   label text unique not null,
+  -- Optional — a brand-new tag someone types while logging hours starts
+  -- ungrouped; Samantha assigns it to a group herself on the admin page
+  -- whenever she gets to it, rather than asking the person mid-form to
+  -- pick from a list of groups they've never seen.
+  group_id int references public.volunteer_category_groups(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -189,7 +206,11 @@ create table public.proposal_power_tree_nodes (
   -- suggestions can come from anywhere.
   status text not null default 'approved' check (status in ('pending', 'approved')),
   submitted_by uuid references public.profiles(id), -- who suggested it, if not the owner
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Bumped whenever status changes (e.g. approved) — lets notifications
+  -- tell "your suggested link was approved" apart from "you just added
+  -- this," since a fresh row's created_at and updated_at start equal.
+  updated_at timestamptz not null default now()
 );
 
 -- Running log of dated notes on a specific decision-maker within a
@@ -337,6 +358,7 @@ alter table public.categories enable row level security;
 alter table public.tags enable row level security;
 alter table public.decision_makers enable row level security;
 alter table public.volunteer_categories enable row level security;
+alter table public.volunteer_category_groups enable row level security;
 alter table public.proposals enable row level security;
 alter table public.proposal_tags enable row level security;
 alter table public.proposal_versions enable row level security;
@@ -361,6 +383,13 @@ create policy "authenticated add volunteer categories" on public.volunteer_categ
 create policy "admin updates volunteer categories" on public.volunteer_categories for update
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 create policy "admin deletes volunteer categories" on public.volunteer_categories for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "public read volunteer category groups" on public.volunteer_category_groups for select using (true);
+create policy "admin add volunteer category groups" on public.volunteer_category_groups for insert
+  with check (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin updates volunteer category groups" on public.volunteer_category_groups for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin deletes volunteer category groups" on public.volunteer_category_groups for delete
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 create policy "public read proposal power tree" on public.proposal_power_tree_nodes for select using (true);
 create policy "public read power_tree_node_updates" on public.power_tree_node_updates for select using (true);
@@ -510,6 +539,12 @@ create policy "owner updates own civic logs" on public.civic_logs for update
   using (auth.uid() = user_id);
 create policy "owner deletes own civic logs" on public.civic_logs for delete
   using (auth.uid() = user_id);
+-- Lets an admin's category rename (renameVolunteerCategory) bulk-update
+-- the plain-text `category` column on every affected log entry,
+-- regardless of who logged it — without this, that update would
+-- silently touch zero rows for anyone else's logs.
+create policy "admin updates any civic log" on public.civic_logs for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
 -- ---------------------------------------------------------------------------
 -- Storage: proposal cover images

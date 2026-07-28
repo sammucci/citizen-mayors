@@ -1,36 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import {
-  deleteVolunteerCategory,
-  renameVolunteerCategory,
-  setVolunteerCategoryGroup,
-} from "@/app/admin/actions";
+import { deleteVolunteerCategoryGroup, renameVolunteerCategoryGroup } from "@/app/admin/actions";
 
-// Inline rename (click the label to edit it in place) plus the same
-// two-step "are you sure" delete confirm used for decision-makers.
-// Renaming here now ALSO updates every past civic_logs row that used
-// the old text (see renameVolunteerCategory), so a correction shows up
-// everywhere that category is displayed, not just in future entries.
-// The group dropdown is the other half of the grouping feature: tags
-// grow on their own as people type them, but which curated group (if
-// any) a tag belongs to is something only an admin sets, here.
-export function VolunteerCategoryRow({
+// Same inline-rename / two-step-delete pattern as VolunteerCategoryRow.
+// Deleting a group never deletes or hides the tags inside it — they
+// fall back to ungrouped (the DB column is `on delete set null`), so
+// this is a safe, reversible action, not a destructive one.
+export function VolunteerCategoryGroupRow({
   id,
   label,
-  groupId,
-  groups,
+  tagCount,
 }: {
   id: string;
   label: string;
-  groupId: string | null;
-  groups: { id: string; label: string }[];
+  tagCount: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(label);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savingGroup, setSavingGroup] = useState(false);
 
   return (
     <li className="rounded-lg border border-neutral-200 bg-white p-3">
@@ -39,7 +28,7 @@ export function VolunteerCategoryRow({
           <form
             action={async (formData) => {
               setError(null);
-              const result = await renameVolunteerCategory(formData);
+              const result = await renameVolunteerCategoryGroup(formData);
               if (result?.error) {
                 setError(result.error);
                 return;
@@ -79,7 +68,10 @@ export function VolunteerCategoryRow({
               className="text-sm font-medium text-neutral-800 hover:underline"
               title="Rename"
             >
-              {label}
+              {label}{" "}
+              <span className="font-normal text-neutral-400">
+                ({tagCount} tag{tagCount === 1 ? "" : "s"})
+              </span>
             </button>
             {!confirmingDelete ? (
               <button
@@ -91,14 +83,16 @@ export function VolunteerCategoryRow({
               </button>
             ) : (
               <div className="flex shrink-0 items-center gap-2">
-                <span className="text-xs text-neutral-500">Delete "{label}"?</span>
+                <span className="text-xs text-neutral-500">
+                  Delete "{label}"? Its tags become ungrouped, not deleted.
+                </span>
                 <button
                   type="button"
                   onClick={async () => {
                     setError(null);
                     const fd = new FormData();
                     fd.set("id", id);
-                    const result = await deleteVolunteerCategory(fd);
+                    const result = await deleteVolunteerCategoryGroup(fd);
                     if (result?.error) {
                       setError(result.error);
                       return;
@@ -121,33 +115,6 @@ export function VolunteerCategoryRow({
           </>
         )}
       </div>
-      {!editing && (
-        <div className="mt-2 flex items-center gap-2">
-          <span className="text-[11px] text-neutral-400">Group</span>
-          <select
-            defaultValue={groupId ?? ""}
-            disabled={savingGroup}
-            onChange={async (e) => {
-              setSavingGroup(true);
-              setError(null);
-              const fd = new FormData();
-              fd.set("id", id);
-              fd.set("group_id", e.target.value);
-              const result = await setVolunteerCategoryGroup(fd);
-              if (result?.error) setError(result.error);
-              setSavingGroup(false);
-            }}
-            className="rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700"
-          >
-            <option value="">Ungrouped</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
       {error && <p className="mt-1.5 text-xs text-duty-red">{error}</p>}
     </li>
   );

@@ -93,12 +93,24 @@ export function CivicReportCard({
   displayName: string;
 }) {
   const [modalMode, setModalMode] = useState<null | "new" | CivicLog>(null);
+  const [pendingNewType, setPendingNewType] = useState<CivicLog["logType"] | null>(null);
   const [detailKey, setDetailKey] = useState<ClickableStatKey | null>(null);
   const [exporting, setExporting] = useState(false);
   const dirtyRef = useRef(false);
 
   const drafts = logs.filter((l) => l.status === "draft");
   const published = logs.filter((l) => l.status === "published");
+
+  // Opens the "add a log" modal pre-set to a specific type — used by the
+  // "log this now" prompt inside an empty stat-tile popup, so clicking
+  // "Volunteer hours" (say) from an empty popup doesn't dump you into
+  // the generic "what kind of log is this?" picker you'd get from the
+  // header's "+ Add a log" button.
+  function openNewLog(type?: CivicLog["logType"]) {
+    setPendingNewType(type ?? null);
+    setModalMode("new");
+    setDetailKey(null);
+  }
 
   return (
     <div>
@@ -225,7 +237,7 @@ export function CivicReportCard({
           </summary>
           <ul className="mt-2 space-y-1.5">
             {published.map((log) => (
-              <LogRow key={log.id} log={log} />
+              <LogRow key={log.id} log={log} onEdit={() => setModalMode(log)} />
             ))}
           </ul>
         </details>
@@ -234,6 +246,7 @@ export function CivicReportCard({
       {modalMode && (
         <AddLogModal
           existing={modalMode === "new" ? null : modalMode}
+          initialLogType={modalMode === "new" ? pendingNewType : null}
           categoryColor={categoryColor}
           volunteerCategories={volunteerCategories}
           onDirty={() => {
@@ -242,6 +255,7 @@ export function CivicReportCard({
           onClose={() => {
             dirtyRef.current = false;
             setModalMode(null);
+            setPendingNewType(null);
           }}
           isDirty={() => dirtyRef.current}
         />
@@ -253,6 +267,7 @@ export function CivicReportCard({
           stats={stats}
           proposals={details.proposalsMade}
           comments={details.commentsMade}
+          logs={published}
           onClose={() => setExporting(false)}
         />
       )}
@@ -266,6 +281,7 @@ export function CivicReportCard({
           detailKey === "volunteerHours" || detailKey === "testimonyGiven" ? (
             <LogTypeDetailList
               logs={published.filter((l) => l.logType === STAT_TO_LOG_TYPE[detailKey])}
+              onLogNow={() => openNewLog(STAT_TO_LOG_TYPE[detailKey])}
             />
           ) : (
             <PlainDetailList items={details[detailKey]} />
@@ -360,9 +376,20 @@ function PlainDetailList({ items }: { items: CivicDetailItem[] }) {
   );
 }
 
-function LogTypeDetailList({ logs }: { logs: CivicLog[] }) {
+function LogTypeDetailList({ logs, onLogNow }: { logs: CivicLog[]; onLogNow: () => void }) {
   if (logs.length === 0) {
-    return <p className="text-sm text-neutral-500">Nothing logged yet.</p>;
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-neutral-500">Nothing logged yet.</p>
+        <button
+          type="button"
+          onClick={onLogNow}
+          className="rounded-full bg-duty-purple px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+        >
+          + Log one now
+        </button>
+      </div>
+    );
   }
   return (
     <ul className="space-y-2">
@@ -396,7 +423,7 @@ function LogTypeDetailList({ logs }: { logs: CivicLog[] }) {
   );
 }
 
-function LogRow({ log }: { log: CivicLog }) {
+function LogRow({ log, onEdit }: { log: CivicLog; onEdit: () => void }) {
   // A finished log is real work someone already did — a stray click
   // shouldn't be able to wipe it out the way it could before. First
   // click just reveals a "really remove this?" confirm; the actual
@@ -442,14 +469,23 @@ function LogRow({ log }: { log: CivicLog }) {
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => setConfirming(true)}
-          className="shrink-0 rounded-full border border-neutral-300 px-1.5 text-neutral-500 hover:border-duty-red hover:text-duty-red"
-          title="Remove this log entry"
-        >
-          ✕
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-neutral-600 hover:bg-neutral-100"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="rounded-full border border-neutral-300 px-1.5 text-neutral-500 hover:border-duty-red hover:text-duty-red"
+            title="Remove this log entry"
+          >
+            ✕
+          </button>
+        </div>
       )}
     </li>
   );
@@ -493,6 +529,7 @@ function StatTile({
 // row instead of creating a second one.
 function AddLogModal({
   existing,
+  initialLogType,
   categoryColor,
   volunteerCategories,
   onDirty,
@@ -500,13 +537,16 @@ function AddLogModal({
   isDirty,
 }: {
   existing: CivicLog | null;
+  initialLogType?: CivicLog["logType"] | null;
   categoryColor: string;
   volunteerCategories: string[];
   onDirty: () => void;
   onClose: () => void;
   isDirty: () => boolean;
 }) {
-  const [logType, setLogType] = useState<CivicLog["logType"]>(existing?.logType ?? "community_meeting");
+  const [logType, setLogType] = useState<CivicLog["logType"]>(
+    existing?.logType ?? initialLogType ?? "community_meeting"
+  );
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const savedRef = useRef(false);
@@ -563,6 +603,19 @@ function AddLogModal({
 
         <form
           ref={formRef}
+          onKeyDown={(e) => {
+            // The Save button is a real submit button (as it should be),
+            // but that also means pressing Enter in any single-line
+            // field — typing a title, tabbing through, hitting Enter out
+            // of habit — fires the whole form early, before you've
+            // filled in the rest. Textareas are fine (Enter there is
+            // just a newline); this only guards plain text/number/date
+            // inputs.
+            const target = e.target as HTMLElement;
+            if (e.key === "Enter" && target.tagName === "INPUT") {
+              e.preventDefault();
+            }
+          }}
           action={async (formData) => {
             formData.set("log_type", logType);
             const result = existing

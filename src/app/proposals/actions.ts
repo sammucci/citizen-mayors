@@ -840,7 +840,7 @@ export async function approvePowerTreeNode(formData: FormData) {
 
   await supabase
     .from("proposal_power_tree_nodes")
-    .update({ status: "approved" })
+    .update({ status: "approved", updated_at: new Date().toISOString() })
     .eq("id", nodeId);
 
   revalidatePath(`/proposals/${proposalId}`);
