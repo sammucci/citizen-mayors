@@ -149,7 +149,7 @@ export default async function ProposalPage({
   const { data: powerTreeNodes } = await supabase
     .from("proposal_power_tree_nodes")
     .select(
-      "id, note, parent_node_id, decision_makers ( name, kind ), power_tree_node_updates ( id, body, created_at, profiles ( display_name ) )"
+      "id, note, parent_node_id, decision_makers ( name, kind ), power_tree_node_updates ( id, body, created_at, parent_update_id, talked_to, profiles ( display_name ) )"
     )
     .eq("proposal_id", proposal.id)
     .order("sort_order");
@@ -756,6 +756,8 @@ export default async function ProposalPage({
                       body: u.body,
                       created_at: u.created_at,
                       authorName: u.profiles?.display_name ?? "A resident",
+                      parentUpdateId: u.parent_update_id ?? null,
+                      talkedTo: Boolean(u.talked_to),
                     })),
                 };
               })}

@@ -13,7 +13,17 @@ type Update = {
   body: string;
   created_at: string;
   authorName: string;
+  parentUpdateId: string | null;
+  talkedTo: boolean;
 };
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 // Collapsed by default — name, role, and (if this is the top of the
 // chain) a colored treatment marking it as the final decision-maker.
@@ -49,8 +59,26 @@ export function PowerTreeNodeCard({
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const addUpdateFormRef = useRef<HTMLFormElement>(null);
   const finalTextColor = readableTextColor(categoryColor);
+
+  // Top-level notes only, newest first (already the order they arrive
+  // in) — replies are looked up per-parent below and rendered nested,
+  // one level deep on purpose. A reply can't itself be replied to, so
+  // there's no risk of the thread getting messy or hard to follow.
+  const topLevel = node.updates.filter((u) => !u.parentUpdateId);
+  const repliesByParent = new Map<string, Update[]>();
+  for (const u of node.updates) {
+    if (!u.parentUpdateId) continue;
+    const list = repliesByParent.get(u.parentUpdateId) ?? [];
+    list.push(u);
+    repliesByParent.set(u.parentUpdateId, list);
+  }
+  for (const list of repliesByParent.values()) {
+    list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+  const talkedToCount = node.updates.filter((u) => u.talkedTo).length;
 
   // Escape closes the modal, same as clicking the backdrop or the ✕ —
   // standard modal behavior, easy to miss if you only wire up clicks.
@@ -223,24 +251,102 @@ export function PowerTreeNodeCard({
               )}
 
               <div>
-                <p className="text-xs font-medium text-neutral-700">
-                  Notes on working with them
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-neutral-700">
+                    Notes on working with them
+                  </p>
+                  {talkedToCount > 0 && (
+                    <span className="text-xs font-medium text-neutral-600">
+                      💬 {talkedToCount} {talkedToCount === 1 ? "person has" : "people have"}{" "}
+                      talked to them
+                    </span>
+                  )}
+                </div>
                 <ul className="mt-1.5 space-y-1.5">
-                  {node.updates.map((u) => (
+                  {topLevel.map((u) => (
                     <li key={u.id} className="rounded bg-neutral-50 p-2 text-xs text-neutral-700">
+                      {u.talkedTo && (
+                        <span className="mb-1 inline-block rounded-full bg-[#bee1ca] px-2 py-0.5 text-[10px] font-medium text-neutral-700">
+                          💬 Talked to them
+                        </span>
+                      )}
                       <p className="whitespace-pre-wrap">{u.body}</p>
-                      <p className="mt-1 text-neutral-400">
-                        {u.authorName} ·{" "}
-                        {new Date(u.created_at).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-neutral-400">
+                        <span>
+                          {u.authorName} · {formatDate(u.created_at)}
+                        </span>
+                        {canContribute && (
+                          <button
+                            type="button"
+                            onClick={() => setReplyingTo(replyingTo === u.id ? null : u.id)}
+                            className="underline hover:text-neutral-600"
+                          >
+                            Reply
+                          </button>
+                        )}
+                      </div>
+
+                      {(repliesByParent.get(u.id) ?? []).length > 0 && (
+                        <ul className="mt-1.5 space-y-1.5 border-l-2 border-neutral-200 pl-2.5">
+                          {repliesByParent.get(u.id)!.map((r) => (
+                            <li key={r.id}>
+                              {r.talkedTo && (
+                                <span className="mb-1 inline-block rounded-full bg-[#bee1ca] px-2 py-0.5 text-[10px] font-medium text-neutral-700">
+                                  💬 Talked to them
+                                </span>
+                              )}
+                              <p className="whitespace-pre-wrap">{r.body}</p>
+                              <p className="mt-1 text-neutral-400">
+                                {r.authorName} · {formatDate(r.created_at)}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {replyingTo === u.id && (
+                        <form
+                          action={async (formData) => {
+                            await addPowerTreeNodeUpdate(formData);
+                            setReplyingTo(null);
+                          }}
+                          className="mt-1.5 space-y-1"
+                        >
+                          <input type="hidden" name="proposal_id" value={proposalId} />
+                          <input type="hidden" name="node_id" value={node.id} />
+                          <input type="hidden" name="parent_update_id" value={u.id} />
+                          <textarea
+                            name="body"
+                            required
+                            rows={2}
+                            autoFocus
+                            placeholder="Reply — e.g. answer a question, add context"
+                            className="input text-xs"
+                          />
+                          <label className="flex items-center gap-1.5 text-[11px] text-neutral-600">
+                            <input type="checkbox" name="talked_to" />
+                            I talked to them about this
+                          </label>
+                          <div className="flex gap-1.5">
+                            <button
+                              className="rounded px-2 py-0.5 text-[11px]"
+                              style={{ backgroundColor: categoryColor, color: finalTextColor }}
+                            >
+                              Reply
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReplyingTo(null)}
+                              className="rounded border border-neutral-300 px-2 py-0.5 text-[11px] text-neutral-600 hover:bg-neutral-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      )}
                     </li>
                   ))}
-                  {node.updates.length === 0 && (
+                  {topLevel.length === 0 && (
                     <li className="text-xs text-neutral-400">Nothing logged yet.</li>
                   )}
                 </ul>
@@ -265,6 +371,10 @@ export function PowerTreeNodeCard({
                   placeholder="When did you talk to them? What happened? Anything worth knowing for next time?"
                   className="input text-xs"
                 />
+                <label className="flex items-center gap-1.5 text-xs text-neutral-600">
+                  <input type="checkbox" name="talked_to" />
+                  I talked to them about this
+                </label>
                 <button
                   className="rounded px-2 py-1 text-xs"
                   style={{ backgroundColor: categoryColor, color: finalTextColor }}

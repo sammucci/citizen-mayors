@@ -6,7 +6,14 @@ import { DecisionMakerField } from "@/components/decision-maker-field";
 import { PowerTreeNodeCard } from "@/components/power-tree-node-card";
 import { readableTextColor } from "@/lib/readable-text-color";
 
-type Update = { id: string; body: string; created_at: string; authorName: string };
+type Update = {
+  id: string;
+  body: string;
+  created_at: string;
+  authorName: string;
+  parentUpdateId: string | null;
+  talkedTo: boolean;
+};
 type Node = {
   id: string;
   name: string;

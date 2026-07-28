@@ -749,20 +749,31 @@ export async function reorderPowerTreeNodes(formData: FormData) {
 // this proposal — when someone talked to them, what came of it,
 // anything learned about working with them. Open to any signed-in
 // person, not just the proposal owner: this kind of on-the-ground
-// knowledge is useful from whoever has it. No edit/delete in this
-// first pass.
+// knowledge is useful from whoever has it.
+//
+// Doubles as the reply action: an optional parent_update_id makes this
+// a reply to another note instead of a new top-level one (e.g.
+// answering a question someone asked in their note) — deliberately
+// single-level, so a reply itself can't be replied to. The talked_to
+// checkbox is the actual point of the whole log: it's what lets the
+// site show whether people are following through and really
+// contacting decision-makers, not just talking about them.
 export async function addPowerTreeNodeUpdate(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
   const nodeId = String(formData.get("node_id"));
   const body = String(formData.get("body") ?? "").trim();
+  const parentUpdateId = formData.get("parent_update_id");
+  const talkedTo = formData.get("talked_to") === "on";
   if (!body) return;
 
   await supabase.from("power_tree_node_updates").insert({
     node_id: nodeId,
     author_id: user.id,
     body,
+    parent_update_id: parentUpdateId ? String(parentUpdateId) : null,
+    talked_to: talkedTo,
   });
 
   revalidatePath(`/proposals/${proposalId}`);

@@ -161,6 +161,14 @@ create table public.power_tree_node_updates (
   node_id uuid not null references public.proposal_power_tree_nodes(id) on delete cascade,
   author_id uuid not null references public.profiles(id) on delete cascade,
   body text not null,
+  -- Single-level replies only (a reply can't itself be replied to) — kept
+  -- intentionally simple since this is a dated log, not a full comment
+  -- thread; that already exists elsewhere on a proposal.
+  parent_update_id uuid references public.power_tree_node_updates(id) on delete cascade,
+  -- Tracks actual outreach, not just commentary — the point of this log
+  -- is to see whether people are following through and really talking to
+  -- decision-makers, not just discussing them.
+  talked_to boolean not null default false,
   created_at timestamptz not null default now()
 );
 
