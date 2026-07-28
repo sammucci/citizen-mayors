@@ -91,6 +91,48 @@ export async function rejectTagSuggestion(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
+// Same normalization as the "add new" flow in the decision-maker
+// combobox (proposals/actions.ts) — kept as its own small copy here
+// rather than a shared import, matching how the other small per-file
+// helpers (like isNonEmptyFile) are already handled in this codebase.
+function toTitleCase(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/(^|\s|-|')([a-z])/g, (_match, sep, letter) => sep + letter.toUpperCase());
+}
+
+// Lets an admin add straight to the shared decision-makers registry —
+// previously the only way in was the "add new" combobox option while
+// building a specific proposal's chain. Same duplicate-avoidance as
+// that flow: a case-insensitive name match reuses the existing row
+// instead of creating a near-duplicate.
+export async function addDecisionMakerAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireAdmin();
+
+  const rawName = String(formData.get("name") ?? "").trim();
+  const kind = String(formData.get("kind") ?? "other");
+  if (!rawName) return { error: "Give it a name first." };
+
+  const { data: existing } = await supabase
+    .from("decision_makers")
+    .select("id")
+    .ilike("name", rawName)
+    .maybeSingle();
+  if (existing) {
+    return { error: "That's already in the registry." };
+  }
+
+  const { error } = await supabase
+    .from("decision_makers")
+    .insert({ name: toTitleCase(rawName), kind, added_by: user.id });
+  if (error) {
+    return { error: "Something went wrong adding that entry." };
+  }
+
+  revalidatePath("/admin/decision-makers");
+  return {};
+}
+
 // Removes an entry from the shared decision-makers registry — typos,
 // duplicates (e.g. a stray lowercase "quetcy lozada" next to the real
 // "Quetcy Lozada"), anything that shouldn't be an option anymore.

@@ -653,6 +653,13 @@ async function reindexPowerTreeNodes(
 // re-typing "Streets Department" reuses the same row instead of
 // creating a duplicate; creates a new registry entry only if nothing
 // matched, which is the "add new" path.
+// Open to the whole community now, not just the proposal owner — the
+// decision chain is meant to be a shared, crowdsourced record, and
+// requiring the owner to add every entry themselves was the one part
+// of it that wasn't. The owner's own additions still land approved
+// immediately (unchanged); anyone else's land 'pending' until the
+// owner approves or removes them, so the chain stays owner-curated
+// even though the suggestions can come from anywhere.
 export async function addPowerTreeNode(formData: FormData) {
   const { supabase, user } = await requireUser();
 
@@ -667,9 +674,8 @@ export async function addPowerTreeNode(formData: FormData) {
     .select("owner_id")
     .eq("id", proposalId)
     .single();
-  if (proposal?.owner_id !== user.id) {
-    throw new Error("Only the proposal owner can edit its power tree.");
-  }
+  if (!proposal) throw new Error("Proposal not found.");
+  const isOwner = proposal.owner_id === user.id;
   if (!rawName) throw new Error("Pick or name a decision-maker.");
 
   let { data: decisionMaker } = await supabase
@@ -702,6 +708,8 @@ export async function addPowerTreeNode(formData: FormData) {
       decision_maker_id: decisionMaker.id,
       note: note || null,
       sort_order: existingIds.length, // placeholder — reindexed below
+      status: isOwner ? "approved" : "pending",
+      submitted_by: user.id,
     })
     .select("id")
     .single();
@@ -715,6 +723,33 @@ export async function addPowerTreeNode(formData: FormData) {
       : existingIds.length;
   existingIds.splice(insertIndex, 0, newNode.id);
   await reindexPowerTreeNodes(supabase, existingIds);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Owner-only: flips a community-suggested node from pending to
+// approved, giving it the same standing as anything the owner added
+// directly. Rejecting a suggestion is just removePowerTreeNode — no
+// separate "reject" action needed.
+export async function approvePowerTreeNode(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const nodeId = String(formData.get("node_id"));
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can approve suggestions.");
+  }
+
+  await supabase
+    .from("proposal_power_tree_nodes")
+    .update({ status: "approved" })
+    .eq("id", nodeId);
 
   revalidatePath(`/proposals/${proposalId}`);
 }

@@ -56,7 +56,7 @@ export default async function RootLayout({
                 href="/proposals/new"
                 className="rounded-full bg-duty-purple px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
               >
-                🏛️ New proposal
+                New proposal
               </Link>
               {user ? (
                 <UserMenu displayName={displayName ?? "there"} isAdmin={isAdmin} />

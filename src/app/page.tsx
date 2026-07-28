@@ -102,7 +102,7 @@ export default async function HomePage({
         href="/proposals/new"
         className="mt-5 inline-flex items-center gap-2 rounded-full bg-duty-purple px-6 py-3 text-base font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:opacity-90"
       >
-        🏛️ Submit your proposal
+        Submit your proposal
       </Link>
 
       <div className="mt-6">

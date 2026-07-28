@@ -147,6 +147,14 @@ create table public.proposal_power_tree_nodes (
   parent_node_id uuid references public.proposal_power_tree_nodes(id),
   note text, -- e.g. "final sign-off", "committee review first"
   sort_order int not null default 0,
+  -- Open to the whole community, not just the proposal owner: anyone
+  -- signed in can suggest adding a decision-maker to the chain. The
+  -- owner's own additions land approved immediately (unchanged
+  -- behavior); anyone else's land pending until the owner approves or
+  -- removes them, so the chain stays owner-curated even though
+  -- suggestions can come from anywhere.
+  status text not null default 'approved' check (status in ('pending', 'approved')),
+  submitted_by uuid references public.profiles(id), -- who suggested it, if not the owner
   created_at timestamptz not null default now()
 );
 
@@ -375,8 +383,11 @@ create policy "authenticated add decision makers" on public.decision_makers for 
 create policy "admin deletes decision makers" on public.decision_makers for delete
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
-create policy "owner builds own power tree" on public.proposal_power_tree_nodes for insert
-  with check (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
+-- Anyone signed in can suggest a decision-maker for the chain, not just
+-- the owner — the app layer (addPowerTreeNode) decides whether that
+-- lands as 'approved' (owner) or 'pending' (everyone else).
+create policy "authenticated contribute to power tree" on public.proposal_power_tree_nodes for insert
+  with check (auth.role() = 'authenticated');
 create policy "owner edits own power tree" on public.proposal_power_tree_nodes for delete
   using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
 create policy "owner reorders own power tree" on public.proposal_power_tree_nodes for update

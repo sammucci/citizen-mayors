@@ -149,7 +149,7 @@ export default async function ProposalPage({
   const { data: powerTreeNodes } = await supabase
     .from("proposal_power_tree_nodes")
     .select(
-      "id, note, parent_node_id, decision_makers ( name, kind ), power_tree_node_updates ( id, body, created_at, author_id, parent_update_id, talked_to, profiles ( display_name ) )"
+      "id, note, parent_node_id, status, submitted_by, decision_makers ( name, kind ), profiles ( display_name ), power_tree_node_updates ( id, body, created_at, author_id, parent_update_id, talked_to, profiles ( display_name ) )"
     )
     .eq("proposal_id", proposal.id)
     .order("sort_order");
@@ -745,6 +745,8 @@ export default async function ProposalPage({
                   name: primary,
                   subtitle: subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ") ?? null,
                   note: node.note,
+                  status: node.status === "pending" ? "pending" : "approved",
+                  submittedByName: node.profiles?.display_name ?? "A resident",
                   updates: (node.power_tree_node_updates ?? [])
                     .slice()
                     .sort(

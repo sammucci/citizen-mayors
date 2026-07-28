@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { AddDecisionMakerForm } from "@/components/add-decision-maker-form";
 import { DeleteDecisionMakerButton } from "@/components/delete-decision-maker-button";
 import { splitDecisionMakerLabel } from "@/lib/decision-maker-label";
 
@@ -50,6 +51,10 @@ export default async function DecisionMakersAdminPage() {
         decision chain. Deleting here removes it from the registry for
         everyone — it fails safely if it's still in use somewhere.
       </p>
+
+      <div className="mt-4">
+        <AddDecisionMakerForm />
+      </div>
 
       <ul className="mt-6 space-y-2">
         {decisionMakers?.map((dm: any) => {

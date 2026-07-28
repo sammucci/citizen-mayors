@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   addPowerTreeNodeUpdate,
+  approvePowerTreeNode,
   removePowerTreeNode,
   updatePowerTreeNodeNote,
 } from "@/app/proposals/actions";
@@ -50,6 +51,8 @@ export function PowerTreeNodeCard({
     name: string;
     subtitle: string | null;
     note: string | null;
+    status: "pending" | "approved";
+    submittedByName: string;
     updates: Update[];
   };
   isFinal: boolean;
@@ -63,6 +66,7 @@ export function PowerTreeNodeCard({
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const addUpdateFormRef = useRef<HTMLFormElement>(null);
   const finalTextColor = readableTextColor(categoryColor);
+  const isPending = node.status === "pending";
 
   // Top-level notes only, newest first (already the order they arrive
   // in) — replies are looked up per-parent below and rendered nested,
@@ -101,19 +105,25 @@ export function PowerTreeNodeCard({
   return (
     <>
       <li
-        className="overflow-hidden rounded-lg border bg-white"
-        style={{ borderColor: isFinal ? categoryColor : `${categoryColor}55` }}
+        className={`overflow-hidden rounded-lg border bg-white ${isPending ? "border-dashed" : ""}`}
+        style={{
+          borderColor: isPending ? "#a3a3a3" : isFinal ? categoryColor : `${categoryColor}55`,
+        }}
       >
         <div
           className="flex items-start justify-between gap-2 p-3"
-          style={{ backgroundColor: isFinal ? categoryColor : `${categoryColor}1a` }}
+          style={
+            isPending
+              ? { backgroundColor: "#ffffff" }
+              : { backgroundColor: isFinal ? categoryColor : `${categoryColor}1a` }
+          }
         >
           <div className="flex min-w-0 items-start gap-2">
             {isOwner && (
               <span
                 {...dragHandleProps}
                 className="mt-0.5 shrink-0 cursor-grab select-none text-sm"
-                style={isFinal ? { color: finalTextColor, opacity: 0.7 } : undefined}
+                style={isFinal && !isPending ? { color: finalTextColor, opacity: 0.7 } : undefined}
                 title="Drag to reorder"
                 aria-hidden="true"
               >
@@ -126,27 +136,37 @@ export function PowerTreeNodeCard({
               className="min-w-0 text-left"
               title="View notes and civic dialogue"
             >
-              {isFinal && (
-                <span
-                  className="mb-0.5 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                  style={{ color: finalTextColor }}
-                >
-                  🏁 Final decision-maker
+              {isPending ? (
+                <span className="mb-0.5 inline-block rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                  ⏳ Pending approval
                 </span>
+              ) : (
+                isFinal && (
+                  <span
+                    className="mb-0.5 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                    style={{ color: finalTextColor }}
+                  >
+                    🏁 Final decision-maker
+                  </span>
+                )
               )}
               <span
                 className="block truncate text-base font-semibold"
-                style={isFinal ? { color: finalTextColor } : undefined}
+                style={isFinal && !isPending ? { color: finalTextColor } : undefined}
               >
                 {node.name}
               </span>
               <span
                 className="block text-xs"
-                style={isFinal ? { color: finalTextColor, opacity: 0.8 } : { color: "#737373" }}
+                style={
+                  isFinal && !isPending
+                    ? { color: finalTextColor, opacity: 0.8 }
+                    : { color: "#737373" }
+                }
               >
-                {node.subtitle}
+                {isPending ? `Suggested by ${node.submittedByName}` : node.subtitle}
                 {node.updates.length > 0
-                  ? `${node.subtitle ? " · " : ""}${node.updates.length} note${
+                  ? `${node.subtitle || isPending ? " · " : ""}${node.updates.length} note${
                       node.updates.length === 1 ? "" : "s"
                     }`
                   : ""}
@@ -154,23 +174,44 @@ export function PowerTreeNodeCard({
             </button>
           </div>
           {isOwner && (
-            <form action={removePowerTreeNode}>
-              <input type="hidden" name="proposal_id" value={proposalId} />
-              <input type="hidden" name="node_id" value={node.id} />
-              <button
-                className={`shrink-0 rounded-full border px-1.5 text-xs ${
-                  isFinal ? "" : "border-neutral-300 text-neutral-500 hover:border-duty-red hover:text-duty-red"
-                }`}
-                style={
-                  isFinal
-                    ? { borderColor: `${finalTextColor}66`, color: finalTextColor, opacity: 0.8 }
-                    : undefined
-                }
-                title="Remove from this proposal's chain"
-              >
-                ✕
-              </button>
-            </form>
+            <div className="flex shrink-0 items-center gap-1">
+              {isPending && (
+                <form
+                  action={async (formData) => {
+                    await approvePowerTreeNode(formData);
+                  }}
+                >
+                  <input type="hidden" name="proposal_id" value={proposalId} />
+                  <input type="hidden" name="node_id" value={node.id} />
+                  <button
+                    className="rounded-full px-2 py-0.5 text-xs font-medium text-white"
+                    style={{ backgroundColor: categoryColor }}
+                    title="Approve this suggestion"
+                  >
+                    Approve
+                  </button>
+                </form>
+              )}
+              <form action={removePowerTreeNode}>
+                <input type="hidden" name="proposal_id" value={proposalId} />
+                <input type="hidden" name="node_id" value={node.id} />
+                <button
+                  className={`rounded-full border px-1.5 text-xs ${
+                    isFinal && !isPending
+                      ? ""
+                      : "border-neutral-300 text-neutral-500 hover:border-duty-red hover:text-duty-red"
+                  }`}
+                  style={
+                    isFinal && !isPending
+                      ? { borderColor: `${finalTextColor}66`, color: finalTextColor, opacity: 0.8 }
+                      : undefined
+                  }
+                  title={isPending ? "Reject this suggestion" : "Remove from this proposal's chain"}
+                >
+                  ✕
+                </button>
+              </form>
+            </div>
           )}
         </div>
       </li>
@@ -186,36 +227,67 @@ export function PowerTreeNodeCard({
           >
             <div
               className="flex shrink-0 items-start justify-between gap-2 p-4"
-              style={{ backgroundColor: isFinal ? categoryColor : `${categoryColor}1a` }}
+              style={
+                isPending
+                  ? { backgroundColor: "#ffffff" }
+                  : { backgroundColor: isFinal ? categoryColor : `${categoryColor}1a` }
+              }
             >
               <div className="min-w-0">
-                {isFinal && (
-                  <span
-                    className="mb-1 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                    style={{ color: finalTextColor }}
-                  >
-                    🏁 Final decision-maker
+                {isPending ? (
+                  <span className="mb-1 inline-block rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                    ⏳ Pending approval
                   </span>
+                ) : (
+                  isFinal && (
+                    <span
+                      className="mb-1 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                      style={{ color: finalTextColor }}
+                    >
+                      🏁 Final decision-maker
+                    </span>
+                  )
                 )}
                 <h3
                   className="truncate text-lg font-semibold"
-                  style={isFinal ? { color: finalTextColor } : undefined}
+                  style={isFinal && !isPending ? { color: finalTextColor } : undefined}
                 >
                   {node.name}
                 </h3>
                 <p
                   className="text-xs"
-                  style={isFinal ? { color: finalTextColor, opacity: 0.8 } : { color: "#737373" }}
+                  style={
+                    isFinal && !isPending
+                      ? { color: finalTextColor, opacity: 0.8 }
+                      : { color: "#737373" }
+                  }
                 >
-                  {node.subtitle}
+                  {isPending ? `Suggested by ${node.submittedByName}` : node.subtitle}
                 </p>
+                {isPending && isOwner && (
+                  <form
+                    action={async (formData) => {
+                      await approvePowerTreeNode(formData);
+                    }}
+                    className="mt-1.5"
+                  >
+                    <input type="hidden" name="proposal_id" value={proposalId} />
+                    <input type="hidden" name="node_id" value={node.id} />
+                    <button
+                      className="rounded-full px-3 py-1 text-xs font-medium text-white"
+                      style={{ backgroundColor: categoryColor }}
+                    >
+                      Approve this suggestion
+                    </button>
+                  </form>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
                 className="shrink-0 rounded-full border px-2 py-0.5 text-sm"
                 style={
-                  isFinal
+                  isFinal && !isPending
                     ? { borderColor: `${finalTextColor}66`, color: finalTextColor }
                     : { borderColor: "#d4d4d4", color: "#525252" }
                 }

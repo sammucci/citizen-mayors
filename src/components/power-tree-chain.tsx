@@ -20,6 +20,8 @@ type Node = {
   name: string;
   subtitle: string | null;
   note: string | null;
+  status: "pending" | "approved";
+  submittedByName: string;
   updates: Update[];
 };
 
@@ -77,6 +79,12 @@ export function PowerTreeChain({
 
   const display = [...ascending].reverse(); // final decision-maker first/top
 
+  // "Final decision-maker" only ever applies to an approved node — a
+  // pending suggestion sitting at the top of the display shouldn't get
+  // the colored final treatment (or bump the real final decision-maker
+  // out of it) before anyone's actually approved it.
+  const firstApprovedDisplayIndex = display.findIndex((n) => n.status === "approved");
+
   function persistOrder(newAscending: Node[]) {
     setAscending(newAscending);
     const fd = new FormData();
@@ -106,7 +114,9 @@ export function PowerTreeChain({
   }
 
   function GapInserter({ displayGapIndex }: { displayGapIndex: number }) {
-    if (!isOwner) return null;
+    // Anyone signed in can suggest an addition, not just the owner —
+    // it just lands pending until the owner approves it.
+    if (!canContribute) return null;
     const isOpen = openGap === displayGapIndex;
     return (
       <li
@@ -181,7 +191,7 @@ export function PowerTreeChain({
             <PowerTreeNodeCard
               proposalId={proposalId}
               node={node}
-              isFinal={i === 0}
+              isFinal={i === firstApprovedDisplayIndex}
               isOwner={isOwner}
               canContribute={canContribute}
               categoryColor={categoryColor}
