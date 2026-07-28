@@ -52,6 +52,9 @@ export default async function RootLayout({
               <span className="text-duty-purple">Mayors</span>
             </Link>
             <nav className="flex items-center gap-4 text-sm">
+              <Link href="/community-dashboard" className="text-neutral-600 hover:text-neutral-900">
+                Community
+              </Link>
               <Link
                 href="/proposals/new"
                 className="rounded-full bg-duty-purple px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"

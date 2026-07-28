@@ -53,6 +53,14 @@ export default async function AdminHomePage() {
             Clean up typos and duplicates in the shared decision-maker registry.
           </p>
         </li>
+        <li className="rounded-lg border border-neutral-200 bg-white p-4">
+          <Link href="/admin/members" className="text-sm font-semibold underline">
+            Members
+          </Link>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Everyone who's registered on the platform.
+          </p>
+        </li>
       </ul>
     </div>
   );
