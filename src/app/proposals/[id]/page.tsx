@@ -132,7 +132,7 @@ export default async function ProposalPage({
                 omitted) so the tab reads as physically attached to it,
                 like a folder tab. */}
             <div
-              className="inline-block rounded-t-lg px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white"
+              className="inline-block rounded-t-lg px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white"
               style={{ backgroundColor: proposal.categories?.color ?? "#a3a3a3" }}
             >
               {proposal.categories?.label} • {proposal.type}
@@ -213,50 +213,58 @@ export default async function ProposalPage({
                 </div>
 
                 {isOwner && (
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
-                      {proposal.image_url ? "Change cover image" : "Add a cover image"}
-                    </summary>
-                    <form
-                      action={updateProposalImage}
-                      className="mt-2 flex flex-wrap items-center gap-2"
-                    >
-                      <input type="hidden" name="proposal_id" value={proposal.id} />
-                      <input type="file" name="image" accept="image/*" className="text-xs" />
-                      <button className="rounded bg-duty-purple px-3 py-1 text-xs text-white">
-                        Upload
-                      </button>
-                    </form>
-                  </details>
-                )}
+                  // Owner-only utility toggles, grouped in a row and
+                  // styled as small pill buttons instead of default
+                  // <details> disclosure triangles — those read as plain
+                  // browser dropdowns, which looked out of place next to
+                  // everything else here being deliberately designed.
+                  // list-none + hiding the ::-webkit-details-marker strips
+                  // the native triangle; the <details>/<summary> behavior
+                  // (click to expand) is unchanged underneath.
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <details>
+                      <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
+                        🖼️ {proposal.image_url ? "Change cover image" : "Add a cover image"}
+                      </summary>
+                      <form
+                        action={updateProposalImage}
+                        className="mt-2 flex flex-wrap items-center gap-2"
+                      >
+                        <input type="hidden" name="proposal_id" value={proposal.id} />
+                        <input type="file" name="image" accept="image/*" className="text-xs" />
+                        <button className="rounded bg-duty-purple px-3 py-1 text-xs text-white">
+                          Upload
+                        </button>
+                      </form>
+                    </details>
 
-                {isOwner && (
-                  // Lets the owner change title/type/category/geography
-                  // after posting — previously the only way to fix a wrong
-                  // category was to delete the whole proposal and repost
-                  // it. Keyed to the fields it edits so it remounts
-                  // (picking up the saved values, and re-syncing its
-                  // internal scope state) right after a successful save.
-                  <details
-                    key={`${proposal.title}-${proposal.category_id}-${proposal.geography_scope}-${proposal.geography_label}-${proposal.council_district}`}
-                    className="mt-2"
-                  >
-                    <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
-                      Edit proposal details
-                    </summary>
-                    <EditProposalForm
-                      proposalId={proposal.id}
-                      categories={allCategories ?? []}
-                      initial={{
-                        title: proposal.title,
-                        type: proposal.type,
-                        category_id: proposal.category_id,
-                        geography_scope: proposal.geography_scope,
-                        geography_label: proposal.geography_label,
-                        council_district: proposal.council_district,
-                      }}
-                    />
-                  </details>
+                    {/* Lets the owner change title/type/category/geography
+                        after posting — previously the only way to fix a
+                        wrong category was to delete the whole proposal
+                        and repost it. Keyed to the fields it edits so it
+                        remounts (picking up the saved values, and
+                        re-syncing its internal scope state) right after a
+                        successful save. */}
+                    <details
+                      key={`${proposal.title}-${proposal.category_id}-${proposal.geography_scope}-${proposal.geography_label}-${proposal.council_district}`}
+                    >
+                      <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
+                        ✎ Edit proposal details
+                      </summary>
+                      <EditProposalForm
+                        proposalId={proposal.id}
+                        categories={allCategories ?? []}
+                        initial={{
+                          title: proposal.title,
+                          type: proposal.type,
+                          category_id: proposal.category_id,
+                          geography_scope: proposal.geography_scope,
+                          geography_label: proposal.geography_label,
+                          council_district: proposal.council_district,
+                        }}
+                      />
+                    </details>
+                  </div>
                 )}
               </div>
 
@@ -406,7 +414,7 @@ export default async function ProposalPage({
                               defaultChecked={defaultStatus === "accepted_with_contingency"}
                               className="peer sr-only"
                             />
-                            <span className="cursor-pointer rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-700 peer-checked:bg-amber-500 peer-checked:text-white">
+                            <span className="cursor-pointer rounded-full border border-yellow-300 bg-yellow-50 px-2 py-1 text-xs text-yellow-800 peer-checked:bg-yellow-400 peer-checked:text-yellow-900">
                               Accept with contingency
                             </span>
                           </label>
@@ -450,8 +458,8 @@ export default async function ProposalPage({
 
                   {user?.id === c.author_id && c.id === latestCommentId && (
                     <details className="mt-2">
-                      <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
-                        Edit your comment
+                      <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
+                        ✎ Edit your comment
                       </summary>
                       <form action={editComment} className="mt-2 space-y-2">
                         <input type="hidden" name="comment_id" value={c.id} />
@@ -542,6 +550,26 @@ export default async function ProposalPage({
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {/* Wraps the spacer and the decision-chain box together with no
+              gap between them (mirroring how the tab sits flush against
+              the card in the main column), so this whole pair still
+              behaves as a single item for the sidebar's own space-y-6
+              spacing against the Tags box below. */}
+          <div>
+            {/* Invisible spacer that exactly mirrors the filing tab's own
+                padding/text/line-height (just without color or a visible
+                background) — pushes the sidebar's first white box down
+                by the same height as the tab, so the two white areas
+                start flush with each other instead of the sidebar lining
+                up with the top of the tab. Using the same markup instead
+                of a fixed pixel value keeps this correct even if the tab
+                ever wraps to two lines for a long category name. */}
+            <div
+              className="invisible px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+              aria-hidden="true"
+            >
+              {proposal.categories?.label} • {proposal.type}
+            </div>
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
             <h2 className="text-base font-semibold">Decision chain</h2>
             <p className="mt-1 text-xs text-neutral-500">
@@ -566,8 +594,8 @@ export default async function ProposalPage({
                     {node.note && <p className="mt-1 text-xs text-neutral-500">{node.note}</p>}
                     {isOwner && (
                       <details key={node.note ?? ""} className="mt-1">
-                        <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
-                          Edit role
+                        <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-white [&::-webkit-details-marker]:hidden">
+                          ✎ Edit role
                         </summary>
                         <form
                           action={updatePowerTreeNodeNote}
@@ -648,6 +676,7 @@ export default async function ProposalPage({
                 </button>
               </form>
             )}
+          </div>
           </div>
 
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
