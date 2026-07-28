@@ -11,9 +11,15 @@ export async function signOut() {
 }
 
 // Self-reported, optional. Not geocoded or verified against an address —
-// just what someone tells us. (Plausibility-checking this against a zip
-// code is planned but not built yet; see project notes.)
-export async function updateProfile(formData: FormData) {
+// just what someone tells us. But zip and district are both meant to
+// describe the SAME place, and nothing stopped someone from picking a
+// zip in one part of the city and a district from somewhere else
+// entirely (e.g. 19122 with District 10) — checked here against the
+// same zip_council_districts crosswalk the proposal form uses. A zip
+// that maps to more than one district, or isn't in the crosswalk at
+// all, isn't blocked — the data just isn't precise enough yet to
+// second-guess what someone picked.
+export async function updateProfile(formData: FormData): Promise<{ error?: string }> {
   const supabase = createClient();
   const {
     data: { user },
@@ -27,6 +33,27 @@ export async function updateProfile(formData: FormData) {
   const ageRange = String(formData.get("age_range") ?? "").trim();
   const raceEthnicity = String(formData.get("race_ethnicity") ?? "").trim();
   const gender = String(formData.get("gender") ?? "").trim();
+
+  if (zipCode && councilDistrict) {
+    const { data: matches } = await supabase
+      .from("zip_council_districts")
+      .select("council_district")
+      .eq("zip_code", zipCode);
+
+    if (matches && matches.length > 0) {
+      const validDistricts = matches.map((m) => m.council_district);
+      if (!validDistricts.includes(councilDistrict)) {
+        return {
+          error:
+            validDistricts.length === 1
+              ? `Zip ${zipCode} is in District ${validDistricts[0]}, not District ${councilDistrict} — double check which one's right.`
+              : `Zip ${zipCode} doesn't match District ${councilDistrict} — it's in ${validDistricts
+                  .map((d) => `District ${d}`)
+                  .join(" or ")}.`,
+        };
+      }
+    }
+  }
 
   await supabase
     .from("profiles")
@@ -42,6 +69,7 @@ export async function updateProfile(formData: FormData) {
 
   revalidatePath("/profile");
   revalidatePath("/");
+  return {};
 }
 
 function isNonEmptyFile(value: FormDataEntryValue | null): value is File {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   addPowerTreeNodeUpdate,
   approvePowerTreeNode,
@@ -64,7 +65,17 @@ export function PowerTreeNodeCard({
   const [modalOpen, setModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  // Removing a node takes its whole note log with it, and it used to be
+  // one click away right next to a card full of notes people worked hard
+  // to add — an easy accidental-click target. Now the ✕ just opens an
+  // inline "type delete to confirm" bar instead of removing immediately.
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [removeConfirmText, setRemoveConfirmText] = useState("");
   const addUpdateFormRef = useRef<HTMLFormElement>(null);
+  // Forces a real refetch after approve/remove/note actions, on top of
+  // the resync-key fix, so a signed-in tab can never keep showing a
+  // stale cached copy of the chain after one of these completes.
+  const router = useRouter();
   const finalTextColor = readableTextColor(categoryColor);
   const isPending = node.status === "pending";
 
@@ -118,64 +129,49 @@ export function PowerTreeNodeCard({
               : { backgroundColor: isFinal ? categoryColor : `${categoryColor}1a` }
           }
         >
-          {/* Badge and owner actions get their own row, separate from the
-              name/subtitle below. Cramming "Approve" + "✕" into the same
-              row as the badge was squeezing the badge onto two lines and
-              making the owner's view look cluttered compared to everyone
-              else's (who never sees those buttons, so their row had all
-              the room it needed). */}
-          {(isOwner || isPending || isFinal) && (
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
-                {isOwner && (
-                  <span
-                    {...dragHandleProps}
-                    className="shrink-0 cursor-grab select-none text-sm"
-                    style={isFinal && !isPending ? { color: finalTextColor, opacity: 0.7 } : undefined}
-                    title="Drag to reorder"
-                    aria-hidden="true"
-                  >
-                    ⠿
-                  </span>
-                )}
-                {isPending ? (
-                  <span className="inline-block shrink-0 whitespace-nowrap rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
-                    ⏳ Pending approval
-                  </span>
-                ) : (
-                  isFinal && (
+          {/* A badge (pending or final) needs its own row above the name —
+              cramming "Approve" + "✕" into the same row as the badge
+              squeezed the badge onto two lines. But when there's NO
+              badge (the common case — an ordinary, non-final approved
+              entry), splitting into two rows just left the drag dots
+              stranded above an empty row with nothing next to them,
+              adding dead space and knocking them out of line with the
+              name and the ✕. So: two rows only when there's an actual
+              badge to separate out; one aligned row otherwise, same as
+              before badges existed. */}
+          {isPending || isFinal ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  {isOwner && (
+                    <span
+                      {...dragHandleProps}
+                      className="shrink-0 cursor-grab select-none text-sm"
+                      style={isFinal && !isPending ? { color: finalTextColor, opacity: 0.7 } : undefined}
+                      title="Drag to reorder"
+                      aria-hidden="true"
+                    >
+                      ⠿
+                    </span>
+                  )}
+                  {isPending ? (
+                    <span className="inline-block shrink-0 whitespace-nowrap rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                      ⏳ Pending approval
+                    </span>
+                  ) : (
                     <span
                       className="inline-block shrink-0 whitespace-nowrap rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
                       style={{ color: finalTextColor }}
                     >
                       🏁 Final decision-maker
                     </span>
-                  )
-                )}
-              </div>
-              {isOwner && (
-                <div className="flex shrink-0 items-center gap-1">
-                  {isPending && (
-                    <form
-                      action={async (formData) => {
-                        await approvePowerTreeNode(formData);
-                      }}
-                    >
-                      <input type="hidden" name="proposal_id" value={proposalId} />
-                      <input type="hidden" name="node_id" value={node.id} />
-                      <button
-                        className="whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium text-white"
-                        style={{ backgroundColor: categoryColor }}
-                        title="Approve this suggestion"
-                      >
-                        Approve
-                      </button>
-                    </form>
                   )}
-                  <form action={removePowerTreeNode}>
-                    <input type="hidden" name="proposal_id" value={proposalId} />
-                    <input type="hidden" name="node_id" value={node.id} />
+                </div>
+                {isOwner && (
+                  <div className="flex shrink-0 items-center gap-1">
                     <button
+                      type="button"
+                      onClick={() => setConfirmingRemove(true)}
                       className={`rounded-full border px-1.5 text-xs ${
                         isFinal && !isPending
                           ? ""
@@ -190,41 +186,131 @@ export function PowerTreeNodeCard({
                     >
                       ✕
                     </button>
-                  </form>
-                </div>
+                  </div>
+                )}
+              </div>
+              {/* Approving now only lives in the modal, where there's
+                  actual room for it — it used to sit right next to the
+                  "Pending approval" pill in this tight header row, which
+                  crowded the pill and made it wrap. Click the card to
+                  open the modal and approve from there. */}
+              <button
+                type="button"
+                onClick={() => setModalOpen(true)}
+                className="mt-1.5 block w-full min-w-0 text-left"
+                title="View notes and civic dialogue"
+              >
+                <span
+                  className="block truncate text-base font-semibold"
+                  style={isFinal && !isPending ? { color: finalTextColor } : undefined}
+                >
+                  {node.name}
+                </span>
+                <span
+                  className="block text-xs"
+                  style={
+                    isFinal && !isPending
+                      ? { color: finalTextColor, opacity: 0.8 }
+                      : { color: "#737373" }
+                  }
+                >
+                  {isPending ? `Suggested by ${node.submittedByName}` : node.subtitle}
+                  {node.updates.length > 0
+                    ? `${node.subtitle || isPending ? " · " : ""}${node.updates.length} note${
+                        node.updates.length === 1 ? "" : "s"
+                      }`
+                    : ""}
+                </span>
+              </button>
+            </>
+          ) : (
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-start gap-2">
+                {isOwner && (
+                  <span
+                    {...dragHandleProps}
+                    className="mt-0.5 shrink-0 cursor-grab select-none text-sm"
+                    title="Drag to reorder"
+                    aria-hidden="true"
+                  >
+                    ⠿
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(true)}
+                  className="min-w-0 text-left"
+                  title="View notes and civic dialogue"
+                >
+                  <span className="block truncate text-base font-semibold">{node.name}</span>
+                  <span className="block text-xs" style={{ color: "#737373" }}>
+                    {node.subtitle}
+                    {node.updates.length > 0
+                      ? `${node.subtitle ? " · " : ""}${node.updates.length} note${
+                          node.updates.length === 1 ? "" : "s"
+                        }`
+                      : ""}
+                  </span>
+                </button>
+              </div>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingRemove(true)}
+                  className="shrink-0 rounded-full border border-neutral-300 px-1.5 text-xs text-neutral-500 hover:border-duty-red hover:text-duty-red"
+                  title="Remove from this proposal's chain"
+                >
+                  ✕
+                </button>
               )}
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            className={`block w-full min-w-0 text-left ${
-              isOwner || isPending || isFinal ? "mt-1.5" : ""
-            }`}
-            title="View notes and civic dialogue"
-          >
-            <span
-              className="block truncate text-base font-semibold"
-              style={isFinal && !isPending ? { color: finalTextColor } : undefined}
+
+          {/* Removing a node takes its whole note log with it, so this
+              isn't a one-click action anymore — has to actually type
+              "delete" before the button will submit. */}
+          {confirmingRemove && (
+            <form
+              action={async (formData) => {
+                await removePowerTreeNode(formData);
+                router.refresh();
+              }}
+              className="mt-2 space-y-1.5 rounded border border-duty-red/40 bg-duty-red/5 p-2"
             >
-              {node.name}
-            </span>
-            <span
-              className="block text-xs"
-              style={
-                isFinal && !isPending
-                  ? { color: finalTextColor, opacity: 0.8 }
-                  : { color: "#737373" }
-              }
-            >
-              {isPending ? `Suggested by ${node.submittedByName}` : node.subtitle}
-              {node.updates.length > 0
-                ? `${node.subtitle || isPending ? " · " : ""}${node.updates.length} note${
-                    node.updates.length === 1 ? "" : "s"
-                  }`
-                : ""}
-            </span>
-          </button>
+              <input type="hidden" name="proposal_id" value={proposalId} />
+              <input type="hidden" name="node_id" value={node.id} />
+              <p className="text-xs text-neutral-700">
+                Type <span className="font-semibold">delete</span> to remove{" "}
+                <span className="font-semibold">{node.name}</span>
+                {isPending ? "" : " and all of its notes"}. This can&apos;t be undone.
+              </p>
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={removeConfirmText}
+                  onChange={(e) => setRemoveConfirmText(e.target.value)}
+                  placeholder="delete"
+                  autoFocus
+                  className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+                />
+                <button
+                  disabled={removeConfirmText.trim().toLowerCase() !== "delete"}
+                  className="shrink-0 rounded bg-duty-red px-2 py-1 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isPending ? "Reject" : "Remove"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmingRemove(false);
+                    setRemoveConfirmText("");
+                  }}
+                  className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </li>
 
@@ -280,6 +366,7 @@ export function PowerTreeNodeCard({
                   <form
                     action={async (formData) => {
                       await approvePowerTreeNode(formData);
+                      router.refresh();
                     }}
                     className="mt-1.5"
                   >

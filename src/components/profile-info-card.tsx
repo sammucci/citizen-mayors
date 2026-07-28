@@ -22,6 +22,7 @@ type Profile = {
 // straight into edit mode instead of showing an empty card first.
 export function ProfileInfoCard({ profile }: { profile: Profile }) {
   const [editing, setEditing] = useState(!profile?.display_name);
+  const [error, setError] = useState<string | null>(null);
   const districts = Array.from({ length: 10 }, (_, i) => i + 1);
 
   const demographicRows = [
@@ -110,7 +111,12 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
 
       <form
         action={async (formData) => {
-          await updateProfile(formData);
+          setError(null);
+          const result = await updateProfile(formData);
+          if (result?.error) {
+            setError(result.error);
+            return;
+          }
           setEditing(false);
         }}
         className="mt-3 space-y-3"
@@ -136,6 +142,9 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             placeholder="e.g. 19125"
           />
         </label>
+        {error && (
+          <p className="rounded-md bg-duty-red/10 px-3 py-2 text-xs text-duty-red">{error}</p>
+        )}
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-neutral-700">
             Your council district (optional)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { addPowerTreeNode, reorderPowerTreeNodes } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
 import { PowerTreeNodeCard } from "@/components/power-tree-node-card";
@@ -53,6 +54,15 @@ export function PowerTreeChain({
   isOwner: boolean;
   canContribute: boolean;
 }) {
+  // Server Actions invoked from a plain <form action> auto-refresh the
+  // tab that submitted them, but that refresh can still be served from
+  // Next's client-side router cache rather than a true refetch in some
+  // cases. Calling router.refresh() explicitly after every mutation
+  // forces a real refetch of this page's data, so there's no chance of
+  // a stale cached copy showing an add/approve/reorder in the wrong
+  // spot — belt-and-suspenders alongside the resync-key fix above.
+  const router = useRouter();
+
   // ascending = lowest sort_order first (closest to "We the people").
   // Local copy so a drag can move things around instantly, before the
   // server round-trip confirms it.
@@ -92,7 +102,7 @@ export function PowerTreeChain({
     const fd = new FormData();
     fd.set("proposal_id", proposalId);
     newAscending.forEach((n) => fd.append("node_id", n.id));
-    reorderPowerTreeNodes(fd);
+    reorderPowerTreeNodes(fd).then(() => router.refresh());
   }
 
   function handleDropAtDisplayIndex(targetDisplayIndex: number) {
@@ -147,6 +157,7 @@ export function PowerTreeChain({
           <form
             action={async (formData) => {
               await addPowerTreeNode(formData);
+              router.refresh();
               setOpenGap(null);
             }}
             className="w-full space-y-2 rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-2"
