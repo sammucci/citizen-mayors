@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { CivicReportCard, type CivicLog, type CivicStats } from "@/components/civic-report-card";
 import { ProfileInfoCard } from "@/components/profile-info-card";
 import { statusColorClasses } from "@/lib/status-colors";
 
@@ -39,10 +40,86 @@ export default async function ProfilePage() {
   const { data: myComments } = await supabase
     .from("comments")
     .select(
-      "id, body, is_suggested_edit, status, created_at, proposal_id, proposals ( title, categories ( color ) )"
+      "id, body, is_suggested_edit, status, created_at, proposal_id, parent_comment_id, proposals ( title, owner_id, categories ( color ) )"
     )
     .eq("author_id", user.id)
     .order("created_at", { ascending: false });
+
+  // --- Civic report card: platform-engagement half is all computed
+  // live from tables that already exist ("compute, don't duplicate" —
+  // the same call made on the Meantime project) rather than tracked in
+  // new counter columns that could drift out of sync.
+  const myCommentIds = (myComments ?? []).map((c: any) => c.id);
+  const parentIdsIRepliedTo = (myComments ?? [])
+    .map((c: any) => c.parent_comment_id)
+    .filter((id: string | null): id is string => Boolean(id));
+
+  const [{ data: repliesToMe }, { data: peopleIRepliedTo }, { data: myPowerTreeUpdates }] =
+    await Promise.all([
+      myCommentIds.length > 0
+        ? supabase.from("comments").select("author_id").in("parent_comment_id", myCommentIds)
+        : Promise.resolve({ data: [] as { author_id: string }[] }),
+      parentIdsIRepliedTo.length > 0
+        ? supabase.from("comments").select("author_id").in("id", parentIdsIRepliedTo)
+        : Promise.resolve({ data: [] as { author_id: string }[] }),
+      supabase
+        .from("power_tree_node_updates")
+        .select("proposal_power_tree_nodes ( decision_maker_id )")
+        .eq("author_id", user.id),
+    ]);
+
+  const peopleConversedWith = new Set(
+    [...(repliesToMe ?? []), ...(peopleIRepliedTo ?? [])]
+      .map((r: any) => r.author_id)
+      .filter((id: string) => id !== user.id)
+  ).size;
+
+  const decisionMakersEngaged = new Set(
+    (myPowerTreeUpdates ?? [])
+      .map((u: any) => u.proposal_power_tree_nodes?.decision_maker_id)
+      .filter(Boolean)
+  ).size;
+
+  const contributedToOthers = new Set(
+    (myComments ?? [])
+      .filter((c: any) => c.is_suggested_edit && c.proposals?.owner_id && c.proposals.owner_id !== user.id)
+      .map((c: any) => c.proposal_id)
+  ).size;
+
+  const { data: civicLogsRaw } = await supabase
+    .from("civic_logs")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("occurred_on", { ascending: false });
+
+  const civicLogs: CivicLog[] = (civicLogsRaw ?? []).map((l: any) => ({
+    id: l.id,
+    logType: l.log_type,
+    occurredOn: l.occurred_on,
+    published: l.published,
+    publishedLink: l.published_link,
+    hours: l.hours,
+    category: l.category,
+    note: l.note,
+    status: l.status,
+  }));
+
+  const publishedLogs = civicLogs.filter((l) => l.status === "published");
+  const civicStats: CivicStats = {
+    proposalsMade: myProposals?.length ?? 0,
+    contributedToOthers,
+    commentsMade: myComments?.length ?? 0,
+    peopleConversedWith,
+    decisionMakersEngaged,
+    lettersWritten: publishedLogs.filter((l) => l.logType === "letter_to_editor").length,
+    lettersPublished: publishedLogs.filter((l) => l.logType === "letter_to_editor" && l.published)
+      .length,
+    meetingsAttended: publishedLogs.filter((l) => l.logType === "community_meeting").length,
+    volunteerHours: publishedLogs
+      .filter((l) => l.logType === "volunteer_hours")
+      .reduce((sum, l) => sum + (l.hours ?? 0), 0),
+    testimonyGiven: publishedLogs.filter((l) => l.logType === "testimony").length,
+  };
 
   // Grouped by proposal so "Your comments" reads as one row per
   // conversation you've been part of, not a flat list repeating the
@@ -74,6 +151,8 @@ export default async function ProfilePage() {
       </div>
 
       <ProfileInfoCard profile={profile} />
+
+      <CivicReportCard stats={civicStats} logs={civicLogs} categoryColor="#6C3FD1" />
 
       <div>
         <h2 className="text-lg font-semibold">Your proposals</h2>
