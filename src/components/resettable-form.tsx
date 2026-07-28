@@ -10,6 +10,13 @@ import { useRef } from "react";
 // like posting a comment or publishing a new version hadn't worked,
 // which is exactly the kind of thing that invites someone to hit submit
 // again and create a duplicate.
+//
+// STANDING RULE: any new form with a free-text input or textarea (not
+// just hidden fields + a button) should use this instead of a plain
+// <form>, by default, without needing to be asked each time. If a form
+// genuinely needs to keep showing what's in it after saving (editing
+// existing data, like the profile form), skip this and say so in a
+// comment — that's the exception, not the default.
 export function ResettableForm({
   action,
   className,

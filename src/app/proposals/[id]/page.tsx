@@ -13,10 +13,12 @@ import {
   suggestTag,
   updateProposalImage,
 } from "@/app/proposals/actions";
+import { CollapsibleReplies } from "@/components/collapsible-replies";
 import { CommentBody } from "@/components/comment-body";
 import { DecisionChainNote } from "@/components/decision-chain-note";
 import { DecisionMakerField } from "@/components/decision-maker-field";
 import { EditProposalForm } from "@/components/edit-proposal-form";
+import { ReplyToggle } from "@/components/reply-toggle";
 import { ResolveCommentForm } from "@/components/resolve-comment-form";
 import { ResettableForm } from "@/components/resettable-form";
 import { VersionCarousel } from "@/components/version-carousel";
@@ -200,13 +202,54 @@ export default async function ProposalPage({
 
     return (
       <li key={c.id} className="rounded-lg border border-neutral-200 bg-white p-3">
+        {/* Vote controls moved up here, inline with the name — used to
+            sit in their own row below the comment text, which pushed
+            everything after it (Reply, replies) further down for no
+            real reason. */}
         <div className="flex items-center justify-between text-xs text-neutral-500">
           <span>{c.profiles?.display_name ?? "A resident"}</span>
-          {c.is_suggested_edit && (
-            <span className={`rounded-full px-2 py-0.5 ${statusColorClasses(c.status)}`}>
-              Suggested edit · {c.status.replace(/_/g, " ")}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {c.is_suggested_edit && (
+              <span className={`rounded-full px-2 py-0.5 ${statusColorClasses(c.status)}`}>
+                {c.status.replace(/_/g, " ")}
+              </span>
+            )}
+            <div className="flex items-center gap-1.5">
+              <form action={react}>
+                <input type="hidden" name="proposal_id" value={proposal.id} />
+                <input type="hidden" name="comment_id" value={c.id} />
+                <input type="hidden" name="value" value="1" />
+                <button
+                  aria-label="Upvote comment"
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
+                    myVoteOnComment === 1 ? "bg-green-600" : "bg-[#bee1ca] hover:bg-[#abcbb6]"
+                  }`}
+                >
+                  <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
+                    👍
+                  </span>
+                </button>
+              </form>
+              <form action={react}>
+                <input type="hidden" name="proposal_id" value={proposal.id} />
+                <input type="hidden" name="comment_id" value={c.id} />
+                <input type="hidden" name="value" value="-1" />
+                <button
+                  aria-label="Downvote comment"
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
+                    myVoteOnComment === -1 ? "bg-duty-red" : "bg-red-300 hover:bg-red-400"
+                  }`}
+                >
+                  <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
+                    👎
+                  </span>
+                </button>
+              </form>
+              <span className="text-xs text-neutral-500">
+                {score >= 0 ? `+${score}` : score}
+              </span>
+            </div>
+          </div>
         </div>
         {/* Own, still-editable comment gets a client component that
             swaps its display text for the edit form in place, instead
@@ -232,7 +275,7 @@ export default async function ProposalPage({
         )}
         {c.status_note && (
           <p className="mt-1 text-xs italic text-neutral-500">
-            Owner note: {c.status_note}
+            Contingency: {c.status_note}
           </p>
         )}
         {c.unresolved_flagged && (
@@ -241,55 +284,13 @@ export default async function ProposalPage({
           </p>
         )}
 
-        {/* Small vote row — reuses the same react() action as the
-            proposal's own vote buttons; sending comment_id (instead of
-            just a bare proposal_id) is what tells the action this is a
-            comment vote. Net score here is also what "Most active"
-            sorting is based on. */}
-        <div className="mt-2 flex items-center gap-1.5">
-          <form action={react}>
-            <input type="hidden" name="proposal_id" value={proposal.id} />
-            <input type="hidden" name="comment_id" value={c.id} />
-            <input type="hidden" name="value" value="1" />
-            <button
-              aria-label="Upvote comment"
-              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
-                myVoteOnComment === 1 ? "bg-green-600" : "bg-[#bee1ca] hover:bg-[#abcbb6]"
-              }`}
-            >
-              <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
-                👍
-              </span>
-            </button>
-          </form>
-          <form action={react}>
-            <input type="hidden" name="proposal_id" value={proposal.id} />
-            <input type="hidden" name="comment_id" value={c.id} />
-            <input type="hidden" name="value" value="-1" />
-            <button
-              aria-label="Downvote comment"
-              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
-                myVoteOnComment === -1 ? "bg-duty-red" : "bg-red-300 hover:bg-red-400"
-              }`}
-            >
-              <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
-                👎
-              </span>
-            </button>
-          </form>
-          <span className="text-xs text-neutral-500">
-            {score >= 0 ? `+${score}` : score}
-          </span>
-        </div>
-
         {isOwner && c.is_suggested_edit && (
           <ResolveCommentForm
+            key={`${c.status}-${c.status_note ?? ""}`}
             commentId={c.id}
             proposalId={proposal.id}
-            defaultStatus={c.status === "open" ? "accepted" : c.status}
-            defaultNote={c.status_note}
-            buttonLabel={c.status === "open" ? "Resolve" : "Change decision"}
-            categoryColor={categoryColor}
+            status={c.status}
+            statusNote={c.status_note}
           />
         )}
 
@@ -305,38 +306,20 @@ export default async function ProposalPage({
 
 
         {user && (
-          <details className="mt-2">
-            <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
-              ↩ Reply
-            </summary>
-            <ResettableForm
-              key={replies.length}
-              action={addComment}
-              className="mt-2 space-y-2"
-            >
-              <input type="hidden" name="proposal_id" value={proposal.id} />
-              <input type="hidden" name="version_id" value={currentVersion?.id ?? ""} />
-              <input type="hidden" name="parent_comment_id" value={c.id} />
-              <textarea
-                name="body"
-                required
-                rows={2}
-                placeholder="Write a reply..."
-                className="input text-sm"
-              />
-              <button
-                className="rounded px-2 py-1 text-xs text-white"
-                style={{ backgroundColor: categoryColor }}
-              >
-                Post reply
-              </button>
-            </ResettableForm>
-          </details>
+          <ReplyToggle
+            key={replies.length}
+            proposalId={proposal.id}
+            versionId={currentVersion?.id ?? ""}
+            parentCommentId={c.id}
+            categoryColor={categoryColor}
+          />
         )}
 
         {replies.length > 0 && (
           <ul className="mt-3 space-y-3 border-l-2 border-neutral-100 pl-3">
-            {replies.map((reply: any) => renderComment(reply, true))}
+            <CollapsibleReplies
+              replies={replies.map((reply: any) => renderComment(reply, true))}
+            />
           </ul>
         )}
       </li>
@@ -572,7 +555,11 @@ export default async function ProposalPage({
                       <code className="rounded bg-white px-1">##</code> for a
                       smaller one.
                     </p>
-                    <form action={advanceVersion} className="mt-3 space-y-3">
+                    <ResettableForm
+                      key={currentVersion?.id ?? "new"}
+                      action={advanceVersion}
+                      className="mt-3 space-y-3"
+                    >
                       <input type="hidden" name="proposal_id" value={proposal.id} />
                       <textarea
                         name="body"
@@ -591,7 +578,7 @@ export default async function ProposalPage({
                       >
                         Publish new version
                       </button>
-                    </form>
+                    </ResettableForm>
                   </div>
                 </details>
               )}
@@ -898,7 +885,10 @@ export default async function ProposalPage({
             {user && (
               <div className="mt-3 border-t border-neutral-100 pt-3">
                 <p className="text-xs text-neutral-500">Don't see the right tag?</p>
-                <form action={suggestTag} className="mt-2 flex flex-wrap items-center gap-2">
+                <ResettableForm
+                  action={suggestTag}
+                  className="mt-2 flex flex-wrap items-center gap-2"
+                >
                   <input type="hidden" name="proposal_id" value={proposal.id} />
                   <input
                     name="label"
@@ -909,7 +899,7 @@ export default async function ProposalPage({
                   <button className="shrink-0 rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50">
                     Suggest
                   </button>
-                </form>
+                </ResettableForm>
               </div>
             )}
           </div>
