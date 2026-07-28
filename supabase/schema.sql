@@ -95,6 +95,11 @@ create table public.proposals (
   geography_point geography(Point, 4326),   -- dropped pin
   geography_polygon geography(Polygon, 4326), -- drawn area
   image_url text, -- optional cover image, stored in the "proposal-images" bucket
+  -- Focal point for the cover image crop, as a 0-100 percentage pair fed
+  -- into CSS object-position, so owners can drag to keep the important
+  -- part of the photo visible instead of always cropping dead-center.
+  image_position_x smallint not null default 50 check (image_position_x between 0 and 100),
+  image_position_y smallint not null default 50 check (image_position_y between 0 and 100),
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -141,6 +146,20 @@ create table public.proposal_power_tree_nodes (
   parent_node_id uuid references public.proposal_power_tree_nodes(id),
   note text, -- e.g. "final sign-off", "committee review first"
   sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Running log of dated notes on a specific decision-maker within a
+-- specific proposal's chain — separate from the single "note" field
+-- above (that's a role, this is many entries over time: when someone
+-- talked to them, what came of it, what's useful to know for next
+-- time). Crowdsourced like the decision-maker registry itself — any
+-- signed-in person can add one, not just the proposal owner.
+create table public.power_tree_node_updates (
+  id uuid primary key default gen_random_uuid(),
+  node_id uuid not null references public.proposal_power_tree_nodes(id) on delete cascade,
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null,
   created_at timestamptz not null default now()
 );
 
@@ -218,9 +237,9 @@ insert into public.categories (slug, label, description, requires_budget, sort_o
   ('public_safety', 'Public Safety', 'Police, fire, prisons, and criminal justice.', true, 1, '#8358D3'),
   ('benefits_pensions', 'Benefits and Pensions', 'Employee retirement contributions and health care fringe benefits.', true, 2, '#F86767'),
   ('general_government', 'General Government Operations', 'Administration, internal tech, legal, fleet, and facilities.', true, 3, '#4069D9'),
-  ('infrastructure_sanitation', 'Infrastructure and Sanitation', 'Streets, cleaning, and transit support.', true, 4, '#FFAFCB'),
+  ('infrastructure_sanitation', 'Infrastructure and Sanitation', 'Streets, cleaning, and transit support.', true, 4, '#FF74A5'),
   ('culture_leisure', 'Culture and Leisure', 'Parks, recreation, libraries, and arts.', true, 5, '#6BAB68'),
-  ('education_subsidies', 'Education and Subsidies', 'Support for the school district and community college.', true, 6, '#FFA550'),
+  ('education_subsidies', 'Education and Subsidies', 'Support for the school district and community college.', true, 6, '#FF881A'),
   ('governance_process', 'Governance and Civic Process', 'Structural/procedural proposals with no direct budget line — term limits, election rules, redistricting, ethics rules, charter changes.', false, 7, '#FBE968');
 
 insert into public.tags (slug, label) values
@@ -270,6 +289,7 @@ alter table public.proposals enable row level security;
 alter table public.proposal_tags enable row level security;
 alter table public.proposal_versions enable row level security;
 alter table public.proposal_power_tree_nodes enable row level security;
+alter table public.power_tree_node_updates enable row level security;
 alter table public.comments enable row level security;
 alter table public.reactions enable row level security;
 alter table public.proposal_flags enable row level security;
@@ -280,6 +300,7 @@ create policy "public read categories" on public.categories for select using (tr
 create policy "public read tags" on public.tags for select using (true);
 create policy "public read decision makers" on public.decision_makers for select using (true);
 create policy "public read proposal power tree" on public.proposal_power_tree_nodes for select using (true);
+create policy "public read power_tree_node_updates" on public.power_tree_node_updates for select using (true);
 create policy "public read proposals" on public.proposals for select using (true);
 create policy "public read proposal_tags" on public.proposal_tags for select using (true);
 create policy "public read proposal_versions" on public.proposal_versions for select using (true);
@@ -338,6 +359,12 @@ create policy "admin inserts tags" on public.tags for insert
 -- owner curates which ones apply to their own proposal's tree.
 create policy "authenticated add decision makers" on public.decision_makers for insert
   with check (auth.uid() = added_by);
+-- Deletion is admin-only, not open to whoever added the entry — the
+-- registry is shared/crowdsourced, so anyone's typo or duplicate (e.g.
+-- a lowercase "quetcy lozada" alongside the real "Quetcy Lozada") needs
+-- cleanup by someone who can see the whole list, not just its author.
+create policy "admin deletes decision makers" on public.decision_makers for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
 create policy "owner builds own power tree" on public.proposal_power_tree_nodes for insert
   with check (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
@@ -345,6 +372,9 @@ create policy "owner edits own power tree" on public.proposal_power_tree_nodes f
   using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
 create policy "owner reorders own power tree" on public.proposal_power_tree_nodes for update
   using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
+
+create policy "authenticated add power_tree_node_updates" on public.power_tree_node_updates for insert
+  with check (auth.uid() = author_id);
 
 -- ---------------------------------------------------------------------------
 -- Storage: proposal cover images
