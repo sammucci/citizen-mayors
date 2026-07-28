@@ -10,7 +10,6 @@ import {
   react,
   removePowerTreeNode,
   removeProposalTag,
-  resolveComment,
   suggestTag,
   updateProposalImage,
 } from "@/app/proposals/actions";
@@ -18,6 +17,7 @@ import { CommentBody } from "@/components/comment-body";
 import { DecisionChainNote } from "@/components/decision-chain-note";
 import { DecisionMakerField } from "@/components/decision-maker-field";
 import { EditProposalForm } from "@/components/edit-proposal-form";
+import { ResolveCommentForm } from "@/components/resolve-comment-form";
 import { ResettableForm } from "@/components/resettable-form";
 import { VersionCarousel } from "@/components/version-carousel";
 import { statusColorClasses } from "@/lib/status-colors";
@@ -282,72 +282,16 @@ export default async function ProposalPage({
           </span>
         </div>
 
-        {isOwner && c.is_suggested_edit && (() => {
-          const defaultStatus = c.status === "open" ? "accepted" : c.status;
-          return (
-            <form action={resolveComment} className="mt-2 space-y-2">
-              <input type="hidden" name="comment_id" value={c.id} />
-              <input type="hidden" name="proposal_id" value={proposal.id} />
-              {/* Color-coded pill toggles instead of a plain dropdown —
-                  green/amber/red reads at a glance instead of needing to
-                  open a select to see the options. Plain radio inputs,
-                  so this still works as an ordinary form post with no
-                  extra JS. */}
-              <div className="flex flex-wrap gap-1.5">
-                <label>
-                  <input
-                    type="radio"
-                    name="status"
-                    value="accepted"
-                    defaultChecked={defaultStatus === "accepted"}
-                    className="peer sr-only"
-                  />
-                  <span className="cursor-pointer rounded-full border border-green-300 bg-green-50 px-2 py-1 text-xs text-green-700 peer-checked:bg-green-600 peer-checked:text-white">
-                    Accept
-                  </span>
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="status"
-                    value="accepted_with_contingency"
-                    defaultChecked={defaultStatus === "accepted_with_contingency"}
-                    className="peer sr-only"
-                  />
-                  <span className="cursor-pointer rounded-full border border-yellow-300 bg-yellow-50 px-2 py-1 text-xs text-yellow-800 peer-checked:bg-yellow-400 peer-checked:text-yellow-900">
-                    Accept with contingency
-                  </span>
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="status"
-                    value="rejected"
-                    defaultChecked={defaultStatus === "rejected"}
-                    className="peer sr-only"
-                  />
-                  <span className="cursor-pointer rounded-full border border-red-300 bg-red-50 px-2 py-1 text-xs text-duty-red peer-checked:bg-duty-red peer-checked:text-white">
-                    Reject
-                  </span>
-                </label>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  name="status_note"
-                  defaultValue={c.status_note ?? ""}
-                  placeholder="Optional note (e.g. the contingency)"
-                  className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
-                />
-                <button
-                  className="shrink-0 rounded-full px-3 py-1 text-xs text-white"
-                  style={{ backgroundColor: categoryColor }}
-                >
-                  {c.status === "open" ? "Resolve" : "Change decision"}
-                </button>
-              </div>
-            </form>
-          );
-        })()}
+        {isOwner && c.is_suggested_edit && (
+          <ResolveCommentForm
+            commentId={c.id}
+            proposalId={proposal.id}
+            defaultStatus={c.status === "open" ? "accepted" : c.status}
+            defaultNote={c.status_note}
+            buttonLabel={c.status === "open" ? "Resolve" : "Change decision"}
+            categoryColor={categoryColor}
+          />
+        )}
 
         {!isOwner && c.status !== "open" && !c.unresolved_flagged && (
           <form action={flagUnresolved} className="mt-2">
