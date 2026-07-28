@@ -91,6 +91,95 @@ export async function rejectTagSuggestion(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
+// Edits one of the 7 founding budget categories in place — label,
+// description, accent color, whether it requires a direct budget line,
+// and its sort order on the homepage filter row. Deliberately edit-only:
+// there's no add/delete counterpart, since this is meant to stay a
+// small, deliberate fixed set rather than something that grows like tags
+// or decision_makers. The slug is left alone on purpose — it's baked
+// into existing filter links (/?category=slug) around the site, and
+// changing it would silently break any of those still in use.
+export async function updateCategory(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = Number(formData.get("id"));
+  const label = String(formData.get("label") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
+  const requiresBudget = formData.get("requires_budget") === "on";
+  const sortOrderRaw = String(formData.get("sort_order") ?? "").trim();
+
+  if (!label) return { error: "Category name can't be empty." };
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return { error: "Color needs to be a hex code, like #6C3FD1." };
+  }
+
+  const { error } = await supabase
+    .from("categories")
+    .update({
+      label,
+      description: description || null,
+      color,
+      requires_budget: requiresBudget,
+      sort_order: sortOrderRaw ? Number(sortOrderRaw) : 0,
+    })
+    .eq("id", id);
+  if (error) return { error: "Something went wrong updating that category." };
+
+  revalidatePath("/admin/categories");
+  revalidatePath("/");
+  revalidatePath("/proposals/new");
+  return {};
+}
+
+// Renames a real, already-approved tag in place — previously the tags
+// table itself had no update/delete path from the admin panel at all,
+// only the suggestion-approval queue (which creates NEW tags). The slug
+// is regenerated from the new label so filter links (/?tag=slug) keep
+// matching, same normalization approveTagSuggestion uses.
+export async function renameTag(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Tag name can't be empty." };
+
+  const slug = label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  const { error } = await supabase.from("tags").update({ label, slug }).eq("id", id);
+  if (error) {
+    return {
+      error: /duplicate|unique/i.test(error.message)
+        ? "That name (or its slug) is already used by another tag."
+        : "Something went wrong renaming that tag.",
+    };
+  }
+
+  revalidatePath("/admin/tags");
+  revalidatePath("/");
+  return {};
+}
+
+// Removes a tag from the shared registry entirely — proposal_tags rows
+// referencing it are cleaned up automatically (on delete cascade in the
+// schema), so a deleted tag just quietly disappears from any proposal
+// that had it, rather than failing or orphaning anything.
+export async function deleteTag(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const { error } = await supabase.from("tags").delete().eq("id", id);
+  if (error) return { error: "Something went wrong deleting that tag." };
+
+  revalidatePath("/admin/tags");
+  revalidatePath("/");
+  return {};
+}
+
 // Same normalization as the "add new" flow in the decision-maker
 // combobox (proposals/actions.ts) — kept as its own small copy here
 // rather than a shared import, matching how the other small per-file
@@ -128,6 +217,38 @@ export async function addDecisionMakerAdmin(formData: FormData): Promise<{ error
   if (error) {
     return { error: "Something went wrong adding that entry." };
   }
+
+  revalidatePath("/admin/decision-makers");
+  return {};
+}
+
+// Renames (and/or re-kinds) an entry in the shared decision-makers
+// registry in place — previously a typo or wrong "kind" could only be
+// fixed by deleting the entry and re-adding it, which fails outright if
+// it's already in use in any proposal's decision chain. Same
+// case-insensitive duplicate check as the "add new" flow, so a rename
+// can't accidentally collide with another existing entry.
+export async function renameDecisionMaker(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const name = String(formData.get("name") ?? "").trim();
+  const kind = String(formData.get("kind") ?? "other");
+  if (!name) return { error: "Name can't be empty." };
+
+  const { data: existing } = await supabase
+    .from("decision_makers")
+    .select("id")
+    .ilike("name", name)
+    .neq("id", id)
+    .maybeSingle();
+  if (existing) return { error: "Another entry already has that name." };
+
+  const { error } = await supabase
+    .from("decision_makers")
+    .update({ name, kind })
+    .eq("id", id);
+  if (error) return { error: "Something went wrong renaming that entry." };
 
   revalidatePath("/admin/decision-makers");
   return {};

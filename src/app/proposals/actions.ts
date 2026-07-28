@@ -94,8 +94,17 @@ export async function createProposal(formData: FormData) {
   // the one pressed.
   const published = formData.get("published") !== "false";
 
-  if (!title || !summary || !body) {
-    throw new Error("Title, summary, and body text are all required.");
+  // A draft only needs a title — that's the one thing you can't come back
+  // and fill in later without first having something to find on your
+  // profile. Summary and body stay required, but only on the "Post
+  // proposal" path; the DB columns themselves are NOT NULL (not
+  // nullable), so an unfinished draft stores them as empty strings rather
+  // than needing a schema change.
+  if (!title) {
+    throw new Error("A proposal needs at least a title.");
+  }
+  if (published && (!summary || !body)) {
+    throw new Error("Title, summary, and body text are all required to publish.");
   }
 
   const councilDistrict = await resolveCouncilDistrict(
@@ -112,8 +121,8 @@ export async function createProposal(formData: FormData) {
       title,
       type,
       category_id: categoryId,
-      summary,
-      body,
+      summary: summary || "",
+      body: body || "",
       geography_scope: geographyScope,
       geography_label: geographyScope === "citywide" ? null : geographyLabel || null,
       council_district: councilDistrict,
@@ -662,6 +671,35 @@ export async function removeProposalTag(formData: FormData) {
     .delete()
     .eq("proposal_id", proposalId)
     .eq("tag_id", tagId);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Owner-only: sets or clears the optional note on the fixed "We the
+// people" anchor at the bottom of the decision chain — what the actual
+// first step looks like (e.g. "Write proposal", "Make petition"). That
+// anchor isn't a real power-tree node (see PowerTreeChain), so this
+// updates the proposal row directly rather than going through the
+// power-tree-node actions below.
+export async function updatePeopleActionNote(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const note = String(formData.get("people_action_note") ?? "").trim();
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can edit this.");
+  }
+
+  await supabase
+    .from("proposals")
+    .update({ people_action_note: note || null })
+    .eq("id", proposalId);
 
   revalidatePath(`/proposals/${proposalId}`);
 }

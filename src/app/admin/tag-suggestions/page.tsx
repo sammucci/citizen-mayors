@@ -49,7 +49,12 @@ export default async function TagSuggestionsAdminPage() {
       <h1 className="text-xl font-bold">Tag suggestions</h1>
       <p className="mt-1 text-sm text-neutral-500">
         Approving creates the tag for real and attaches it to the proposal
-        it was suggested on. Rejecting just dismisses it.
+        it was suggested on. Rejecting just dismisses it. To rename or
+        remove a tag that already exists,{" "}
+        <Link href="/admin/tags" className="underline">
+          manage the full tags list
+        </Link>
+        .
       </p>
 
       <ul className="mt-6 space-y-3">

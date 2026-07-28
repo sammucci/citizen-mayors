@@ -38,11 +38,19 @@ export default async function AdminHomePage() {
       <h1 className="text-xl font-bold">Admin</h1>
       <ul className="mt-6 space-y-2">
         <li className="rounded-lg border border-neutral-200 bg-white p-4">
+          <Link href="/admin/tags" className="text-sm font-semibold underline">
+            Tags
+          </Link>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            The full shared tag registry — rename or remove any existing tag.
+          </p>
+        </li>
+        <li className="rounded-lg border border-neutral-200 bg-white p-4">
           <Link href="/admin/tag-suggestions" className="text-sm font-semibold underline">
             Tag suggestions
           </Link>
           <p className="mt-0.5 text-xs text-neutral-500">
-            Review and approve or reject tags people have suggested.
+            Review and approve or reject brand-new tags people have suggested.
           </p>
         </li>
         <li className="rounded-lg border border-neutral-200 bg-white p-4">
@@ -67,6 +75,14 @@ export default async function AdminHomePage() {
           </Link>
           <p className="mt-0.5 text-xs text-neutral-500">
             The shared list people pick from when logging volunteer hours.
+          </p>
+        </li>
+        <li className="rounded-lg border border-neutral-200 bg-white p-4">
+          <Link href="/admin/categories" className="text-sm font-semibold underline">
+            Categories
+          </Link>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            The 7 founding budget categories every proposal picks from.
           </p>
         </li>
       </ul>

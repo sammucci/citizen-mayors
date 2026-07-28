@@ -161,14 +161,16 @@ export function NewProposalForm({
         version.
       </p>
 
+      {/* Not `required` — a draft only needs a title (see "Save as draft"
+          below). createProposal() is what actually enforces summary/body
+          being filled in, but only on the "Post proposal" path. */}
       <Field label="Summary (one or two sentences)">
-        <textarea name="summary" required rows={2} className="input" />
+        <textarea name="summary" rows={2} className="input" />
       </Field>
 
       <Field label="Full proposal text">
         <textarea
           name="body"
-          required
           rows={10}
           className="input font-mono text-sm"
           placeholder="Write it the way you'd want it to read as real ordinance or project language..."
@@ -203,7 +205,8 @@ export function NewProposalForm({
           Save as draft
         </button>
         <span className="text-xs text-neutral-500">
-          A draft is only visible to you — publish it whenever it's ready.
+          A draft only needs a title to save — fill in the rest whenever
+          you're ready. It's only visible to you until you publish it.
         </span>
       </div>
     </form>

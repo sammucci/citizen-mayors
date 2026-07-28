@@ -780,6 +780,7 @@ export default async function ProposalPage({
               categoryColor={categoryColor}
               isOwner={isOwner}
               canContribute={Boolean(user)}
+              peopleActionNote={proposal.people_action_note}
               decisionMakers={allDecisionMakers ?? []}
               nodesAscending={(powerTreeNodes ?? []).map((node: any) => {
                 const { primary, subtitle } = splitDecisionMakerLabel(

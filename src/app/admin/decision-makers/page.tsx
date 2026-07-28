@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { AddDecisionMakerForm } from "@/components/add-decision-maker-form";
-import { DeleteDecisionMakerButton } from "@/components/delete-decision-maker-button";
-import { splitDecisionMakerLabel } from "@/lib/decision-maker-label";
+import { DecisionMakerRow } from "@/components/decision-maker-row";
 
 export const dynamic = "force-dynamic";
 
@@ -48,8 +47,9 @@ export default async function DecisionMakersAdminPage() {
       <h1 className="text-xl font-bold">Decision makers</h1>
       <p className="mt-1 text-sm text-neutral-500">
         The shared registry anyone can add to when building a proposal's
-        decision chain. Deleting here removes it from the registry for
-        everyone — it fails safely if it's still in use somewhere.
+        decision chain. Click a name to rename it (or fix its kind) in place —
+        deleting removes it from the registry for everyone and fails safely if
+        it's still in use somewhere.
       </p>
 
       <div className="mt-4">
@@ -57,32 +57,16 @@ export default async function DecisionMakersAdminPage() {
       </div>
 
       <ul className="mt-6 space-y-2">
-        {decisionMakers?.map((dm: any) => {
-          const { primary, subtitle } = splitDecisionMakerLabel(dm.name);
-          return (
-            <li
-              key={dm.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-white p-3"
-            >
-              <div>
-                <span className="text-sm font-semibold">{primary}</span>
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  {subtitle ?? dm.kind.replace(/_/g, " ")}
-                  {dm.profiles?.display_name && (
-                    <>
-                      {" "}
-                      · added by{" "}
-                      <Link href={`/u/${dm.added_by}`} className="hover:underline">
-                        {dm.profiles.display_name}
-                      </Link>
-                    </>
-                  )}
-                </p>
-              </div>
-              <DeleteDecisionMakerButton id={dm.id} name={dm.name} />
-            </li>
-          );
-        })}
+        {decisionMakers?.map((dm: any) => (
+          <DecisionMakerRow
+            key={dm.id}
+            id={dm.id}
+            name={dm.name}
+            kind={dm.kind}
+            addedByName={dm.profiles?.display_name ?? null}
+            addedById={dm.added_by}
+          />
+        ))}
         {(!decisionMakers || decisionMakers.length === 0) && (
           <p className="text-sm text-neutral-500">Nothing in the registry yet.</p>
         )}

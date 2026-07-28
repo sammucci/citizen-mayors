@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
-import { addPowerTreeNode, reorderPowerTreeNodes } from "@/app/proposals/actions";
+import { addPowerTreeNode, reorderPowerTreeNodes, updatePeopleActionNote } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
 import { PowerTreeNodeCard } from "@/components/power-tree-node-card";
 import { readableTextColor } from "@/lib/readable-text-color";
@@ -47,6 +47,7 @@ export function PowerTreeChain({
   decisionMakers,
   isOwner,
   canContribute,
+  peopleActionNote,
 }: {
   proposalId: string;
   categoryColor: string;
@@ -54,6 +55,7 @@ export function PowerTreeChain({
   decisionMakers: { id: string; name: string; kind: string }[];
   isOwner: boolean;
   canContribute: boolean;
+  peopleActionNote?: string | null;
 }) {
   // Server Actions invoked from a plain <form action> auto-refresh the
   // tab that submitted them, but that refresh can still be served from
@@ -70,6 +72,11 @@ export function PowerTreeChain({
   const [ascending, setAscending] = useState(nodesAscending);
   const [dragId, setDragId] = useState<string | null>(null);
   const [openGap, setOpenGap] = useState<number | null>(null); // ascending insert index
+  // Inline edit for the fixed "We the people" anchor's optional action
+  // note (e.g. "Write proposal", "Make petition") — same pattern as a
+  // power-tree node's role note, just against the proposal row directly
+  // since this anchor isn't a real node.
+  const [editingPeopleNote, setEditingPeopleNote] = useState(false);
 
   // Resync if the underlying data changed (node added/removed elsewhere,
   // or the server's revalidated result differs from our optimistic one).
@@ -271,9 +278,56 @@ export function PowerTreeChain({
       )}
 
       {/* Fixed anchor — not a real node, never draggable, never
-          removable. Represents where every proposal actually starts. */}
-      <li className="mt-1 rounded-lg border border-dashed border-neutral-300 bg-cream/60 p-3 text-center">
+          removable. Represents where every proposal actually starts.
+          The role note below is the one thing about it that IS
+          editable: an optional description of what that first step
+          actually looks like (e.g. "Write proposal", "Make petition"). */}
+      <li className="mt-1 space-y-1.5 rounded-lg border border-dashed border-neutral-300 bg-cream/60 p-3 text-center">
         <span className="text-sm font-medium text-neutral-600">🧑‍🤝‍🧑 We the people</span>
+        {isOwner && !editingPeopleNote && (
+          <button
+            type="button"
+            onClick={() => setEditingPeopleNote(true)}
+            className="block w-full text-xs text-neutral-500 underline hover:text-neutral-700"
+          >
+            {peopleActionNote ? `Role: ${peopleActionNote}` : "Add a role note"}
+          </button>
+        )}
+        {!isOwner && peopleActionNote && (
+          <p className="text-xs text-neutral-500">Role: {peopleActionNote}</p>
+        )}
+        {isOwner && editingPeopleNote && (
+          <form
+            action={async (formData) => {
+              await updatePeopleActionNote(formData);
+              router.refresh();
+              setEditingPeopleNote(false);
+            }}
+            className="flex items-center justify-center gap-1.5"
+          >
+            <input type="hidden" name="proposal_id" value={proposalId} />
+            <input
+              name="people_action_note"
+              defaultValue={peopleActionNote ?? ""}
+              placeholder="e.g. Write proposal, Make petition"
+              className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-0.5 text-xs"
+              autoFocus
+            />
+            <button
+              className="shrink-0 rounded px-2 py-0.5 text-xs"
+              style={{ backgroundColor: categoryColor, color: readableTextColor(categoryColor) }}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingPeopleNote(false)}
+              className="shrink-0 rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-50"
+            >
+              Cancel
+            </button>
+          </form>
+        )}
       </li>
     </ul>
   );

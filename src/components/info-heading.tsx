@@ -21,7 +21,7 @@ export function InfoHeading({
       {children}
       <span
         tabIndex={0}
-        className="flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full bg-duty-purple text-[10px] font-bold leading-none text-white shadow-sm outline-none transition hover:scale-110 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-duty-purple/50 focus-visible:ring-offset-2"
+        className="flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full border-2 border-duty-purple bg-white text-[10px] font-bold leading-none text-duty-purple shadow-sm outline-none transition hover:scale-110 hover:bg-duty-purple/10 focus-visible:ring-2 focus-visible:ring-duty-purple/50 focus-visible:ring-offset-2"
         aria-label="More info"
       >
         i

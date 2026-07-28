@@ -153,6 +153,12 @@ create table public.proposals (
   -- from everyone else.
   published boolean not null default true,
 
+  -- Optional, owner-editable description of the actual first step at
+  -- the fixed "We the people" anchor in the decision chain (e.g. "Write
+  -- proposal", "Make petition") — that anchor has no other fields of
+  -- its own; it's a static label in the UI, not a real power-tree node.
+  people_action_note text,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -371,6 +377,11 @@ alter table public.tag_suggestions enable row level security;
 
 -- Reference data + published content: readable by anyone
 create policy "public read categories" on public.categories for select using (true);
+-- Edit-in-place only (no insert/delete) — this is meant to stay a small,
+-- deliberate fixed set (the 7 founding budget categories), not something
+-- that grows on its own like tags or decision_makers.
+create policy "admin updates categories" on public.categories for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 create policy "public read tags" on public.tags for select using (true);
 create policy "public read decision makers" on public.decision_makers for select using (true);
 create policy "public read volunteer categories" on public.volunteer_categories for select using (true);
@@ -459,6 +470,13 @@ create policy "admin updates tag_suggestions" on public.tag_suggestions for upda
 -- table — previously nothing but the initial seed data could do that.
 create policy "admin inserts tags" on public.tags for insert
   with check (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+-- Previously only reachable via the suggestion-approval queue (which
+-- creates NEW tags) — nothing let an admin edit or remove an already-
+-- real tag from the shared registry.
+create policy "admin updates tags" on public.tags for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin deletes tags" on public.tags for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
 -- Anyone signed in can add a missing decision-maker to the shared registry
 -- (crowdsourced, like the rest of the platform) — but only the proposal
@@ -470,6 +488,11 @@ create policy "authenticated add decision makers" on public.decision_makers for 
 -- a lowercase "quetcy lozada" alongside the real "Quetcy Lozada") needs
 -- cleanup by someone who can see the whole list, not just its author.
 create policy "admin deletes decision makers" on public.decision_makers for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+-- Previously insert + delete only — a typo could only be fixed by
+-- deleting and re-adding, which fails outright if the entry's already
+-- in use in any proposal's decision chain.
+create policy "admin updates decision makers" on public.decision_makers for update
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
 -- Anyone signed in can suggest a decision-maker for the chain, not just

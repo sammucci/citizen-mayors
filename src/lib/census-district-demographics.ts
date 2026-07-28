@@ -1,6 +1,18 @@
 // Real Philadelphia population by council district, sourced from the
 // Census Bureau's 2022 5-year American Community Survey (ACS5) — NOT an
-// estimate or guess. Built the same way as the zip/district crosswalk:
+// estimate or guess.
+//
+// STILL ON 2022 DATA as of v59 — flagging, not silently updating. The
+// Census Bureau released the newer 2020-2024 ACS5 estimates on January
+// 29, 2026 (data.census.gov), which IS more current than what's below.
+// But refreshing these numbers means rerunning the exact same tract-to-
+// district spatial join described below against the new release — every
+// one of Philadelphia's ~391 tracts re-summed into a district — which
+// needs either the 2020-2024 tract-level ACS tables pulled fresh from
+// the Census API, or Samantha re-exporting them the way she did the
+// first time. Not something to fake inline with placeholder numbers, so
+// this is a flagged follow-up rather than a done thing. Built the same
+// way as the zip/district crosswalk:
 // every one of the city's 391 populated census tracts (2020 tract
 // boundaries) was matched to a council district by checking the tract's
 // internal centroid point against the district polygons Samantha
