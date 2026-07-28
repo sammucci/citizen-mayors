@@ -10,10 +10,10 @@ import {
   removePowerTreeNode,
   removeProposalTag,
   resolveComment,
-  updatePowerTreeNodeNote,
   updateProposalImage,
 } from "@/app/proposals/actions";
 import { CommentBody } from "@/components/comment-body";
+import { DecisionChainNote } from "@/components/decision-chain-note";
 import { DecisionMakerField } from "@/components/decision-maker-field";
 import { EditProposalForm } from "@/components/edit-proposal-form";
 import { ResettableForm } from "@/components/resettable-form";
@@ -241,7 +241,7 @@ export default async function ProposalPage({
             <button
               aria-label="Upvote comment"
               className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
-                myVoteOnComment === 1 ? "bg-green-600" : "bg-green-300 hover:bg-green-400"
+                myVoteOnComment === 1 ? "bg-green-600" : "bg-[#d7ecdf] hover:bg-[#c2d9c9]"
               }`}
             >
               <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
@@ -443,7 +443,7 @@ export default async function ProposalPage({
                           className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
                             myVote === 1
                               ? "bg-green-600"
-                              : "bg-green-300 hover:bg-green-400"
+                              : "bg-[#d7ecdf] hover:bg-[#c2d9c9]"
                           }`}
                         >
                           {/* CSS trick: emoji render with their own
@@ -794,32 +794,15 @@ export default async function ProposalPage({
                     <span className="block text-xs font-normal text-neutral-500">
                       {subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ")}
                     </span>
-                    {node.note && <p className="mt-1 text-xs text-neutral-500">{node.note}</p>}
-                    {isOwner && (
-                      <details key={node.note ?? ""} className="mt-1">
-                        <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-white [&::-webkit-details-marker]:hidden">
-                          ✎ Edit role
-                        </summary>
-                        <form
-                          action={updatePowerTreeNodeNote}
-                          className="mt-1 flex items-center gap-1"
-                        >
-                          <input type="hidden" name="proposal_id" value={proposal.id} />
-                          <input type="hidden" name="node_id" value={node.id} />
-                          <input
-                            name="note"
-                            defaultValue={node.note ?? ""}
-                            placeholder="e.g. final sign-off"
-                            className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-0.5 text-xs"
-                          />
-                          <button
-                            className="shrink-0 rounded px-2 py-0.5 text-xs text-white"
-                            style={{ backgroundColor: categoryColor }}
-                          >
-                            Save
-                          </button>
-                        </form>
-                      </details>
+                    {isOwner ? (
+                      <DecisionChainNote
+                        note={node.note}
+                        proposalId={proposal.id}
+                        nodeId={node.id}
+                        categoryColor={categoryColor}
+                      />
+                    ) : (
+                      node.note && <p className="mt-1 text-xs text-neutral-500">{node.note}</p>
                     )}
                   </div>
                   {isOwner && (

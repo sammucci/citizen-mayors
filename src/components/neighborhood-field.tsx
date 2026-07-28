@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { PHILLY_NEIGHBORHOODS } from "@/lib/philly-neighborhoods";
 
-// Autocomplete-as-you-type for the neighborhood field, backed by
-// OpenStreetMap's Nominatim geocoder (proxied through /api/geocode so we
-// can set a proper User-Agent — see that route for why). Picking a
-// suggestion locks in a correctly spelled, consistently capitalized
-// neighborhood name instead of whatever a person happened to type.
-// Free-typed text (typos, "Fishtown" vs "fishtown" vs "Fish Town") is
-// effectively impossible to geocode later; this doesn't geocode the
-// proposal itself yet (no lat/lng column exists — dropping a pin is
-// still a follow-up), but it keeps the text clean enough that a future
-// geocoding pass can actually work. Typing and pressing Enter without
-// picking a suggestion still works — this never blocks submission.
+// Autocomplete-as-you-type for the neighborhood field, matched against a
+// fixed list of Philadelphia neighborhood names (see philly-neighborhoods.ts).
+// This used to call out to Nominatim (OpenStreetMap's geocoder), but
+// Nominatim matches whole words against its search index rather than
+// doing true prefix matching — so "Fish" wouldn't surface "Fishtown"
+// until most of the word was typed. A fixed list filters instantly and
+// guarantees correct, consistent spelling/capitalization since there's
+// nothing to mistype into it.
+//
+// Picking a suggestion locks in the clean name. Free-typed text that
+// doesn't match anything in the list still works and still submits —
+// this never blocks you from posting — it just won't offer a suggestion.
 export function NeighborhoodField({
   name,
   defaultValue = "",
@@ -23,12 +25,8 @@ export function NeighborhoodField({
   placeholder?: string;
 }) {
   const [query, setQuery] = useState(defaultValue);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestIdRef = useRef(0);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -40,37 +38,21 @@ export function NeighborhoodField({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    const trimmed = query.trim();
-    if (trimmed.length < 3) {
-      setSuggestions([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const thisRequestId = ++requestIdRef.current;
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(trimmed)}`);
-        const data = await res.json();
-        // Ignore stale responses from an earlier keystroke that resolved
-        // after a more recent one.
-        if (thisRequestId === requestIdRef.current) {
-          setSuggestions(Array.isArray(data) ? data : []);
-          setLoading(false);
-        }
-      } catch {
-        if (thisRequestId === requestIdRef.current) {
-          setSuggestions([]);
-          setLoading(false);
-        }
-      }
-    }, 350);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query]);
+  const trimmed = query.trim().toLowerCase();
+  const matches =
+    trimmed.length === 0
+      ? []
+      : PHILLY_NEIGHBORHOODS.filter((n) => n.toLowerCase().includes(trimmed))
+          // Names that start with what's been typed so far ("Fishtown"
+          // for "fish") float above ones that just contain it somewhere
+          // ("East Falls" for "falls" still shows, just lower).
+          .sort((a, b) => {
+            const aStarts = a.toLowerCase().startsWith(trimmed) ? 0 : 1;
+            const bStarts = b.toLowerCase().startsWith(trimmed) ? 0 : 1;
+            if (aStarts !== bStarts) return aStarts - bStarts;
+            return a.localeCompare(b);
+          })
+          .slice(0, 8);
 
   return (
     <div ref={wrapRef} className="relative">
@@ -87,15 +69,14 @@ export function NeighborhoodField({
         placeholder={placeholder}
         className="input"
       />
-      {open && (suggestions.length > 0 || loading) && (
+      {open && matches.length > 0 && (
         <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded border border-neutral-200 bg-white shadow-md">
-          {suggestions.map((s) => (
+          {matches.map((s) => (
             <li key={s}>
               <button
                 type="button"
                 onClick={() => {
                   setQuery(s);
-                  setSuggestions([]);
                   setOpen(false);
                 }}
                 className="block w-full px-2 py-1.5 text-left text-sm hover:bg-neutral-50"
@@ -104,9 +85,6 @@ export function NeighborhoodField({
               </button>
             </li>
           ))}
-          {loading && suggestions.length === 0 && (
-            <li className="px-2 py-1.5 text-sm text-neutral-400">Searching…</li>
-          )}
         </ul>
       )}
     </div>
