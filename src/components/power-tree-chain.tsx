@@ -52,7 +52,14 @@ export function PowerTreeChain({
 
   // Resync if the underlying data changed (node added/removed elsewhere,
   // or the server's revalidated result differs from our optimistic one).
-  const currentKey = nodesAscending.map((n) => n.id).join(",");
+  // Has to include more than just the id list — adding a note or editing
+  // a role note doesn't change which nodes exist, just their content, and
+  // that was getting silently swallowed: the key matched, so the stale
+  // local copy (from before the note was added) kept being shown even
+  // though the server had the new one all along.
+  const currentKey = nodesAscending
+    .map((n) => `${n.id}:${n.updates.length}:${n.note ?? ""}`)
+    .join("|");
   const [syncedKey, setSyncedKey] = useState(currentKey);
   if (currentKey !== syncedKey) {
     setAscending(nodesAscending);

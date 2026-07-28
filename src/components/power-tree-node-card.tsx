@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   addPowerTreeNodeUpdate,
   removePowerTreeNode,
@@ -17,11 +17,13 @@ type Update = {
 
 // Collapsed by default — name, role, and (if this is the top of the
 // chain) a colored treatment marking it as the final decision-maker.
-// Click to open it up: the role note becomes editable, and below that
-// sits a running log of dated updates — when someone talked to this
-// person/office, what came of it, what's useful to know working with
-// them — plus a box to add another. That log is the new part; the
-// note field already existed.
+// Click the name to pop the full record open in a floating window
+// (modal) instead of expanding in place: the running log of notes and
+// civic dialogue about this decision-maker is the actual point of this
+// feature, and a small inline accordion made it easy to add a note and
+// then never see it again. The modal always shows the whole log, plus
+// the role note and the add-note box, all in one place you can actually
+// read.
 export function PowerTreeNodeCard({
   proposalId,
   node,
@@ -45,173 +47,235 @@ export function PowerTreeNodeCard({
   categoryColor: string;
   dragHandleProps?: React.HTMLAttributes<HTMLSpanElement>;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const addUpdateFormRef = useRef<HTMLFormElement>(null);
   const finalTextColor = readableTextColor(categoryColor);
 
-  return (
-    <li
-      className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
-      style={isFinal ? { borderColor: categoryColor } : undefined}
-    >
-      <div
-        className="flex items-start justify-between gap-2 p-3"
-        style={isFinal ? { backgroundColor: categoryColor } : { backgroundColor: "#fafafa" }}
-      >
-        <div className="flex min-w-0 items-start gap-2">
-          {isOwner && (
-            <span
-              {...dragHandleProps}
-              className="mt-0.5 shrink-0 cursor-grab select-none text-sm"
-              style={isFinal ? { color: finalTextColor, opacity: 0.7 } : undefined}
-              title="Drag to reorder"
-              aria-hidden="true"
-            >
-              ⠿
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setExpanded(!expanded)}
-            className="min-w-0 text-left"
-          >
-            <span
-              className="block truncate text-base font-semibold"
-              style={isFinal ? { color: finalTextColor } : undefined}
-            >
-              {isFinal ? "🏁 " : ""}
-              {node.name}
-            </span>
-            <span
-              className="block text-xs"
-              style={isFinal ? { color: finalTextColor, opacity: 0.8 } : undefined}
-            >
-              {node.subtitle}
-              {isFinal ? " · Final decision-maker" : ""}
-            </span>
-          </button>
-        </div>
-        {isOwner && (
-          <form action={removePowerTreeNode}>
-            <input type="hidden" name="proposal_id" value={proposalId} />
-            <input type="hidden" name="node_id" value={node.id} />
-            <button
-              className={`shrink-0 rounded-full border px-1.5 text-xs ${
-                isFinal ? "" : "border-neutral-300 text-neutral-500 hover:border-duty-red hover:text-duty-red"
-              }`}
-              style={
-                isFinal
-                  ? { borderColor: `${finalTextColor}66`, color: finalTextColor, opacity: 0.8 }
-                  : undefined
-              }
-              title="Remove from this proposal's chain"
-            >
-              ✕
-            </button>
-          </form>
-        )}
-      </div>
+  // Escape closes the modal, same as clicking the backdrop or the ✕ —
+  // standard modal behavior, easy to miss if you only wire up clicks.
+  useEffect(() => {
+    if (!modalOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setModalOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [modalOpen]);
 
-      {expanded && (
-        <div className="space-y-3 border-t border-neutral-100 p-3">
-          {isOwner && !editingNote && (
+  return (
+    <>
+      <li
+        className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
+        style={isFinal ? { borderColor: categoryColor } : undefined}
+      >
+        <div
+          className="flex items-start justify-between gap-2 p-3"
+          style={isFinal ? { backgroundColor: categoryColor } : { backgroundColor: "#fafafa" }}
+        >
+          <div className="flex min-w-0 items-start gap-2">
+            {isOwner && (
+              <span
+                {...dragHandleProps}
+                className="mt-0.5 shrink-0 cursor-grab select-none text-sm"
+                style={isFinal ? { color: finalTextColor, opacity: 0.7 } : undefined}
+                title="Drag to reorder"
+                aria-hidden="true"
+              >
+                ⠿
+              </span>
+            )}
             <button
               type="button"
-              onClick={() => setEditingNote(true)}
-              className="text-xs text-neutral-500 underline hover:text-neutral-700"
+              onClick={() => setModalOpen(true)}
+              className="min-w-0 text-left"
+              title="View notes and civic dialogue"
             >
-              {node.note ? `Role: ${node.note}` : "Add a role note"}
+              <span
+                className="block truncate text-base font-semibold"
+                style={isFinal ? { color: finalTextColor } : undefined}
+              >
+                {isFinal ? "🏁 " : ""}
+                {node.name}
+              </span>
+              <span
+                className="block text-xs"
+                style={isFinal ? { color: finalTextColor, opacity: 0.8 } : undefined}
+              >
+                {node.subtitle}
+                {isFinal ? " · Final decision-maker" : ""}
+                {node.updates.length > 0
+                  ? ` · ${node.updates.length} note${node.updates.length === 1 ? "" : "s"}`
+                  : ""}
+              </span>
             </button>
-          )}
-          {isOwner && editingNote && (
-            <form
-              action={async (formData) => {
-                await updatePowerTreeNodeNote(formData);
-                setEditingNote(false);
-              }}
-              className="flex items-center gap-1.5"
-            >
-              <input type="hidden" name="proposal_id" value={proposalId} />
-              <input type="hidden" name="node_id" value={node.id} />
-              <input
-                name="note"
-                defaultValue={node.note ?? ""}
-                placeholder="e.g. final sign-off"
-                className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-0.5 text-xs"
-                autoFocus
-              />
-              <button
-                className="shrink-0 rounded px-2 py-0.5 text-xs"
-                style={{ backgroundColor: categoryColor, color: finalTextColor }}
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingNote(false)}
-                className="shrink-0 rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-50"
-              >
-                Cancel
-              </button>
-            </form>
-          )}
-          {!isOwner && node.note && (
-            <p className="text-xs text-neutral-500">Role: {node.note}</p>
-          )}
-
-          <div>
-            <p className="text-xs font-medium text-neutral-700">
-              Notes on working with them
-            </p>
-            <ul className="mt-1.5 space-y-1.5">
-              {node.updates.map((u) => (
-                <li key={u.id} className="rounded bg-neutral-50 p-2 text-xs text-neutral-700">
-                  <p className="whitespace-pre-wrap">{u.body}</p>
-                  <p className="mt-1 text-neutral-400">
-                    {u.authorName} ·{" "}
-                    {new Date(u.created_at).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </p>
-                </li>
-              ))}
-              {node.updates.length === 0 && (
-                <li className="text-xs text-neutral-400">Nothing logged yet.</li>
-              )}
-            </ul>
           </div>
-
-          {canContribute && (
-            <form
-              ref={addUpdateFormRef}
-              action={async (formData) => {
-                await addPowerTreeNodeUpdate(formData);
-                addUpdateFormRef.current?.reset();
-              }}
-              className="space-y-1.5"
-            >
+          {isOwner && (
+            <form action={removePowerTreeNode}>
               <input type="hidden" name="proposal_id" value={proposalId} />
               <input type="hidden" name="node_id" value={node.id} />
-              <textarea
-                name="body"
-                required
-                rows={2}
-                placeholder="When did you talk to them? What happened? Anything worth knowing for next time?"
-                className="input text-xs"
-              />
               <button
-                className="rounded px-2 py-1 text-xs"
-                style={{ backgroundColor: categoryColor, color: finalTextColor }}
+                className={`shrink-0 rounded-full border px-1.5 text-xs ${
+                  isFinal ? "" : "border-neutral-300 text-neutral-500 hover:border-duty-red hover:text-duty-red"
+                }`}
+                style={
+                  isFinal
+                    ? { borderColor: `${finalTextColor}66`, color: finalTextColor, opacity: 0.8 }
+                    : undefined
+                }
+                title="Remove from this proposal's chain"
               >
-                Add note
+                ✕
               </button>
             </form>
           )}
         </div>
+      </li>
+
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex shrink-0 items-start justify-between gap-2 p-4"
+              style={isFinal ? { backgroundColor: categoryColor } : { backgroundColor: "#fafafa" }}
+            >
+              <div className="min-w-0">
+                <h3
+                  className="truncate text-lg font-semibold"
+                  style={isFinal ? { color: finalTextColor } : undefined}
+                >
+                  {isFinal ? "🏁 " : ""}
+                  {node.name}
+                </h3>
+                <p
+                  className="text-xs"
+                  style={isFinal ? { color: finalTextColor, opacity: 0.8 } : { color: "#737373" }}
+                >
+                  {node.subtitle}
+                  {isFinal ? " · Final decision-maker" : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="shrink-0 rounded-full border px-2 py-0.5 text-sm"
+                style={
+                  isFinal
+                    ? { borderColor: `${finalTextColor}66`, color: finalTextColor }
+                    : { borderColor: "#d4d4d4", color: "#525252" }
+                }
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 overflow-y-auto p-4">
+              {isOwner && !editingNote && (
+                <button
+                  type="button"
+                  onClick={() => setEditingNote(true)}
+                  className="text-xs text-neutral-500 underline hover:text-neutral-700"
+                >
+                  {node.note ? `Role: ${node.note}` : "Add a role note"}
+                </button>
+              )}
+              {isOwner && editingNote && (
+                <form
+                  action={async (formData) => {
+                    await updatePowerTreeNodeNote(formData);
+                    setEditingNote(false);
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <input type="hidden" name="proposal_id" value={proposalId} />
+                  <input type="hidden" name="node_id" value={node.id} />
+                  <input
+                    name="note"
+                    defaultValue={node.note ?? ""}
+                    placeholder="e.g. final sign-off"
+                    className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-0.5 text-xs"
+                    autoFocus
+                  />
+                  <button
+                    className="shrink-0 rounded px-2 py-0.5 text-xs"
+                    style={{ backgroundColor: categoryColor, color: finalTextColor }}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingNote(false)}
+                    className="shrink-0 rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-50"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              )}
+              {!isOwner && node.note && (
+                <p className="text-xs text-neutral-500">Role: {node.note}</p>
+              )}
+
+              <div>
+                <p className="text-xs font-medium text-neutral-700">
+                  Notes on working with them
+                </p>
+                <ul className="mt-1.5 space-y-1.5">
+                  {node.updates.map((u) => (
+                    <li key={u.id} className="rounded bg-neutral-50 p-2 text-xs text-neutral-700">
+                      <p className="whitespace-pre-wrap">{u.body}</p>
+                      <p className="mt-1 text-neutral-400">
+                        {u.authorName} ·{" "}
+                        {new Date(u.created_at).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </li>
+                  ))}
+                  {node.updates.length === 0 && (
+                    <li className="text-xs text-neutral-400">Nothing logged yet.</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+
+            {canContribute && (
+              <form
+                ref={addUpdateFormRef}
+                action={async (formData) => {
+                  await addPowerTreeNodeUpdate(formData);
+                  addUpdateFormRef.current?.reset();
+                }}
+                className="shrink-0 space-y-1.5 border-t border-neutral-100 p-4"
+              >
+                <input type="hidden" name="proposal_id" value={proposalId} />
+                <input type="hidden" name="node_id" value={node.id} />
+                <textarea
+                  name="body"
+                  required
+                  rows={2}
+                  placeholder="When did you talk to them? What happened? Anything worth knowing for next time?"
+                  className="input text-xs"
+                />
+                <button
+                  className="rounded px-2 py-1 text-xs"
+                  style={{ backgroundColor: categoryColor, color: finalTextColor }}
+                >
+                  Add note
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
       )}
-    </li>
+    </>
   );
 }
