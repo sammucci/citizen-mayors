@@ -1,3 +1,10 @@
+-- SUPERSEDED — do not run this file anymore. Replaced by
+-- migration_real_zip_council_crosswalk.sql, which loads a real GIS
+-- spatial join (actual zip and district boundary shapes intersected in
+-- shapely) instead of the hand-compiled guesses below. Left in place
+-- only for history; running it after the real crosswalk would
+-- reintroduce these rougher guesses alongside the accurate data.
+--
 -- Best-effort zip -> council district data for the zip_council_districts
 -- crosswalk table, which existed as an empty structure only until now.
 --

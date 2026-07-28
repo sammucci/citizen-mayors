@@ -15,10 +15,11 @@ export async function signOut() {
 // describe the SAME place, and nothing stopped someone from picking a
 // zip in one part of the city and a district from somewhere else
 // entirely (e.g. 19122 with District 10) — checked here against the
-// same zip_council_districts crosswalk the proposal form uses. A zip
-// that maps to more than one district, or isn't in the crosswalk at
-// all, isn't blocked — the data just isn't precise enough yet to
-// second-guess what someone picked.
+// same zip_council_districts crosswalk the proposal form uses. That
+// crosswalk is now a real GIS spatial join (actual zip and district
+// boundaries intersected), not a guess, so this check is authoritative
+// for any zip it has data for. A zip that isn't in the crosswalk at all
+// (state/PO-box zips outside city limits, mainly) isn't blocked.
 export async function updateProfile(formData: FormData): Promise<{ error?: string }> {
   const supabase = createClient();
   const {
@@ -43,19 +44,20 @@ export async function updateProfile(formData: FormData): Promise<{ error?: strin
   if (zipCode && councilDistrict) {
     const { data: matches } = await supabase
       .from("zip_council_districts")
-      .select("council_district")
-      .eq("zip_code", zipCode);
+      .select("council_district, overlap_pct")
+      .eq("zip_code", zipCode)
+      .order("overlap_pct", { ascending: false });
 
     if (matches && matches.length > 0) {
       const validDistricts = matches.map((m) => m.council_district);
       if (!validDistricts.includes(councilDistrict)) {
         return {
           error:
-            validDistricts.length === 1
-              ? `Zip ${zipCode} is in District ${validDistricts[0]}, not District ${councilDistrict} — double check which one's right.`
-              : `Zip ${zipCode} doesn't match District ${councilDistrict} — it's in ${validDistricts
-                  .map((d) => `District ${d}`)
-                  .join(" or ")}.`,
+            matches.length === 1
+              ? `Zip ${zipCode} is in District ${matches[0].council_district}, not District ${councilDistrict} — double check which one's right.`
+              : `Zip ${zipCode} doesn't match District ${councilDistrict} — it's ${matches
+                  .map((m) => `${m.overlap_pct}% in District ${m.council_district}`)
+                  .join(", ")}.`,
         };
       }
     }

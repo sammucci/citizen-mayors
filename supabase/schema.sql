@@ -33,13 +33,17 @@ create table public.profiles (
 -- Which council districts a given zip code actually overlaps, so a
 -- self-reported district can be sanity-checked (a 19122 zip claiming
 -- District 1 is flatly impossible) without ever collecting a home address.
--- Populate this once from two free public datasets: Census ZCTA boundaries
--- and OpenDataPhilly's "City Council Districts" layer, intersected in
--- PostGIS. Many-to-many on purpose — some zips straddle more than one
--- district.
+-- Many-to-many on purpose — some zips straddle more than one district.
+-- Populated from a real spatial join of OpenDataPhilly's "Zip Codes" and
+-- "City Council Districts" GeoJSON layers (Samantha downloaded both and
+-- handed them over; the join itself ran in shapely, not PostGIS, since
+-- it only needed to run once, not live). overlap_pct is what percentage
+-- of that zip's area falls in that district — lets the app auto-suggest
+-- the majority district instead of just flagging impossible combos.
 create table public.zip_council_districts (
   zip_code text not null,
   council_district int not null,
+  overlap_pct numeric,
   primary key (zip_code, council_district)
 );
 

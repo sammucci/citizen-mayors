@@ -43,10 +43,15 @@ async function requireUser() {
 // updateProposalDetails. Citywide always means "every district," so it's
 // left null and handled as a wildcard in filtering, never stored as a fixed
 // value. For the council_district scope, the person picked it directly.
-// For zip, we auto-populate it from the zip -> district crosswalk when that
-// zip maps to exactly one district. Address/neighborhood don't have a
-// reliable auto-lookup yet (needs real geocoding — see README), so they
-// stay unset for now rather than guessing.
+// For zip, we auto-populate it from the zip -> district crosswalk, which
+// now holds a real GIS spatial join (zip and district boundaries actually
+// intersected, not a guess) with a real overlap_pct per row. When a zip
+// spans more than one district, this picks the one with the highest
+// overlap — nearly every split zip in Philadelphia is >50% in one
+// district, so "most of this zip" is a reasonable auto-fill rather than
+// leaving it blank; the person can always correct it by hand.
+// Address/neighborhood don't have a reliable auto-lookup yet (needs real
+// geocoding — see README), so they stay unset for now.
 async function resolveCouncilDistrict(
   supabase: ReturnType<typeof createClient>,
   formData: FormData,
@@ -60,15 +65,14 @@ async function resolveCouncilDistrict(
   if (geographyScope === "zip" && geographyLabel) {
     const { data: matches } = await supabase
       .from("zip_council_districts")
-      .select("council_district")
-      .eq("zip_code", geographyLabel);
+      .select("council_district, overlap_pct")
+      .eq("zip_code", geographyLabel)
+      .order("overlap_pct", { ascending: false });
 
-    if (matches && matches.length === 1) {
+    if (matches && matches.length > 0) {
       return matches[0].council_district;
     }
-    // If it matches 0 or several districts, we leave it null rather than
-    // guess wrong — the crosswalk table needs real data loaded before this
-    // gets more precise (see README "Deferred to a fast-follow").
+    // Zip not in the crosswalk at all — leave it null rather than guess.
   }
   return null;
 }
