@@ -23,8 +23,14 @@ export function renderMarkdownLite(body: string) {
   }
 
   for (const line of lines) {
-    const h3Match = line.match(/^##\s+(.*)/);
-    const h2Match = line.match(/^#\s+(.*)/);
+    // Space after the hash(es) is optional — "#Heading" works the same
+    // as "# Heading". The strict "must have a space" version is what
+    // was shipped originally; in practice people often skip the space,
+    // and it just silently fell through to plain paragraph text with no
+    // indication anything went wrong, which read as "the hashes aren't
+    // working."
+    const h3Match = line.match(/^##\s*(.*)/);
+    const h2Match = line.match(/^#\s*(.*)/);
     if (h3Match) {
       flushParagraph();
       blocks.push({ type: "h3", text: h3Match[1] });

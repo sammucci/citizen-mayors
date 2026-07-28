@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   addComment,
@@ -176,10 +177,12 @@ export default async function ProposalPage({
     .select("id, label")
     .order("sort_order");
 
-  // Renders one comment's <li> — used for both top-level comments and,
-  // with isReply=true, the replies nested under them. Capped at one
-  // level deep: a reply never gets its own "Reply" toggle or its own
-  // nested reply list, so a thread can't spiral into deep indentation.
+  // Renders one comment's <li> — used for both top-level comments and
+  // replies. Replies can themselves be replied to (true recursive
+  // threading, not capped at one level) since real back-and-forth needs
+  // more than a single reply layer. Each level indents a bit further via
+  // the border-l wrapper below, so depth stays visible without needing
+  // "replying to @X" labels.
   function renderComment(c: any, isReply: boolean) {
     const score = commentScores.get(c.id) ?? 0;
     const myVoteOnComment = myCommentVotes.get(c.id) ?? null;
@@ -241,7 +244,7 @@ export default async function ProposalPage({
             <button
               aria-label="Upvote comment"
               className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
-                myVoteOnComment === 1 ? "bg-green-600" : "bg-[#d7ecdf] hover:bg-[#c2d9c9]"
+                myVoteOnComment === 1 ? "bg-green-600" : "bg-[#bee1ca] hover:bg-[#abcbb6]"
               }`}
             >
               <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
@@ -347,7 +350,7 @@ export default async function ProposalPage({
         )}
 
 
-        {!isReply && user && (
+        {user && (
           <details className="mt-2">
             <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
               ↩ Reply
@@ -377,7 +380,7 @@ export default async function ProposalPage({
           </details>
         )}
 
-        {!isReply && replies.length > 0 && (
+        {replies.length > 0 && (
           <ul className="mt-3 space-y-3 border-l-2 border-neutral-100 pl-3">
             {replies.map((reply: any) => renderComment(reply, true))}
           </ul>
@@ -443,7 +446,7 @@ export default async function ProposalPage({
                           className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
                             myVote === 1
                               ? "bg-green-600"
-                              : "bg-[#d7ecdf] hover:bg-[#c2d9c9]"
+                              : "bg-[#bee1ca] hover:bg-[#abcbb6]"
                           }`}
                         >
                           {/* CSS trick: emoji render with their own
@@ -644,12 +647,14 @@ export default async function ProposalPage({
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Discussion</h2>
-              {/* Sort toggle — plain links to the same page with a
-                  different ?sort= value, so it works with no JS and
-                  plays nicely with everything else on this page that's
-                  already server-rendered. */}
+              {/* Sort toggle — Next's <Link>, not a plain <a>. Same
+                  ?sort= URL pattern (still works with no JS, still
+                  server-rendered), but Link intercepts the click and
+                  does a client-side transition instead of a full
+                  browser page reload, so switching sort no longer
+                  flashes/reloads the whole page. */}
               <div className="flex items-center gap-1 text-xs">
-                <a
+                <Link
                   href="?sort=oldest"
                   className="rounded-full px-2 py-1"
                   style={
@@ -659,8 +664,8 @@ export default async function ProposalPage({
                   }
                 >
                   Oldest
-                </a>
-                <a
+                </Link>
+                <Link
                   href="?sort=new"
                   className="rounded-full px-2 py-1"
                   style={
@@ -670,8 +675,8 @@ export default async function ProposalPage({
                   }
                 >
                   Newest
-                </a>
-                <a
+                </Link>
+                <Link
                   href="?sort=top"
                   className="rounded-full px-2 py-1"
                   style={
@@ -681,7 +686,7 @@ export default async function ProposalPage({
                   }
                 >
                   Most active
-                </a>
+                </Link>
               </div>
             </div>
             <ul className="mt-3 space-y-4">
