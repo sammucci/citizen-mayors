@@ -75,7 +75,7 @@ export default async function ProposalPage({
 
   const { data: comments } = await supabase
     .from("comments")
-    .select("*, profiles ( display_name )")
+    .select("*, profiles ( display_name, avatar_url )")
     .eq("proposal_id", proposal.id)
     .order("created_at", { ascending: true });
 
@@ -192,7 +192,23 @@ export default async function ProposalPage({
             everything after it (Reply, replies) further down for no
             real reason. */}
         <div className="flex items-center justify-between text-xs text-neutral-500">
-          <span>{c.profiles?.display_name ?? "A resident"}</span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-5 w-5 shrink-0 overflow-hidden rounded-full bg-duty-purple/10 text-duty-purple">
+              {c.profiles?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={c.profiles.avatar_url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold">
+                  {(c.profiles?.display_name || "?").trim().charAt(0).toUpperCase()}
+                </span>
+              )}
+            </span>
+            {c.profiles?.display_name ?? "A resident"}
+          </span>
           <div className="flex items-center gap-2">
             {c.is_suggested_edit && (
               <span className={`rounded-full px-2 py-0.5 ${statusColorClasses(c.status)}`}>

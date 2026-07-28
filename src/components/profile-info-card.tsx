@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updateProfile } from "@/app/actions";
+import { AvatarUploadControl } from "@/components/avatar-upload-control";
 
 type Profile = {
   display_name: string | null;
@@ -10,6 +11,7 @@ type Profile = {
   age_range: string | null;
   race_ethnicity: string | null;
   gender: string | null;
+  avatar_url: string | null;
 } | null;
 
 // Was a permanently-open form — even fields you'd already filled in and
@@ -32,14 +34,26 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
     return (
       <div className="rounded-lg border border-neutral-200 bg-white p-4">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">
-              {profile?.display_name || "Unnamed resident"}
-            </h2>
-            <p className="mt-0.5 text-xs text-neutral-500">
-              {profile?.zip_code ? `Zip ${profile.zip_code}` : "No zip code shared"}
-              {profile?.council_district ? ` · District ${profile.council_district}` : ""}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-duty-purple/10 text-duty-purple">
+              {profile?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-base font-semibold">
+                  {(profile?.display_name || "?").trim().charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div>
+              <h2 className="text-base font-semibold">
+                {profile?.display_name || "Unnamed resident"}
+              </h2>
+              <p className="mt-0.5 text-xs text-neutral-500">
+                {profile?.zip_code ? `Zip ${profile.zip_code}` : "No zip code shared"}
+                {profile?.council_district ? ` · District ${profile.council_district}` : ""}
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -86,6 +100,14 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
         Everything here is optional and self-reported — we never geocode this
         from a home address.
       </p>
+
+      <div className="mt-3">
+        <AvatarUploadControl
+          displayName={profile?.display_name ?? null}
+          avatarUrl={profile?.avatar_url ?? null}
+        />
+      </div>
+
       <form
         action={async (formData) => {
           await updateProfile(formData);

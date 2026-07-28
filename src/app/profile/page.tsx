@@ -77,20 +77,21 @@ export default async function ProfilePage() {
 
       <div>
         <h2 className="text-lg font-semibold">Your proposals</h2>
-        {/* Two-column grid of small "mini cards" — half the width of the
-            old full-width rows — each tinted with its category color so
-            the colors read at a glance again, not just on the thumbnail. */}
+        {/* Two-column grid of small "mini cards", split vertically —
+            a square image on one side, title/category/type on the
+            other — each tinted with its category color so the colors
+            read at a glance again, not just on the thumbnail. */}
         <ul className="mt-3 grid grid-cols-2 gap-2.5">
           {myProposals?.map((p: any) => {
             const color = p.categories?.color ?? "#e5e5e5";
             return (
               <li
                 key={p.id}
-                className="flex flex-col overflow-hidden rounded-lg border"
+                className="flex items-center overflow-hidden rounded-lg border"
                 style={{ backgroundColor: `${color}1a`, borderColor: `${color}66` }}
               >
                 <div
-                  className="h-16 w-full shrink-0 overflow-hidden"
+                  className="h-16 w-16 shrink-0 overflow-hidden"
                   style={{ backgroundColor: color }}
                 >
                   {p.image_url && (
@@ -108,7 +109,7 @@ export default async function ProfilePage() {
                 <div className="min-w-0 p-2">
                   <Link
                     href={`/proposals/${p.id}`}
-                    className="block truncate text-xs font-semibold hover:underline"
+                    className="block truncate text-sm font-semibold hover:underline"
                   >
                     {p.title}
                   </Link>

@@ -18,6 +18,7 @@ create table public.profiles (
   gender text, -- population and council districts. Never required.
   accepted_guidelines_at timestamptz, -- respectful-dialogue prompt acknowledgment
   is_admin boolean not null default false, -- gates admin-only screens, e.g. tag-suggestion review
+  avatar_url text, -- optional profile picture, stored in the "avatars" bucket
   created_at timestamptz not null default now()
 );
 
@@ -389,3 +390,17 @@ create policy "authenticated upload proposal images" on storage.objects for inse
   with check (bucket_id = 'proposal-images' and auth.role() = 'authenticated');
 create policy "authenticated update own proposal images" on storage.objects for update
   using (bucket_id = 'proposal-images' and auth.role() = 'authenticated');
+
+-- ---------------------------------------------------------------------------
+-- Storage: profile avatars
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+create policy "public read avatars" on storage.objects for select
+  using (bucket_id = 'avatars');
+create policy "authenticated upload avatars" on storage.objects for insert
+  with check (bucket_id = 'avatars' and auth.role() = 'authenticated');
+create policy "authenticated update own avatars" on storage.objects for update
+  using (bucket_id = 'avatars' and auth.role() = 'authenticated');
