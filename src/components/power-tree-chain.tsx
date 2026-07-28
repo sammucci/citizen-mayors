@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addPowerTreeNode, reorderPowerTreeNodes } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
@@ -105,6 +105,8 @@ export function PowerTreeChain({
     reorderPowerTreeNodes(fd).then(() => router.refresh());
   }
 
+  // Dropping on a GAP is unambiguous — a gap already means "exactly
+  // here" — so this stays a straight insert-at-this-position.
   function handleDropAtDisplayIndex(targetDisplayIndex: number) {
     if (!dragId) return;
     const current = [...display];
@@ -112,6 +114,29 @@ export function PowerTreeChain({
     if (fromIndex === -1) return;
     const [moved] = current.splice(fromIndex, 1);
     const adjustedTarget = fromIndex < targetDisplayIndex ? targetDisplayIndex - 1 : targetDisplayIndex;
+    current.splice(adjustedTarget, 0, moved);
+    persistOrder([...current].reverse());
+    setDragId(null);
+  }
+
+  // Dropping directly ON A CARD is different — it used to always mean
+  // "insert above this card" (same math as a gap drop), which made
+  // dragging a card down onto the very next card a no-op: removing the
+  // dragged card shifts the target up by one, and "insert above the
+  // target's new position" lands you right back where you started. A
+  // downward drag reads naturally as "put it after this card," an
+  // upward drag as "put it before this card" — so which side it lands
+  // on now follows the direction you dragged, matching how sortable
+  // lists elsewhere (Trello, etc.) behave.
+  function handleDropOnCard(targetDisplayIndex: number) {
+    if (!dragId) return;
+    const current = [...display];
+    const fromIndex = current.findIndex((n) => n.id === dragId);
+    if (fromIndex === -1 || fromIndex === targetDisplayIndex) return;
+    const draggingDown = fromIndex < targetDisplayIndex;
+    const [moved] = current.splice(fromIndex, 1);
+    let adjustedTarget = draggingDown ? targetDisplayIndex - 1 : targetDisplayIndex;
+    if (draggingDown) adjustedTarget += 1; // land after the target, not above it
     current.splice(adjustedTarget, 0, moved);
     persistOrder([...current].reverse());
     setDragId(null);
@@ -204,7 +229,14 @@ export function PowerTreeChain({
     <ul className="mt-3 space-y-1.5">
       <GapInserter displayGapIndex={0} />
       {display.map((node, i) => (
-        <div key={node.id}>
+        // Each card and its trailing gap are separate direct children of
+        // the <ul> (via this Fragment) rather than both nested inside one
+        // wrapping <div> — that div used to be the only thing space-y-1.5
+        // actually applied margin between, so a card and the "+" right
+        // below it sat flush against each other while the "+" and the
+        // NEXT card got the real gap. Made the "+" look glued to the
+        // card above it instead of centered between the two.
+        <Fragment key={node.id}>
           <div
             draggable={isOwner}
             onDragStart={() => setDragId(node.id)}
@@ -213,11 +245,12 @@ export function PowerTreeChain({
             // strips between cards — dropping anywhere on a card itself
             // (which is what you'd naturally try) did nothing, so
             // dragging looked broken even though it was technically
-            // wired up. Dropping directly on a card now behaves the
-            // same as dropping the gap right above it: insert here,
-            // shifting this card (and the rest below it) down one.
+            // wired up. Dropping directly on a card now lands above or
+            // below it depending on which way you dragged (see
+            // handleDropOnCard) instead of always "above," which used to
+            // make a downward drag onto the next card do nothing.
             onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
-            onDrop={isOwner ? () => handleDropAtDisplayIndex(i) : undefined}
+            onDrop={isOwner ? () => handleDropOnCard(i) : undefined}
           >
             <PowerTreeNodeCard
               proposalId={proposalId}
@@ -229,7 +262,7 @@ export function PowerTreeChain({
             />
           </div>
           <GapInserter displayGapIndex={i + 1} />
-        </div>
+        </Fragment>
       ))}
 
       {display.length === 0 && (

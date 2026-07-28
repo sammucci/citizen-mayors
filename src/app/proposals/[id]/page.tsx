@@ -66,6 +66,17 @@ export default async function ProposalPage({
     .eq("id", proposal.owner_id)
     .maybeSingle();
 
+  // For the "Add a comment" box's avatar — was a generic 🙂 placeholder
+  // for everyone, regardless of whether the signed-in person actually
+  // has a photo uploaded.
+  const { data: myProfile } = user
+    ? await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
+
   const location =
     proposal.geography_scope === "citywide"
       ? "Citywide (applies to every council district)"
@@ -226,7 +237,10 @@ export default async function ProposalPage({
                     myVoteOnComment === 1 ? "bg-green-600" : "bg-[#bee1ca] hover:bg-[#abcbb6]"
                   }`}
                 >
-                  <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
+                  <span
+                    className="inline-block leading-none"
+                    style={{ filter: "brightness(0) invert(1)" }}
+                  >
                     👍
                   </span>
                 </button>
@@ -241,7 +255,10 @@ export default async function ProposalPage({
                     myVoteOnComment === -1 ? "bg-duty-red" : "bg-red-300 hover:bg-red-400"
                   }`}
                 >
-                  <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
+                  <span
+                    className="inline-block leading-none"
+                    style={{ filter: "brightness(0) invert(1)" }}
+                  >
                     👎
                   </span>
                 </button>
@@ -427,7 +444,7 @@ export default async function ProposalPage({
                               voted vs. not, so the icon itself stays one
                               consistent white regardless. */}
                           <span
-                            className="inline-block"
+                            className="inline-block leading-none"
                             style={{ filter: "brightness(0) invert(1)" }}
                           >
                             👍
@@ -446,7 +463,7 @@ export default async function ProposalPage({
                           }`}
                         >
                           <span
-                            className="inline-block"
+                            className="inline-block leading-none"
                             style={{ filter: "brightness(0) invert(1)" }}
                           >
                             👎
@@ -651,8 +668,22 @@ export default async function ProposalPage({
                 <input type="hidden" name="proposal_id" value={proposal.id} />
                 <input type="hidden" name="version_id" value={currentVersion?.id ?? ""} />
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-sm">
-                    🙂
+                  {/* Was a generic 🙂 for every signed-in person regardless
+                      of whether they'd actually uploaded a photo — now
+                      shows their real avatar (or their initial, same
+                      fallback style used everywhere else) in this same
+                      size circle. */}
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-duty-purple/10 text-sm font-semibold text-duty-purple">
+                    {myProfile?.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={myProfile.avatar_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      (myProfile?.display_name || "?").trim().charAt(0).toUpperCase()
+                    )}
                   </div>
                   <textarea
                     name="body"
