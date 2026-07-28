@@ -56,7 +56,7 @@ export default async function RootLayout({
               {user ? (
                 <div className="flex items-center gap-3">
                   <Link href="/profile" className="text-neutral-600 hover:underline">
-                    Signed in as {displayName}
+                    Hello, {displayName}
                   </Link>
                   <form action={signOut}>
                     <button type="submit" className="font-medium underline">

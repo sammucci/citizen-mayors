@@ -35,8 +35,10 @@ function splitDecisionMakerLabel(name: string): { primary: string; subtitle: str
 
 export default async function ProposalPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { sort?: string };
 }) {
   const supabase = createClient();
   const {
@@ -80,6 +82,57 @@ export default async function ProposalPage({
     .select("*, profiles ( display_name )")
     .eq("proposal_id", proposal.id)
     .order("created_at", { ascending: true });
+
+  // Comment-level votes. These live in the same reactions table as
+  // proposal votes but with comment_id set instead of proposal_id, so
+  // they can't be pulled in by the proposal_id filter above — has to be
+  // its own query, scoped to just this proposal's comment ids.
+  const commentIds = (comments ?? []).map((c) => c.id);
+  const { data: commentReactions } =
+    commentIds.length > 0
+      ? await supabase
+          .from("reactions")
+          .select("comment_id, user_id, value")
+          .in("comment_id", commentIds)
+      : { data: [] as { comment_id: string; user_id: string; value: number }[] };
+
+  const commentScores = new Map<string, number>();
+  const myCommentVotes = new Map<string, number>();
+  for (const r of commentReactions ?? []) {
+    commentScores.set(r.comment_id, (commentScores.get(r.comment_id) ?? 0) + r.value);
+    if (user && r.user_id === user.id) myCommentVotes.set(r.comment_id, r.value);
+  }
+
+  // Replies (one level deep — a reply to a reply still threads under the
+  // original top-level comment rather than nesting further, to keep the
+  // UI simple) grouped by their parent, and top-level comments sorted
+  // per the ?sort= toggle. "new" and "top" are display-only — the
+  // underlying query above stays oldest-first ascending, which is what
+  // latestCommentId (right below) depends on to find the single most
+  // recent comment overall.
+  const sortMode = searchParams?.sort === "top" || searchParams?.sort === "new"
+    ? searchParams.sort
+    : "oldest";
+  const topLevelComments = (comments ?? []).filter((c) => !c.parent_comment_id);
+  const repliesByParent = new Map<string, NonNullable<typeof comments>>();
+  for (const c of comments ?? []) {
+    if (c.parent_comment_id) {
+      const list = repliesByParent.get(c.parent_comment_id) ?? [];
+      list.push(c);
+      repliesByParent.set(c.parent_comment_id, list);
+    }
+  }
+  const sortedTopLevelComments = [...topLevelComments].sort((a, b) => {
+    if (sortMode === "top") {
+      const diff = (commentScores.get(b.id) ?? 0) - (commentScores.get(a.id) ?? 0);
+      if (diff !== 0) return diff;
+    }
+    if (sortMode === "top" || sortMode === "new") {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+
   // Only the single most recent comment on the whole proposal is still
   // editable by its author — once anything else gets posted after it,
   // editing locks so nobody can retroactively change context others have
@@ -118,6 +171,222 @@ export default async function ProposalPage({
     .select("id, label")
     .order("sort_order");
 
+  // Renders one comment's <li> — used for both top-level comments and,
+  // with isReply=true, the replies nested under them. Capped at one
+  // level deep: a reply never gets its own "Reply" toggle or its own
+  // nested reply list, so a thread can't spiral into deep indentation.
+  function renderComment(c: any, isReply: boolean) {
+    const score = commentScores.get(c.id) ?? 0;
+    const myVoteOnComment = myCommentVotes.get(c.id) ?? null;
+    const replies = repliesByParent.get(c.id) ?? [];
+
+    return (
+      <li key={c.id} className="rounded-lg border border-neutral-200 bg-white p-3">
+        <div className="flex items-center justify-between text-xs text-neutral-500">
+          <span>{c.profiles?.display_name ?? "A resident"}</span>
+          {c.is_suggested_edit && (
+            <span className={`rounded-full px-2 py-0.5 ${statusColorClasses(c.status)}`}>
+              Suggested edit · {c.status.replace(/_/g, " ")}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-sm">{c.body}</p>
+        {c.is_suggested_edit && (
+          <p className="mt-2 whitespace-pre-wrap rounded bg-neutral-50 p-2 text-sm text-neutral-700">
+            {c.suggested_body}
+          </p>
+        )}
+        {c.status_note && (
+          <p className="mt-1 text-xs italic text-neutral-500">
+            Owner note: {c.status_note}
+          </p>
+        )}
+        {c.unresolved_flagged && (
+          <p className="mt-1 text-xs text-amber-700">
+            Flagged as still not addressed in the latest version.
+          </p>
+        )}
+
+        {/* Small vote row — reuses the same react() action as the
+            proposal's own vote buttons; sending comment_id (instead of
+            just a bare proposal_id) is what tells the action this is a
+            comment vote. Net score here is also what "Most active"
+            sorting is based on. */}
+        <div className="mt-2 flex items-center gap-1.5">
+          <form action={react}>
+            <input type="hidden" name="proposal_id" value={proposal.id} />
+            <input type="hidden" name="comment_id" value={c.id} />
+            <input type="hidden" name="value" value="1" />
+            <button
+              aria-label="Upvote comment"
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
+                myVoteOnComment === 1 ? "bg-green-600" : "bg-green-100 hover:bg-green-200"
+              }`}
+            >
+              <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
+                👍
+              </span>
+            </button>
+          </form>
+          <form action={react}>
+            <input type="hidden" name="proposal_id" value={proposal.id} />
+            <input type="hidden" name="comment_id" value={c.id} />
+            <input type="hidden" name="value" value="-1" />
+            <button
+              aria-label="Downvote comment"
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
+                myVoteOnComment === -1 ? "bg-duty-red" : "bg-red-100 hover:bg-red-200"
+              }`}
+            >
+              <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
+                👎
+              </span>
+            </button>
+          </form>
+          <span className="text-xs text-neutral-500">
+            {score >= 0 ? `+${score}` : score}
+          </span>
+        </div>
+
+        {isOwner && c.is_suggested_edit && (() => {
+          const defaultStatus = c.status === "open" ? "accepted" : c.status;
+          return (
+            <form action={resolveComment} className="mt-2 space-y-2">
+              <input type="hidden" name="comment_id" value={c.id} />
+              <input type="hidden" name="proposal_id" value={proposal.id} />
+              {/* Color-coded pill toggles instead of a plain dropdown —
+                  green/amber/red reads at a glance instead of needing to
+                  open a select to see the options. Plain radio inputs,
+                  so this still works as an ordinary form post with no
+                  extra JS. */}
+              <div className="flex flex-wrap gap-1.5">
+                <label>
+                  <input
+                    type="radio"
+                    name="status"
+                    value="accepted"
+                    defaultChecked={defaultStatus === "accepted"}
+                    className="peer sr-only"
+                  />
+                  <span className="cursor-pointer rounded-full border border-green-300 bg-green-50 px-2 py-1 text-xs text-green-700 peer-checked:bg-green-600 peer-checked:text-white">
+                    Accept
+                  </span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="status"
+                    value="accepted_with_contingency"
+                    defaultChecked={defaultStatus === "accepted_with_contingency"}
+                    className="peer sr-only"
+                  />
+                  <span className="cursor-pointer rounded-full border border-yellow-300 bg-yellow-50 px-2 py-1 text-xs text-yellow-800 peer-checked:bg-yellow-400 peer-checked:text-yellow-900">
+                    Accept with contingency
+                  </span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="status"
+                    value="rejected"
+                    defaultChecked={defaultStatus === "rejected"}
+                    className="peer sr-only"
+                  />
+                  <span className="cursor-pointer rounded-full border border-red-300 bg-red-50 px-2 py-1 text-xs text-duty-red peer-checked:bg-duty-red peer-checked:text-white">
+                    Reject
+                  </span>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  name="status_note"
+                  defaultValue={c.status_note ?? ""}
+                  placeholder="Optional note (e.g. the contingency)"
+                  className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+                />
+                <button className="shrink-0 rounded bg-duty-purple px-2 py-1 text-xs text-white">
+                  {c.status === "open" ? "Resolve" : "Change decision"}
+                </button>
+              </div>
+            </form>
+          );
+        })()}
+
+        {!isOwner && c.status !== "open" && !c.unresolved_flagged && (
+          <form action={flagUnresolved} className="mt-2">
+            <input type="hidden" name="comment_id" value={c.id} />
+            <input type="hidden" name="proposal_id" value={proposal.id} />
+            <button className="text-xs text-amber-700 underline">
+              Still not addressed
+            </button>
+          </form>
+        )}
+
+        {user?.id === c.author_id && c.id === latestCommentId && (
+          <details className="mt-2">
+            <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
+              ✎ Edit your comment
+            </summary>
+            <form action={editComment} className="mt-2 space-y-2">
+              <input type="hidden" name="comment_id" value={c.id} />
+              <input type="hidden" name="proposal_id" value={proposal.id} />
+              <textarea
+                name="body"
+                defaultValue={c.body}
+                rows={2}
+                className="input text-sm"
+              />
+              {c.is_suggested_edit && (
+                <textarea
+                  name="suggested_body"
+                  defaultValue={c.suggested_body ?? ""}
+                  rows={3}
+                  className="input font-mono text-xs"
+                />
+              )}
+              <button className="rounded bg-duty-purple px-2 py-1 text-xs text-white">
+                Save edit
+              </button>
+            </form>
+          </details>
+        )}
+
+        {!isReply && user && (
+          <details className="mt-2">
+            <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
+              ↩ Reply
+            </summary>
+            <ResettableForm
+              key={replies.length}
+              action={addComment}
+              className="mt-2 space-y-2"
+            >
+              <input type="hidden" name="proposal_id" value={proposal.id} />
+              <input type="hidden" name="version_id" value={currentVersion?.id ?? ""} />
+              <input type="hidden" name="parent_comment_id" value={c.id} />
+              <textarea
+                name="body"
+                required
+                rows={2}
+                placeholder="Write a reply..."
+                className="input text-sm"
+              />
+              <button className="rounded bg-duty-purple px-2 py-1 text-xs text-white">
+                Post reply
+              </button>
+            </ResettableForm>
+          </details>
+        )}
+
+        {!isReply && replies.length > 0 && (
+          <ul className="mt-3 space-y-3 border-l-2 border-neutral-100 pl-3">
+            {replies.map((reply: any) => renderComment(reply, true))}
+          </ul>
+        )}
+      </li>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -132,10 +401,11 @@ export default async function ProposalPage({
                 omitted) so the tab reads as physically attached to it,
                 like a folder tab. */}
             <div
-              className="inline-block rounded-t-lg px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white"
+              className="inline-block rounded-t-lg px-5 py-3 text-xs uppercase tracking-wide text-white"
               style={{ backgroundColor: proposal.categories?.color ?? "#a3a3a3" }}
             >
-              {proposal.categories?.label} • {proposal.type}
+              <span className="font-semibold">{proposal.categories?.label}</span>{" "}
+              • <span className="font-normal">{proposal.type}</span>
             </div>
             <div
               className="overflow-hidden rounded-tr-lg rounded-br-lg rounded-bl-lg border bg-white"
@@ -362,141 +632,47 @@ export default async function ProposalPage({
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold">Discussion</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Discussion</h2>
+              {/* Sort toggle — plain links to the same page with a
+                  different ?sort= value, so it works with no JS and
+                  plays nicely with everything else on this page that's
+                  already server-rendered. */}
+              <div className="flex items-center gap-1 text-xs">
+                <a
+                  href="?sort=oldest"
+                  className={`rounded-full px-2 py-1 ${
+                    sortMode === "oldest"
+                      ? "bg-duty-purple text-white"
+                      : "text-neutral-500 hover:bg-neutral-100"
+                  }`}
+                >
+                  Oldest
+                </a>
+                <a
+                  href="?sort=new"
+                  className={`rounded-full px-2 py-1 ${
+                    sortMode === "new"
+                      ? "bg-duty-purple text-white"
+                      : "text-neutral-500 hover:bg-neutral-100"
+                  }`}
+                >
+                  Newest
+                </a>
+                <a
+                  href="?sort=top"
+                  className={`rounded-full px-2 py-1 ${
+                    sortMode === "top"
+                      ? "bg-duty-purple text-white"
+                      : "text-neutral-500 hover:bg-neutral-100"
+                  }`}
+                >
+                  Most active
+                </a>
+              </div>
+            </div>
             <ul className="mt-3 space-y-4">
-              {comments?.map((c) => (
-                <li key={c.id} className="rounded-lg border border-neutral-200 bg-white p-3">
-                  <div className="flex items-center justify-between text-xs text-neutral-500">
-                    <span>{c.profiles?.display_name ?? "A resident"}</span>
-                    {c.is_suggested_edit && (
-                      <span
-                        className={`rounded-full px-2 py-0.5 ${statusColorClasses(c.status)}`}
-                      >
-                        Suggested edit · {c.status.replace(/_/g, " ")}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm">{c.body}</p>
-                  {c.is_suggested_edit && (
-                    <p className="mt-2 whitespace-pre-wrap rounded bg-neutral-50 p-2 text-sm text-neutral-700">
-                      {c.suggested_body}
-                    </p>
-                  )}
-                  {c.status_note && (
-                    <p className="mt-1 text-xs italic text-neutral-500">
-                      Owner note: {c.status_note}
-                    </p>
-                  )}
-                  {c.unresolved_flagged && (
-                    <p className="mt-1 text-xs text-amber-700">
-                      Flagged as still not addressed in the latest version.
-                    </p>
-                  )}
-
-                  {isOwner && c.is_suggested_edit && (() => {
-                    const defaultStatus = c.status === "open" ? "accepted" : c.status;
-                    return (
-                      <form action={resolveComment} className="mt-2 space-y-2">
-                        <input type="hidden" name="comment_id" value={c.id} />
-                        <input type="hidden" name="proposal_id" value={proposal.id} />
-                        {/* Color-coded pill toggles instead of a plain
-                            dropdown — green/amber/red reads at a glance
-                            instead of needing to open a select to see the
-                            options. Plain radio inputs, so this still works
-                            as an ordinary form post with no extra JS. */}
-                        <div className="flex flex-wrap gap-1.5">
-                          <label>
-                            <input
-                              type="radio"
-                              name="status"
-                              value="accepted"
-                              defaultChecked={defaultStatus === "accepted"}
-                              className="peer sr-only"
-                            />
-                            <span className="cursor-pointer rounded-full border border-green-300 bg-green-50 px-2 py-1 text-xs text-green-700 peer-checked:bg-green-600 peer-checked:text-white">
-                              Accept
-                            </span>
-                          </label>
-                          <label>
-                            <input
-                              type="radio"
-                              name="status"
-                              value="accepted_with_contingency"
-                              defaultChecked={defaultStatus === "accepted_with_contingency"}
-                              className="peer sr-only"
-                            />
-                            <span className="cursor-pointer rounded-full border border-yellow-300 bg-yellow-50 px-2 py-1 text-xs text-yellow-800 peer-checked:bg-yellow-400 peer-checked:text-yellow-900">
-                              Accept with contingency
-                            </span>
-                          </label>
-                          <label>
-                            <input
-                              type="radio"
-                              name="status"
-                              value="rejected"
-                              defaultChecked={defaultStatus === "rejected"}
-                              className="peer sr-only"
-                            />
-                            <span className="cursor-pointer rounded-full border border-red-300 bg-red-50 px-2 py-1 text-xs text-duty-red peer-checked:bg-duty-red peer-checked:text-white">
-                              Reject
-                            </span>
-                          </label>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <input
-                            name="status_note"
-                            defaultValue={c.status_note ?? ""}
-                            placeholder="Optional note (e.g. the contingency)"
-                            className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
-                          />
-                          <button className="shrink-0 rounded bg-duty-purple px-2 py-1 text-xs text-white">
-                            {c.status === "open" ? "Resolve" : "Change decision"}
-                          </button>
-                        </div>
-                      </form>
-                    );
-                  })()}
-
-                  {!isOwner && c.status !== "open" && !c.unresolved_flagged && (
-                    <form action={flagUnresolved} className="mt-2">
-                      <input type="hidden" name="comment_id" value={c.id} />
-                      <input type="hidden" name="proposal_id" value={proposal.id} />
-                      <button className="text-xs text-amber-700 underline">
-                        Still not addressed
-                      </button>
-                    </form>
-                  )}
-
-                  {user?.id === c.author_id && c.id === latestCommentId && (
-                    <details className="mt-2">
-                      <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
-                        ✎ Edit your comment
-                      </summary>
-                      <form action={editComment} className="mt-2 space-y-2">
-                        <input type="hidden" name="comment_id" value={c.id} />
-                        <input type="hidden" name="proposal_id" value={proposal.id} />
-                        <textarea
-                          name="body"
-                          defaultValue={c.body}
-                          rows={2}
-                          className="input text-sm"
-                        />
-                        {c.is_suggested_edit && (
-                          <textarea
-                            name="suggested_body"
-                            defaultValue={c.suggested_body ?? ""}
-                            rows={3}
-                            className="input font-mono text-xs"
-                          />
-                        )}
-                        <button className="rounded bg-duty-purple px-2 py-1 text-xs text-white">
-                          Save edit
-                        </button>
-                      </form>
-                    </details>
-                  )}
-                </li>
-              ))}
+              {sortedTopLevelComments.map((c) => renderComment(c, false))}
               {(!comments || comments.length === 0) && (
                 <p className="text-sm text-neutral-500">
                   No comments yet — be the first to weigh in.
@@ -576,7 +752,7 @@ export default async function ProposalPage({
                 of a fixed pixel value keeps this correct even if the tab
                 ever wraps to two lines for a long category name. */}
             <div
-              className="invisible px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+              className="invisible px-5 py-3 text-xs uppercase tracking-wide"
               aria-hidden="true"
             >
               {proposal.categories?.label} • {proposal.type}

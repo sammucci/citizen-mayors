@@ -4,12 +4,23 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+// Used at the top of every mutating action (vote, comment, add tags,
+// etc.). Signed-out visitors can browse everything, but any action that
+// needs an account used to throw a plain Error here — which Next.js
+// redacts in production into a generic "Application error: a
+// server-side exception has occurred" crash screen, since it can't tell
+// a real crash apart from an ordinary validation message. redirect()
+// isn't caught the same way — it's a real navigation, so a signed-out
+// visitor clicking, say, a vote button now lands on the sign-in page
+// instead of seeing a crash. redirect()'s return type is `never`, so
+// TypeScript still narrows `user` to non-null below exactly like the
+// old throw did.
 async function requireUser() {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("You need to sign in first.");
+  if (!user) redirect("/login");
   return { supabase, user };
 }
 
@@ -395,21 +406,29 @@ export async function flagUnresolved(formData: FormData) {
 // other one switches it. Looks up any existing reaction first rather than
 // relying purely on a database upsert, so this can't double-count votes
 // regardless of how the underlying constraint is set up.
+//
+// proposal_id is now always sent (even when voting on a comment) purely
+// so this knows which proposal page to revalidate — whether the vote
+// itself lands on the proposal or a comment is decided by whether
+// comment_id is present, not by proposal_id. Comment votes used to omit
+// proposal_id entirely, which meant a comment vote never refreshed the
+// proposal page it actually happened on — only the homepage.
 export async function react(formData: FormData) {
   const { supabase, user } = await requireUser();
 
-  const proposalId = formData.get("proposal_id");
+  const proposalId = String(formData.get("proposal_id"));
   const commentId = formData.get("comment_id");
   const value = Number(formData.get("value"));
+  const isCommentVote = Boolean(commentId);
 
   let existingQuery = supabase
     .from("reactions")
     .select("id, value")
     .eq("user_id", user.id);
 
-  existingQuery = proposalId
-    ? existingQuery.eq("proposal_id", String(proposalId)).is("comment_id", null)
-    : existingQuery.eq("comment_id", String(commentId)).is("proposal_id", null);
+  existingQuery = isCommentVote
+    ? existingQuery.eq("comment_id", String(commentId)).is("proposal_id", null)
+    : existingQuery.eq("proposal_id", proposalId).is("comment_id", null);
 
   const { data: existing } = await existingQuery.maybeSingle();
 
@@ -422,8 +441,8 @@ export async function react(formData: FormData) {
   } else {
     await supabase.from("reactions").insert({
       user_id: user.id,
-      proposal_id: proposalId ? String(proposalId) : null,
-      comment_id: commentId ? String(commentId) : null,
+      proposal_id: isCommentVote ? null : proposalId,
+      comment_id: isCommentVote ? String(commentId) : null,
       value,
     });
   }

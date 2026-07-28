@@ -1,12 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createProposal } from "@/app/proposals/actions";
 
 type Category = { id: number; label: string; requires_budget: boolean };
 type Tag = { id: number; label: string };
 
 const DISTRICTS = Array.from({ length: 10 }, (_, i) => i + 1);
+
+// Rotates through a few real example titles as the placeholder, so an
+// empty title box doesn't just sit there blank — gives people a concrete
+// sense of scale/specificity ("Make N Front St intersections safer with
+// stop signs" reads very differently than a vague "traffic safety").
+// Purely a placeholder — never touches the actual value, so it doesn't
+// interfere with typing.
+const TITLE_SUGGESTIONS = [
+  "Make N Front St intersections safer with stop signs",
+  "Add exercise equipment for senior citizens in every neighborhood park",
+  "Make the former Church of the Assumption a community center",
+];
 
 export function NewProposalForm({
   categories,
@@ -16,11 +28,24 @@ export function NewProposalForm({
   tags: Tag[];
 }) {
   const [scope, setScope] = useState("citywide");
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setPlaceholderIndex((i) => (i + 1) % TITLE_SUGGESTIONS.length);
+    }, 3000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <form action={createProposal} className="mt-6 space-y-5">
       <Field label="Title">
-        <input name="title" required className="input" />
+        <input
+          name="title"
+          required
+          placeholder={TITLE_SUGGESTIONS[placeholderIndex]}
+          className="input"
+        />
       </Field>
 
       <Field label="Type">
