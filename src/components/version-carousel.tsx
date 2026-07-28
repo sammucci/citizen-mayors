@@ -21,7 +21,13 @@ type Version = {
 // wraps it together with the header into a single continuous card, with
 // a colored divider between them, rather than this having its own
 // separate box.
-export function VersionCarousel({ versions }: { versions: Version[] }) {
+export function VersionCarousel({
+  versions,
+  categoryColor,
+}: {
+  versions: Version[];
+  categoryColor: string;
+}) {
   // Flipped to chronological order (oldest -> newest) so the dots read
   // left-to-right the way people expect from a pager — with the incoming
   // newest-first order, the current version's dot was showing up first
@@ -57,8 +63,9 @@ export function VersionCarousel({ versions }: { versions: Version[] }) {
                 aria-label={`View version ${ver.version_number}`}
                 title={`Version ${ver.version_number}`}
                 className={`h-2 w-2 rounded-full transition-colors ${
-                  i === index ? "bg-duty-purple" : "bg-neutral-300 hover:bg-neutral-400"
+                  i === index ? "" : "bg-neutral-300 hover:bg-neutral-400"
                 }`}
+                style={i === index ? { backgroundColor: categoryColor } : undefined}
               />
             ))}
           </div>

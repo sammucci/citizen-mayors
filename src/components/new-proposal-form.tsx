@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createProposal } from "@/app/proposals/actions";
 
-type Category = { id: number; label: string; requires_budget: boolean };
+type Category = { id: number; label: string; requires_budget: boolean; color: string };
 type Tag = { id: number; label: string };
 
 const DISTRICTS = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -29,6 +29,13 @@ export function NewProposalForm({
 }) {
   const [scope, setScope] = useState("citywide");
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  // Tracks the selected category so the submit button can pick up its
+  // color live as you choose — same "buttons match the category"
+  // treatment as the rest of the app, just live-updating here since
+  // there's no saved proposal yet to read a color back from.
+  const [categoryId, setCategoryId] = useState(categories?.[0]?.id ?? null);
+  const selectedColor =
+    categories?.find((c) => c.id === categoryId)?.color ?? "#6C3FD1";
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -56,7 +63,13 @@ export function NewProposalForm({
       </Field>
 
       <Field label="Category">
-        <select name="category_id" required className="input">
+        <select
+          name="category_id"
+          required
+          className="input"
+          value={categoryId ?? ""}
+          onChange={(e) => setCategoryId(Number(e.target.value))}
+        >
           {categories?.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
@@ -171,7 +184,8 @@ export function NewProposalForm({
 
       <button
         type="submit"
-        className="rounded-md bg-duty-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+        className="rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+        style={{ backgroundColor: selectedColor }}
       >
         Post proposal
       </button>

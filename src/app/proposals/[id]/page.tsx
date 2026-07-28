@@ -4,7 +4,6 @@ import {
   addPowerTreeNode,
   addProposalTags,
   advanceVersion,
-  editComment,
   flagUnresolved,
   movePowerTreeNode,
   react,
@@ -14,6 +13,7 @@ import {
   updatePowerTreeNodeNote,
   updateProposalImage,
 } from "@/app/proposals/actions";
+import { CommentBody } from "@/components/comment-body";
 import { DecisionMakerField } from "@/components/decision-maker-field";
 import { EditProposalForm } from "@/components/edit-proposal-form";
 import { ResettableForm } from "@/components/resettable-form";
@@ -63,6 +63,11 @@ export default async function ProposalPage({
     .slice()
     .sort((a: any, b: any) => b.version_number - a.version_number);
   const currentVersion = versions[0];
+  // Every action button on this page now uses the proposal's own
+  // category color instead of a flat brand purple, so the whole page
+  // feels tied to that category — falls back to the brand purple only
+  // if a proposal somehow has no category color set.
+  const categoryColor = proposal.categories?.color ?? "#6C3FD1";
 
   const { data: ownerProfile } = await supabase
     .from("profiles")
@@ -190,11 +195,27 @@ export default async function ProposalPage({
             </span>
           )}
         </div>
-        <p className="mt-1 text-sm">{c.body}</p>
-        {c.is_suggested_edit && (
-          <p className="mt-2 whitespace-pre-wrap rounded bg-neutral-50 p-2 text-sm text-neutral-700">
-            {c.suggested_body}
-          </p>
+        {/* Own, still-editable comment gets a client component that
+            swaps its display text for the edit form in place, instead
+            of showing the edit box as a separate duplicate underneath
+            (per your drawing — that read as confusingly redundant).
+            Everyone else just sees the plain static text as before. */}
+        {user?.id === c.author_id && c.id === latestCommentId ? (
+          <CommentBody
+            key={c.body}
+            comment={c}
+            proposalId={proposal.id}
+            categoryColor={categoryColor}
+          />
+        ) : (
+          <>
+            <p className="mt-1 text-sm">{c.body}</p>
+            {c.is_suggested_edit && (
+              <p className="mt-2 whitespace-pre-wrap rounded bg-neutral-50 p-2 text-sm text-neutral-700">
+                {c.suggested_body}
+              </p>
+            )}
+          </>
         )}
         {c.status_note && (
           <p className="mt-1 text-xs italic text-neutral-500">
@@ -304,7 +325,10 @@ export default async function ProposalPage({
                   placeholder="Optional note (e.g. the contingency)"
                   className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
                 />
-                <button className="shrink-0 rounded bg-duty-purple px-2 py-1 text-xs text-white">
+                <button
+                  className="shrink-0 rounded px-2 py-1 text-xs text-white"
+                  style={{ backgroundColor: categoryColor }}
+                >
                   {c.status === "open" ? "Resolve" : "Change decision"}
                 </button>
               </div>
@@ -322,34 +346,6 @@ export default async function ProposalPage({
           </form>
         )}
 
-        {user?.id === c.author_id && c.id === latestCommentId && (
-          <details className="mt-2">
-            <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
-              ✎ Edit your comment
-            </summary>
-            <form action={editComment} className="mt-2 space-y-2">
-              <input type="hidden" name="comment_id" value={c.id} />
-              <input type="hidden" name="proposal_id" value={proposal.id} />
-              <textarea
-                name="body"
-                defaultValue={c.body}
-                rows={2}
-                className="input text-sm"
-              />
-              {c.is_suggested_edit && (
-                <textarea
-                  name="suggested_body"
-                  defaultValue={c.suggested_body ?? ""}
-                  rows={3}
-                  className="input font-mono text-xs"
-                />
-              )}
-              <button className="rounded bg-duty-purple px-2 py-1 text-xs text-white">
-                Save edit
-              </button>
-            </form>
-          </details>
-        )}
 
         {!isReply && user && (
           <details className="mt-2">
@@ -371,7 +367,10 @@ export default async function ProposalPage({
                 placeholder="Write a reply..."
                 className="input text-sm"
               />
-              <button className="rounded bg-duty-purple px-2 py-1 text-xs text-white">
+              <button
+                className="rounded px-2 py-1 text-xs text-white"
+                style={{ backgroundColor: categoryColor }}
+              >
                 Post reply
               </button>
             </ResettableForm>
@@ -509,7 +508,10 @@ export default async function ProposalPage({
                       >
                         <input type="hidden" name="proposal_id" value={proposal.id} />
                         <input type="file" name="image" accept="image/*" className="text-xs" />
-                        <button className="rounded bg-duty-purple px-3 py-1 text-xs text-white">
+                        <button
+                          className="rounded px-3 py-1 text-xs text-white"
+                          style={{ backgroundColor: categoryColor }}
+                        >
                           Upload
                         </button>
                       </form>
@@ -531,6 +533,7 @@ export default async function ProposalPage({
                       <EditProposalForm
                         proposalId={proposal.id}
                         categories={allCategories ?? []}
+                        categoryColor={categoryColor}
                         initial={{
                           title: proposal.title,
                           type: proposal.type,
@@ -560,7 +563,11 @@ export default async function ProposalPage({
                     — otherwise it kept showing whatever version was
                     selected before the publish, which read as if the new
                     version hadn't shown up. */}
-                <VersionCarousel key={versions.length} versions={versions} />
+                <VersionCarousel
+                  key={versions.length}
+                  versions={versions}
+                  categoryColor={categoryColor}
+                />
               </div>
 
               {/* Escalation flag buttons ("ready to bring to officials" /
@@ -621,7 +628,10 @@ export default async function ProposalPage({
                         placeholder="What changed and why?"
                         className="input"
                       />
-                      <button className="rounded-md bg-duty-purple px-3 py-1.5 text-sm text-white">
+                      <button
+                        className="rounded-md px-3 py-1.5 text-sm text-white"
+                        style={{ backgroundColor: categoryColor }}
+                      >
                         Publish new version
                       </button>
                     </form>
@@ -641,31 +651,34 @@ export default async function ProposalPage({
               <div className="flex items-center gap-1 text-xs">
                 <a
                   href="?sort=oldest"
-                  className={`rounded-full px-2 py-1 ${
+                  className="rounded-full px-2 py-1"
+                  style={
                     sortMode === "oldest"
-                      ? "bg-duty-purple text-white"
-                      : "text-neutral-500 hover:bg-neutral-100"
-                  }`}
+                      ? { backgroundColor: categoryColor, color: "white" }
+                      : undefined
+                  }
                 >
                   Oldest
                 </a>
                 <a
                   href="?sort=new"
-                  className={`rounded-full px-2 py-1 ${
+                  className="rounded-full px-2 py-1"
+                  style={
                     sortMode === "new"
-                      ? "bg-duty-purple text-white"
-                      : "text-neutral-500 hover:bg-neutral-100"
-                  }`}
+                      ? { backgroundColor: categoryColor, color: "white" }
+                      : undefined
+                  }
                 >
                   Newest
                 </a>
                 <a
                   href="?sort=top"
-                  className={`rounded-full px-2 py-1 ${
+                  className="rounded-full px-2 py-1"
+                  style={
                     sortMode === "top"
-                      ? "bg-duty-purple text-white"
-                      : "text-neutral-500 hover:bg-neutral-100"
-                  }`}
+                      ? { backgroundColor: categoryColor, color: "white" }
+                      : undefined
+                  }
                 >
                   Most active
                 </a>
@@ -719,7 +732,10 @@ export default async function ProposalPage({
                   />
                 </details>
                 <div className="flex justify-end">
-                  <button className="rounded-md bg-duty-purple px-3 py-1.5 text-sm text-white">
+                  <button
+                    className="rounded-md px-3 py-1.5 text-sm text-white"
+                    style={{ backgroundColor: categoryColor }}
+                  >
                     Post comment
                   </button>
                 </div>
@@ -796,7 +812,10 @@ export default async function ProposalPage({
                             placeholder="e.g. final sign-off"
                             className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-0.5 text-xs"
                           />
-                          <button className="shrink-0 rounded bg-duty-purple px-2 py-0.5 text-xs text-white">
+                          <button
+                            className="shrink-0 rounded px-2 py-0.5 text-xs text-white"
+                            style={{ backgroundColor: categoryColor }}
+                          >
                             Save
                           </button>
                         </form>
@@ -858,7 +877,10 @@ export default async function ProposalPage({
                   key={powerTreeNodes?.length ?? 0}
                   decisionMakers={allDecisionMakers ?? []}
                 />
-                <button className="w-full rounded bg-duty-purple px-3 py-1.5 text-sm text-white">
+                <button
+                  className="w-full rounded px-3 py-1.5 text-sm text-white"
+                  style={{ backgroundColor: categoryColor }}
+                >
                   + Add decision maker
                 </button>
               </form>
@@ -907,7 +929,10 @@ export default async function ProposalPage({
                     <form key={t.id} action={addProposalTags}>
                       <input type="hidden" name="proposal_id" value={proposal.id} />
                       <input type="hidden" name="tag_ids" value={t.id} />
-                      <button className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-duty-purple hover:text-duty-purple">
+                      <button
+                        className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-[var(--cat-color)] hover:text-[var(--cat-color)]"
+                        style={{ ["--cat-color" as string]: categoryColor } as React.CSSProperties}
+                      >
                         + {t.label}
                       </button>
                     </form>

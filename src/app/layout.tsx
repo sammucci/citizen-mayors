@@ -50,6 +50,9 @@ export default async function RootLayout({
               <span className="text-duty-purple">Mayors</span>
             </Link>
             <nav className="flex items-center gap-4 text-sm">
+              <Link href="/map" className="text-neutral-600 hover:underline">
+                Map
+              </Link>
               <Link href="/proposals/new" className="font-medium">
                 New proposal
               </Link>

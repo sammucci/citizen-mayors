@@ -15,6 +15,7 @@ export function EditProposalForm({
   proposalId,
   categories,
   initial,
+  categoryColor,
 }: {
   proposalId: string;
   categories: Category[];
@@ -26,6 +27,7 @@ export function EditProposalForm({
     geography_label: string | null;
     council_district: number | null;
   };
+  categoryColor: string;
 }) {
   const [scope, setScope] = useState(initial.geography_scope ?? "citywide");
 
@@ -122,7 +124,10 @@ export function EditProposalForm({
         </Field>
       )}
 
-      <button className="rounded-md bg-duty-purple px-3 py-1.5 text-xs font-medium text-white">
+      <button
+        className="rounded-md px-3 py-1.5 text-xs font-medium text-white"
+        style={{ backgroundColor: categoryColor }}
+      >
         Save changes
       </button>
     </form>
