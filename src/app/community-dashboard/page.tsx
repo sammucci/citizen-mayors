@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CENSUS_DISTRICT_DEMOGRAPHICS, citywideCensusStats } from "@/lib/census-district-demographics";
+import { InfoHeading } from "@/components/info-heading";
 
 export const dynamic = "force-dynamic";
 
@@ -115,7 +116,7 @@ function ComparisonRow({
           {memberPct}% here · {censusPct}% Philly
         </span>
       </div>
-      <div className="mt-1 space-y-0.5">
+      <div className="mt-1.5 space-y-1.5">
         <span className="block h-1.5 overflow-hidden rounded-full bg-neutral-100">
           <span className="block h-full rounded-full bg-duty-purple" style={{ width: `${memberPct}%` }} />
         </span>
@@ -166,10 +167,12 @@ function regroup(items: { label: string; count: number }[], remap: (label: strin
 
 function CensusComparisonSection({
   title,
+  tooltip,
   memberItems,
   censusItems,
 }: {
   title: string;
+  tooltip?: string;
   memberItems: { label: string; count: number }[];
   censusItems: { label: string; count: number }[];
 }) {
@@ -184,8 +187,14 @@ function CensusComparisonSection({
 
   return (
     <div>
-      <p className="text-xs font-semibold text-neutral-700">{title}</p>
-      <ul className="mt-2 space-y-2">
+      {tooltip ? (
+        <InfoHeading className="text-xs font-semibold text-neutral-700" tooltip={tooltip}>
+          {title}
+        </InfoHeading>
+      ) : (
+        <p className="text-xs font-semibold text-neutral-700">{title}</p>
+      )}
+      <ul className="mt-3 space-y-3">
         {labels.map((label) => (
           <ComparisonRow
             key={label}
@@ -329,7 +338,7 @@ export default async function CommunityDashboardPage({
       <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <Tile label="Proposals made" value={proposalsMade ?? 0} color={STAT_COLORS.proposals} />
         <Tile
-          label="Contributed to others'"
+          label="Contributions to others"
           value={contributedToOthers}
           color={STAT_COLORS.contributed}
         />
@@ -355,23 +364,17 @@ export default async function CommunityDashboardPage({
 
       <div className="mt-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="group relative inline-flex items-center gap-1.5 text-lg font-semibold">
-            Who's showing up
-            <span
-              tabIndex={0}
-              className="flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full border border-neutral-300 text-[11px] font-normal leading-none text-neutral-500 hover:border-neutral-500"
-              aria-label="What this section means"
-            >
-              ⓘ
-            </span>
-            <span className="pointer-events-none absolute left-0 top-full z-10 mt-1.5 hidden w-72 rounded-md border border-neutral-200 bg-white p-2.5 text-xs font-normal normal-case text-neutral-600 shadow-md group-hover:block group-focus-within:block">
-              Self-reported, optional demographics — never required, never geocoded from an
-              address.{" "}
-              {selectedDistrict
+          <InfoHeading
+            as="h2"
+            className="text-lg font-semibold"
+            tooltip={`Self-reported, optional demographics — never required, never geocoded from an address. ${
+              selectedDistrict
                 ? `Showing the ${districtProfiles.length} member${districtProfiles.length === 1 ? "" : "s"} who put themselves in District ${selectedDistrict}.`
-                : `Showing all ${totalMembers} registered members.`}
-            </span>
-          </h2>
+                : `Showing all ${totalMembers} registered members.`
+            }`}
+          >
+            Who's showing up
+          </InfoHeading>
           <div className="flex flex-wrap gap-1.5">
             <Link
               href="/community-dashboard"
@@ -426,12 +429,12 @@ export default async function CommunityDashboardPage({
         </div>
 
         <div className="mt-5">
-          <p className="text-xs font-semibold text-neutral-700">Volunteer hours by category</p>
-          <p className="text-[11px] text-neutral-400">
-            Ranked by group (citywide, not affected by the district filter above) — individual
-            tags people pick from in "Add a log" roll up to whichever group Samantha's assigned
-            them to on the admin page; anything not yet assigned shows as "Ungrouped."
-          </p>
+          <InfoHeading
+            className="text-xs font-semibold text-neutral-700"
+            tooltip={`Ranked by group (citywide, not affected by the district filter above) — individual tags people pick from in "Add a log" roll up to whichever group they've been assigned to on the admin page; anything not yet assigned shows as "Ungrouped."`}
+          >
+            Volunteer hours by category
+          </InfoHeading>
           <HoursByCategory
             rows={logs.filter((l: any) => l.log_type === "volunteer_hours")}
             categoryToGroup={categoryToGroup}
@@ -448,25 +451,26 @@ export default async function CommunityDashboardPage({
             tenure can measure). Age isn't included yet — same data
             source, just needs one more processing pass. */}
         <div className="mt-5 rounded-md border border-neutral-200 bg-white p-4">
-          <p className="text-sm font-semibold text-neutral-800">
+          <InfoHeading
+            className="text-sm font-semibold text-neutral-800"
+            tooltip={`Real 2022 Census (ACS5) data by council district, not an estimate. ${
+              selectedDistrict ? `Comparing District ${selectedDistrict} only.` : "Citywide comparison."
+            } Race/ethnicity and gender categories don't map 1:1 to the options above — see each column's own info icon for specifics. Age isn't in this comparison yet.`}
+          >
             How this compares to Philadelphia's real population
-          </p>
-          <p className="mt-1 text-[11px] text-neutral-400">
-            Real 2022 Census (ACS5) data by council district, not an estimate.{" "}
-            {selectedDistrict ? `Comparing District ${selectedDistrict} only.` : "Citywide comparison."}{" "}
-            Race/ethnicity and gender categories don't map 1:1 to the options above — see the note
-            in the code for specifics. Age isn't in this comparison yet.
-          </p>
-          <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-3">
+          </InfoHeading>
+          <div className="mt-5 grid grid-cols-1 gap-7 sm:grid-cols-3">
             <CensusComparisonSection
               title="Race / ethnicity"
+              tooltip='ACS reports "Other" as one bucket covering American Indian/Alaska Native, Native Hawaiian/Pacific Islander, and multiracial residents, who each get their own option on the profile form — those are combined here so the two sides compare the same categories.'
               memberItems={regroup(raceBreakdown, remapRaceForComparison)}
               censusItems={
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.race : citywideCensusStats().race) ?? []
               }
             />
             <CensusComparisonSection
-              title="Gender"
+              title="Gender (vs. Census sex)"
+              tooltip={`Sex and gender aren't the same thing. The Census only collects "sex" (male/female) — it has no gender-identity category at all. "Woman"/"Man" are shown here matched against "Female"/"Male" as the closest available comparison, not a claim they mean the same thing. "Non-binary" and "Prefer to self-describe" are real answers people gave here; they show 0% on the Census side because ACS simply doesn't ask that question, not because the number is actually zero.`}
               memberItems={regroup(genderBreakdown, remapGenderForComparison)}
               censusItems={
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.gender : citywideCensusStats().gender) ?? []
@@ -474,6 +478,7 @@ export default async function CommunityDashboardPage({
             />
             <CensusComparisonSection
               title="Housing status"
+              tooltip={`ACS measures owner- vs. renter-occupied housing units, which lines up with "Homeowner"/"Renter" here. It has no way to count "Unhoused" — people without housing aren't captured by a housing-unit survey — so that option only ever shows on the "here" side.`}
               memberItems={housingBreakdown.map((i) => ({ label: i.label, count: i.count }))}
               censusItems={
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.housing : citywideCensusStats().housing) ?? []

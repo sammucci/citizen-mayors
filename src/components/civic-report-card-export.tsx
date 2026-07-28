@@ -171,7 +171,7 @@ export function CivicReportCardExport({
 
               <div className="mt-4 grid grid-cols-3 gap-2.5">
                 <ExportTile label="Proposals made" value={stats.proposalsMade} color="#6C3FD1" />
-                <ExportTile label="Contributed to others'" value={stats.contributedToOthers} color="#4069D9" />
+                <ExportTile label="Contributions to others" value={stats.contributedToOthers} color="#4069D9" />
                 <ExportTile label="Comments made" value={stats.commentsMade} color="#8358D3" />
                 <ExportTile label="People talked with" value={stats.peopleConversedWith} color="#F86767" />
                 <ExportTile label="Decision-makers engaged" value={stats.decisionMakersEngaged} color="#2E8B57" />

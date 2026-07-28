@@ -147,7 +147,7 @@ export function CivicReportCard({
           onClick={() => setDetailKey("proposalsMade")}
         />
         <StatTile
-          label="Contributed to others'"
+          label="Contributions to others"
           value={stats.contributedToOthers}
           color="#4069D9"
           onClick={() => setDetailKey("contributedToOthers")}

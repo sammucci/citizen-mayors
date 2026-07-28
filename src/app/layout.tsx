@@ -35,6 +35,7 @@ export default async function RootLayout({
   let displayName: string | null = null;
   let isAdmin = false;
   let notificationItems: Awaited<ReturnType<typeof getNotifications>>["items"] = [];
+  let pendingNotificationItems: Awaited<ReturnType<typeof getNotifications>>["pendingItems"] = [];
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -45,6 +46,7 @@ export default async function RootLayout({
     isAdmin = profile?.is_admin ?? false;
     const notifications = await getNotifications(supabase, user.id);
     notificationItems = notifications.items;
+    pendingNotificationItems = notifications.pendingItems;
   }
 
   return (
@@ -66,7 +68,9 @@ export default async function RootLayout({
               >
                 New proposal
               </Link>
-              {user && <NotificationBell items={notificationItems} />}
+              {user && (
+                <NotificationBell items={notificationItems} pendingItems={pendingNotificationItems} />
+              )}
               {user ? (
                 <UserMenu displayName={displayName ?? "there"} isAdmin={isAdmin} />
               ) : (

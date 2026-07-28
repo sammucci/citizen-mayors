@@ -191,6 +191,19 @@ export async function addVolunteerCategoryAdmin(formData: FormData): Promise<{ e
   return {};
 }
 
+// Thin wrapper around addVolunteerCategoryAdmin for the "orphaned
+// categories" recovery form on the admin page — that form is rendered
+// directly in a Server Component (no client-side error state to show),
+// so it's wired straight to a form action rather than through the
+// useState wrapper the combobox-style add form uses. Plain <form
+// action={fn}> requires the action to return void, not the
+// {error?}-shaped result addVolunteerCategoryAdmin normally returns, so
+// this just calls through and discards it — if it fails (name already
+// exists), the row simply stays in the orphaned list to try again.
+export async function addVolunteerCategoryFromOrphan(formData: FormData): Promise<void> {
+  await addVolunteerCategoryAdmin(formData);
+}
+
 // Renames a category label in place. Past civic_logs rows store the
 // category as plain text (not a foreign key from category), so a rename
 // here doesn't automatically follow through to them — this explicitly

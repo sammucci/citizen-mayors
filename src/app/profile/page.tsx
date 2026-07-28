@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CivicReportCard, type CivicLog, type CivicStats } from "@/components/civic-report-card";
 import { ProfileInfoCard } from "@/components/profile-info-card";
 import { statusColorClasses } from "@/lib/status-colors";
+import { HourglassIcon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,40 @@ export default async function ProfilePage() {
   const unresolvedContributions = (myComments ?? []).filter(
     (c: any) => c.is_suggested_edit && c.status === "open"
   );
+
+  // The other side of the same coin: open suggested edits someone ELSE
+  // left on one of YOUR proposals, still awaiting your review. This is
+  // the direct fix for a real bug report — this used to only ever
+  // surface as a one-time "new comment" notification that vanished the
+  // moment the bell was opened, even though the suggestion itself was
+  // still sitting there unresolved. It's the same persistent-status
+  // panel (not a "what's new" event) already used for the box above,
+  // just from the proposal-owner's side instead of the suggester's.
+  const myProposalIds = (myProposals ?? []).map((p: any) => p.id);
+  const { data: openSuggestionsOnMyProposalsRaw } =
+    myProposalIds.length > 0
+      ? await supabase
+          .from("comments")
+          .select("id, body, proposal_id, proposals ( title )")
+          .in("proposal_id", myProposalIds)
+          .eq("is_suggested_edit", true)
+          .eq("status", "open")
+          .neq("author_id", user.id)
+      : { data: [] as any[] };
+
+  const pendingReviewByProposal = new Map<string, { title: string; count: number }>();
+  for (const c of (openSuggestionsOnMyProposalsRaw ?? []) as any[]) {
+    const existing = pendingReviewByProposal.get(c.proposal_id);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      pendingReviewByProposal.set(c.proposal_id, {
+        title: c.proposals?.title ?? "A proposal",
+        count: 1,
+      });
+    }
+  }
+  const pendingReviewOnMyProposals = [...pendingReviewByProposal.entries()];
 
   // --- Civic report card: platform-engagement half is all computed
   // live from tables that already exist ("compute, don't duplicate" —
@@ -211,12 +246,33 @@ export default async function ProfilePage() {
         <p className="mt-1 text-sm text-neutral-600">{user.email}</p>
       </div>
 
+      {pendingReviewOnMyProposals.length > 0 && (
+        <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-amber-900">
+            <HourglassIcon className="h-4 w-4 shrink-0" />
+            {pendingReviewOnMyProposals.reduce((sum, [, v]) => sum + v.count, 0)} suggested edit
+            {pendingReviewOnMyProposals.reduce((sum, [, v]) => sum + v.count, 0) === 1 ? "" : "s"} on your
+            proposals still awaiting your review
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {pendingReviewOnMyProposals.map(([proposalId, v]) => (
+              <li key={proposalId}>
+                <Link href={`/proposals/${proposalId}`} className="text-xs text-amber-800 underline">
+                  {v.title} {v.count > 1 ? `(${v.count})` : ""}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {unresolvedContributions.length > 0 && (
         <div className="space-y-2 rounded-lg border border-duty-purple/30 bg-duty-purple/5 p-3">
           {unresolvedContributions.length > 0 && (
             <div>
-              <p className="text-sm font-medium text-neutral-800">
-                ⏳ {unresolvedContributions.length} of your suggested edit
+              <p className="flex items-center gap-1.5 text-sm font-medium text-neutral-800">
+                <HourglassIcon className="h-4 w-4 shrink-0 text-duty-purple" />
+                {unresolvedContributions.length} of your suggested edit
                 {unresolvedContributions.length === 1 ? "" : "s"} still awaiting a response
               </p>
               <ul className="mt-1 space-y-0.5">

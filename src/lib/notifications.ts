@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 
+export type NotificationIcon = "comment" | "link" | "approved" | "pending";
+
 export type NotificationItem = {
   id: string;
-  icon: string;
+  icon: NotificationIcon;
   text: string;
   href: string;
 };
@@ -17,10 +19,21 @@ export type NotificationItem = {
 // in app/actions.ts, called separately when the bell dropdown opens, so
 // the same "what's new" list can be computed anywhere (bell, profile)
 // without accidentally clearing itself on every render.
+//
+// `items` is the time-gated "what's new since you last looked" list —
+// opening the bell marks it seen and it empties out. `pendingItems` is
+// a DIFFERERENT kind of thing: an ongoing status ("this still needs
+// you"), not an event, so it does NOT clear when the bell is opened —
+// it only goes away when the underlying thing is actually resolved.
+// This exists because of a real bug report: an open suggested edit on
+// one of your own proposals wasn't showing as unresolved anywhere —
+// the old version of this only ever showed "new comment" once, and
+// then it vanished from the bell forever the moment you opened it,
+// even though the suggestion itself was still sitting there unaddressed.
 export async function getNotifications(
   supabase: ReturnType<typeof createClient>,
   userId: string
-): Promise<{ items: NotificationItem[]; lastSeenAt: string }> {
+): Promise<{ items: NotificationItem[]; pendingItems: NotificationItem[]; lastSeenAt: string }> {
   const { data: profile } = await supabase
     .from("profiles")
     .select("notifications_seen_at")
@@ -40,6 +53,7 @@ export async function getNotifications(
     { data: newRepliesToMe },
     { data: newLinksOnMyProposals },
     { data: myApprovedLinks },
+    { data: openSuggestionsOnMyProposals },
   ] = await Promise.all([
     myProposalIds.length > 0
       ? supabase
@@ -71,6 +85,19 @@ export async function getNotifications(
       .eq("submitted_by", userId)
       .eq("status", "approved")
       .gt("updated_at", lastSeenAt),
+    // Persistent, not time-gated: any suggested edit someone else left
+    // on one of your proposals that's still open. Deliberately not
+    // filtered by lastSeenAt — this should keep showing up until you
+    // actually resolve it, not just until you happen to open the bell.
+    myProposalIds.length > 0
+      ? supabase
+          .from("comments")
+          .select("id, proposal_id, proposals ( title )")
+          .in("proposal_id", myProposalIds)
+          .eq("is_suggested_edit", true)
+          .eq("status", "open")
+          .neq("author_id", userId)
+      : Promise.resolve({ data: [] as any[] }),
   ]);
 
   const newCommentsById = new Map<string, { title: string; proposalId: string }>();
@@ -83,7 +110,7 @@ export async function getNotifications(
   for (const [id, v] of newCommentsById.entries()) {
     items.push({
       id: `comment-${id}`,
-      icon: "\u{1F4AC}",
+      icon: "comment",
       text: `New comment on "${v.title}"`,
       href: `/proposals/${v.proposalId}`,
     });
@@ -92,7 +119,7 @@ export async function getNotifications(
   for (const n of (newLinksOnMyProposals ?? []) as any[]) {
     items.push({
       id: `link-${n.id}`,
-      icon: "\u{1F517}",
+      icon: "link",
       text: `${n.decision_makers?.name ?? "Someone"} was added to the decision chain on "${n.proposals?.title ?? "a proposal"}"`,
       href: `/proposals/${n.proposal_id}`,
     });
@@ -105,11 +132,36 @@ export async function getNotifications(
     if (n.proposals?.owner_id === userId) continue;
     items.push({
       id: `approved-${n.id}`,
-      icon: "✅",
+      icon: "approved",
       text: `Your suggestion to add ${n.decision_makers?.name ?? "a decision-maker"} to "${n.proposals?.title ?? "a proposal"}" was approved`,
       href: `/proposals/${n.proposal_id}`,
     });
   }
 
-  return { items, lastSeenAt };
+  const pendingItems: NotificationItem[] = [];
+  const openSuggestionsByProposal = new Map<string, { title: string; count: number }>();
+  for (const c of (openSuggestionsOnMyProposals ?? []) as any[]) {
+    const existing = openSuggestionsByProposal.get(c.proposal_id);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      openSuggestionsByProposal.set(c.proposal_id, {
+        title: c.proposals?.title ?? "A proposal",
+        count: 1,
+      });
+    }
+  }
+  for (const [proposalId, v] of openSuggestionsByProposal.entries()) {
+    pendingItems.push({
+      id: `pending-suggestion-${proposalId}`,
+      icon: "pending",
+      text:
+        v.count === 1
+          ? `1 suggested edit still awaiting your review on "${v.title}"`
+          : `${v.count} suggested edits still awaiting your review on "${v.title}"`,
+      href: `/proposals/${proposalId}`,
+    });
+  }
+
+  return { items, pendingItems, lastSeenAt };
 }
