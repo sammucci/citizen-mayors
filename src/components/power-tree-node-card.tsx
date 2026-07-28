@@ -94,12 +94,12 @@ export function PowerTreeNodeCard({
   return (
     <>
       <li
-        className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
-        style={isFinal ? { borderColor: categoryColor } : undefined}
+        className="overflow-hidden rounded-lg border bg-white"
+        style={{ borderColor: isFinal ? categoryColor : `${categoryColor}55` }}
       >
         <div
           className="flex items-start justify-between gap-2 p-3"
-          style={isFinal ? { backgroundColor: categoryColor } : { backgroundColor: "#fafafa" }}
+          style={{ backgroundColor: isFinal ? categoryColor : `${categoryColor}1a` }}
         >
           <div className="flex min-w-0 items-start gap-2">
             {isOwner && (
@@ -119,21 +119,29 @@ export function PowerTreeNodeCard({
               className="min-w-0 text-left"
               title="View notes and civic dialogue"
             >
+              {isFinal && (
+                <span
+                  className="mb-0.5 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                  style={{ color: finalTextColor }}
+                >
+                  🏁 Final decision-maker
+                </span>
+              )}
               <span
                 className="block truncate text-base font-semibold"
                 style={isFinal ? { color: finalTextColor } : undefined}
               >
-                {isFinal ? "🏁 " : ""}
                 {node.name}
               </span>
               <span
                 className="block text-xs"
-                style={isFinal ? { color: finalTextColor, opacity: 0.8 } : undefined}
+                style={isFinal ? { color: finalTextColor, opacity: 0.8 } : { color: "#737373" }}
               >
                 {node.subtitle}
-                {isFinal ? " · Final decision-maker" : ""}
                 {node.updates.length > 0
-                  ? ` · ${node.updates.length} note${node.updates.length === 1 ? "" : "s"}`
+                  ? `${node.subtitle ? " · " : ""}${node.updates.length} note${
+                      node.updates.length === 1 ? "" : "s"
+                    }`
                   : ""}
               </span>
             </button>
@@ -171,14 +179,21 @@ export function PowerTreeNodeCard({
           >
             <div
               className="flex shrink-0 items-start justify-between gap-2 p-4"
-              style={isFinal ? { backgroundColor: categoryColor } : { backgroundColor: "#fafafa" }}
+              style={{ backgroundColor: isFinal ? categoryColor : `${categoryColor}1a` }}
             >
               <div className="min-w-0">
+                {isFinal && (
+                  <span
+                    className="mb-1 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                    style={{ color: finalTextColor }}
+                  >
+                    🏁 Final decision-maker
+                  </span>
+                )}
                 <h3
                   className="truncate text-lg font-semibold"
                   style={isFinal ? { color: finalTextColor } : undefined}
                 >
-                  {isFinal ? "🏁 " : ""}
                   {node.name}
                 </h3>
                 <p
@@ -186,7 +201,6 @@ export function PowerTreeNodeCard({
                   style={isFinal ? { color: finalTextColor, opacity: 0.8 } : { color: "#737373" }}
                 >
                   {node.subtitle}
-                  {isFinal ? " · Final decision-maker" : ""}
                 </p>
               </div>
               <button
