@@ -3,7 +3,7 @@ import { Roboto } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
-import { signOut } from "@/app/actions";
+import { UserMenu } from "@/components/user-menu";
 
 // Was falling back to the browser's default sans-serif (Arial-ish on a
 // lot of systems) since nothing set a font. Roboto, loaded via
@@ -52,25 +52,14 @@ export default async function RootLayout({
               <span className="text-duty-purple">Mayors</span>
             </Link>
             <nav className="flex items-center gap-4 text-sm">
-              <Link href="/proposals/new" className="font-medium">
-                New proposal
+              <Link
+                href="/proposals/new"
+                className="rounded-full bg-duty-purple px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+              >
+                🏛️ New proposal
               </Link>
               {user ? (
-                <div className="flex items-center gap-3">
-                  {isAdmin && (
-                    <Link href="/admin" className="text-neutral-600 hover:underline">
-                      Admin
-                    </Link>
-                  )}
-                  <Link href="/profile" className="text-neutral-600 hover:underline">
-                    Hello, {displayName}
-                  </Link>
-                  <form action={signOut}>
-                    <button type="submit" className="font-medium underline">
-                      Sign out
-                    </button>
-                  </form>
-                </div>
+                <UserMenu displayName={displayName ?? "there"} isAdmin={isAdmin} />
               ) : (
                 <Link href="/login">Sign in</Link>
               )}

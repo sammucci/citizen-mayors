@@ -168,6 +168,15 @@ export function PowerTreeChain({
             draggable={isOwner}
             onDragStart={() => setDragId(node.id)}
             onDragEnd={() => setDragId(null)}
+            // The only real drop targets used to be the thin "+" gap
+            // strips between cards — dropping anywhere on a card itself
+            // (which is what you'd naturally try) did nothing, so
+            // dragging looked broken even though it was technically
+            // wired up. Dropping directly on a card now behaves the
+            // same as dropping the gap right above it: insert here,
+            // shifting this card (and the rest below it) down one.
+            onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
+            onDrop={isOwner ? () => handleDropAtDisplayIndex(i) : undefined}
           >
             <PowerTreeNodeCard
               proposalId={proposalId}

@@ -94,6 +94,17 @@ export default async function HomePage({
         else&apos;s.
       </p>
 
+      {/* The real, prominent call to action — the header's "New
+          proposal" pill is there for when you're on some other page,
+          but this is the front-and-center version for the dashboard
+          itself, per your ask ("fun, not just a menu item"). */}
+      <Link
+        href="/proposals/new"
+        className="mt-5 inline-flex items-center gap-2 rounded-full bg-duty-purple px-6 py-3 text-base font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:opacity-90"
+      >
+        🏛️ Submit your proposal
+      </Link>
+
       <div className="mt-6">
         <ProposalFilters categories={categories ?? []} tags={tags ?? []} />
         <p className="mt-1 text-xs text-neutral-400">
@@ -108,12 +119,20 @@ export default async function HomePage({
             runtime for this to-one relationship — same mismatch handled
             with `any` elsewhere in this codebase. */}
         <PhillyMap proposals={onMap as any} />
-        <p className="mt-1.5 text-xs text-neutral-400">
-          Pins sit at the middle of each council district for now, not an
-          exact address — proposals located by neighborhood, zip, address,
-          or citywide don&apos;t have map coordinates yet and only show up
-          in the list below.
-        </p>
+        {/* Was a thin grey caption line, easy to miss — this is the
+            actual thing worth knowing at a glance: how much of what's
+            below is actually on the map. */}
+        <div className="mt-2 flex items-start gap-2 rounded-md border border-neutral-200 bg-cream/60 px-3 py-2 text-xs text-neutral-700">
+          <span aria-hidden="true">📍</span>
+          <p>
+            Showing {onMap.length} of {filteredProposals.length} proposal
+            {filteredProposals.length === 1 ? "" : "s"} on the map. Pins sit
+            at the middle of each council district for now, not an exact
+            address — the rest ({filteredProposals.length - onMap.length}{" "}
+            located by neighborhood, zip, address, or citywide) don&apos;t
+            have map coordinates yet and only show up in the list below.
+          </p>
+        </div>
       </div>
 
       <ul className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
