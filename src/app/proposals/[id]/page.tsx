@@ -160,55 +160,62 @@ export default async function ProposalPage({
                   <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
                     {proposal.type} by {ownerProfile?.display_name ?? "a resident"}
                   </span>
-                  <div className="flex items-center gap-2">
-                  <form action={react}>
-                    <input type="hidden" name="proposal_id" value={proposal.id} />
-                    <input type="hidden" name="value" value="1" />
-                    <button
-                      aria-label="Upvote"
-                      className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
-                        myVote === 1
-                          ? "bg-green-600"
-                          : "bg-green-100 hover:bg-green-200"
-                      }`}
-                    >
-                      {/* CSS trick: emoji render with their own built-in
-                          color (thumbs-up is yellow by default) — this
-                          forces it to solid white always, in both the
-                          voted and unvoted state, so no yellow ever shows
-                          up. The colored circle (green/red) is what
-                          signals voted vs. not, so the icon itself stays
-                          one consistent white regardless. */}
-                      <span
-                        className="inline-block"
-                        style={{ filter: "brightness(0) invert(1)" }}
-                      >
-                        👍
-                      </span>
-                    </button>
-                  </form>
-                  <form action={react}>
-                    <input type="hidden" name="proposal_id" value={proposal.id} />
-                    <input type="hidden" name="value" value="-1" />
-                    <button
-                      aria-label="Downvote"
-                      className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
-                        myVote === -1
-                          ? "bg-duty-red"
-                          : "bg-red-100 hover:bg-red-200"
-                      }`}
-                    >
-                      <span
-                        className="inline-block"
-                        style={{ filter: "brightness(0) invert(1)" }}
-                      >
-                        👎
-                      </span>
-                    </button>
-                  </form>
-                  <span className="text-sm font-medium">
-                    {score >= 0 ? `+${score}` : score} net support
-                  </span>
+                  {/* Stacked back to buttons-on-top, count-below (how
+                      this looked before, and how it's drawn in your
+                      mockup) — a v22 restructure accidentally flattened
+                      this into one horizontal row. */}
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center gap-2">
+                      <form action={react}>
+                        <input type="hidden" name="proposal_id" value={proposal.id} />
+                        <input type="hidden" name="value" value="1" />
+                        <button
+                          aria-label="Upvote"
+                          className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
+                            myVote === 1
+                              ? "bg-green-600"
+                              : "bg-green-100 hover:bg-green-200"
+                          }`}
+                        >
+                          {/* CSS trick: emoji render with their own
+                              built-in color (thumbs-up is yellow by
+                              default) — this forces it to solid white
+                              always, in both the voted and unvoted
+                              state, so no yellow ever shows up. The
+                              colored circle (green/red) is what signals
+                              voted vs. not, so the icon itself stays one
+                              consistent white regardless. */}
+                          <span
+                            className="inline-block"
+                            style={{ filter: "brightness(0) invert(1)" }}
+                          >
+                            👍
+                          </span>
+                        </button>
+                      </form>
+                      <form action={react}>
+                        <input type="hidden" name="proposal_id" value={proposal.id} />
+                        <input type="hidden" name="value" value="-1" />
+                        <button
+                          aria-label="Downvote"
+                          className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
+                            myVote === -1
+                              ? "bg-duty-red"
+                              : "bg-red-100 hover:bg-red-200"
+                          }`}
+                        >
+                          <span
+                            className="inline-block"
+                            style={{ filter: "brightness(0) invert(1)" }}
+                          >
+                            👎
+                          </span>
+                        </button>
+                      </form>
+                    </div>
+                    <span className="text-xs font-medium text-neutral-600">
+                      {score >= 0 ? `+${score}` : score} net support
+                    </span>
                   </div>
                 </div>
 
@@ -325,7 +332,11 @@ export default async function ProposalPage({
                     <p className="text-xs text-neutral-600">
                       Starts pre-filled with the current version's text —
                       edit what you need to, or select all and delete it to
-                      start from scratch.
+                      start from scratch. Start a line with{" "}
+                      <code className="rounded bg-white px-1">#</code> for a
+                      heading, or{" "}
+                      <code className="rounded bg-white px-1">##</code> for a
+                      smaller one.
                     </p>
                     <form action={advanceVersion} className="mt-3 space-y-3">
                       <input type="hidden" name="proposal_id" value={proposal.id} />

@@ -133,6 +133,11 @@ export function NewProposalForm({
           className="input font-mono text-sm"
           placeholder="Write it the way you'd want it to read as real ordinance or project language..."
         />
+        <p className="mt-1 text-xs text-neutral-500">
+          Start a line with <code className="rounded bg-neutral-100 px-1">#</code>{" "}
+          for a heading, or <code className="rounded bg-neutral-100 px-1">##</code>{" "}
+          for a smaller one.
+        </p>
       </Field>
 
       <Field label="Cover image (optional)">

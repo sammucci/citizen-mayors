@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { renderMarkdownLite } from "@/lib/markdown-lite";
 
 type Version = {
   id: string;
@@ -33,7 +34,7 @@ export function VersionCarousel({ versions }: { versions: Version[] }) {
 
   return (
     <>
-      <p className="whitespace-pre-wrap text-sm">{v.body}</p>
+      {renderMarkdownLite(v.body)}
 
       {index !== currentIndex && v.change_note && (
         <p className="mt-3 text-xs italic text-neutral-500">

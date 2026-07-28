@@ -95,14 +95,17 @@ export default async function HomePage({
               key={p.id}
               className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white"
             >
-              {p.image_url ? (
+              {/* The color strip now always shows, image or not — it was
+                  getting replaced entirely by the cover image before,
+                  which meant cards with an image lost their category
+                  color cue at a glance. */}
+              <div
+                className="h-2"
+                style={{ backgroundColor: p.categories?.color ?? "#e5e5e5" }}
+              />
+              {p.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.image_url} alt="" className="h-36 w-full object-cover" />
-              ) : (
-                <div
-                  className="h-2"
-                  style={{ backgroundColor: p.categories?.color ?? "#e5e5e5" }}
-                />
               )}
               <div className="flex flex-1 flex-col p-4">
                 <div className="flex flex-wrap items-center gap-2">
