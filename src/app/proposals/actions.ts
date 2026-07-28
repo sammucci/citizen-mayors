@@ -632,15 +632,28 @@ function toTitleCase(name: string): string {
 // with the edge cases of fractional ordering or shifting a partial
 // range — just rewrite the whole list's positions every time. Fine for
 // how many decision-makers a proposal's chain realistically has.
+// Errors here used to be silently dropped — a real RLS policy gap once
+// made every one of these updates fail for a non-owner's suggestion
+// (the insert succeeded, so nothing looked broken at a glance, but the
+// new node never actually moved to its intended spot). Logging any
+// failure now so a future permissions gap like that shows up in the
+// server logs instead of just looking like a mysterious position bug.
 async function reindexPowerTreeNodes(
   supabase: ReturnType<typeof createClient>,
   orderedIds: string[]
 ) {
-  await Promise.all(
+  const results = await Promise.all(
     orderedIds.map((id, index) =>
       supabase.from("proposal_power_tree_nodes").update({ sort_order: index }).eq("id", id)
     )
   );
+  const failed = results.filter((r) => r.error);
+  if (failed.length > 0) {
+    console.error(
+      "reindexPowerTreeNodes: one or more sort_order updates failed",
+      failed.map((r) => r.error?.message)
+    );
+  }
 }
 
 // Adds a decision-maker to this proposal's power tree, at a specific

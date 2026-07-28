@@ -169,6 +169,29 @@ export function PowerTreeNodeCard({
                 </div>
                 {isOwner && (
                   <div className="flex shrink-0 items-center gap-1">
+                    {/* A full "Approve" text button here is what crowded
+                        the pill in the first place — but cutting it
+                        entirely (requiring the modal to approve) turned
+                        out to be real friction of its own. A small
+                        checkmark icon, the same size/shape as the ✕,
+                        gets one-click approve back without the crowding. */}
+                    {isPending && (
+                      <form
+                        action={async (formData) => {
+                          await approvePowerTreeNode(formData);
+                          router.refresh();
+                        }}
+                      >
+                        <input type="hidden" name="proposal_id" value={proposalId} />
+                        <input type="hidden" name="node_id" value={node.id} />
+                        <button
+                          className="rounded-full border border-neutral-300 px-1.5 text-xs text-neutral-500 hover:border-green-600 hover:text-green-600"
+                          title="Approve this suggestion"
+                        >
+                          ✓
+                        </button>
+                      </form>
+                    )}
                     <button
                       type="button"
                       onClick={() => setConfirmingRemove(true)}
@@ -189,11 +212,10 @@ export function PowerTreeNodeCard({
                   </div>
                 )}
               </div>
-              {/* Approving now only lives in the modal, where there's
-                  actual room for it — it used to sit right next to the
-                  "Pending approval" pill in this tight header row, which
-                  crowded the pill and made it wrap. Click the card to
-                  open the modal and approve from there. */}
+              {/* Approving is also available right in the modal (click
+                  the card to open it) for anyone who wants the full
+                  context — the note log, who suggested it — before
+                  deciding. */}
               <button
                 type="button"
                 onClick={() => setModalOpen(true)}

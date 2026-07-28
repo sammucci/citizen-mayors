@@ -390,8 +390,23 @@ create policy "authenticated contribute to power tree" on public.proposal_power_
   with check (auth.role() = 'authenticated');
 create policy "owner edits own power tree" on public.proposal_power_tree_nodes for delete
   using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
-create policy "owner reorders own power tree" on public.proposal_power_tree_nodes for update
-  using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
+-- Every insert (including a non-owner's suggestion) is immediately
+-- followed by a full reindex — every node's sort_order gets rewritten
+-- to match its new array position, so the new entry lands exactly
+-- where it was inserted. That reindex is a batch of UPDATEs. When this
+-- policy was owner-only, a non-owner's suggestion could INSERT fine
+-- but every one of those follow-up UPDATEs was silently rejected by
+-- RLS (the app never checked for the error) — so the new node kept its
+-- placeholder sort_order (always the highest value that exists),
+-- which is why it always rendered at the very top of the chain no
+-- matter which "+" was used, and stayed there even after approval
+-- (approving never touches sort_order). Opened to any authenticated
+-- user, matching the insert policy — the actions that actually need
+-- owner-only enforcement (drag-reorder, approve) already check
+-- ownership themselves in the server action, before ever touching the
+-- database.
+create policy "authenticated reindex power tree" on public.proposal_power_tree_nodes for update
+  using (auth.role() = 'authenticated');
 
 create policy "authenticated add power_tree_node_updates" on public.power_tree_node_updates for insert
   with check (auth.uid() = author_id);
