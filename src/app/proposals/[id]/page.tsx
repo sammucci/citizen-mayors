@@ -11,6 +11,7 @@ import {
   removePowerTreeNode,
   removeProposalTag,
   resolveComment,
+  suggestTag,
   updateProposalImage,
 } from "@/app/proposals/actions";
 import { CommentBody } from "@/components/comment-body";
@@ -171,6 +172,15 @@ export default async function ProposalPage({
     (proposal.proposal_tags ?? []).map((pt: any) => pt.tag_id)
   );
   const availableTags = (allTags ?? []).filter((t) => !appliedTagIds.has(t.id));
+
+  // Shown as muted "pending review" chips so people can see a tag's
+  // already been requested instead of suggesting the same one twice.
+  const { data: pendingTagSuggestions } = await supabase
+    .from("tag_suggestions")
+    .select("id, label")
+    .eq("proposal_id", proposal.id)
+    .eq("status", "pending")
+    .order("created_at");
 
   const { data: allCategories } = await supabase
     .from("categories")
@@ -907,6 +917,15 @@ export default async function ProposalPage({
               {(!proposal.proposal_tags || proposal.proposal_tags.length === 0) && (
                 <p className="text-xs text-neutral-500">No tags on this one.</p>
               )}
+              {pendingTagSuggestions?.map((s) => (
+                <span
+                  key={s.id}
+                  className="rounded-full border border-dashed border-neutral-300 px-3 py-1 text-xs text-neutral-500"
+                  title="Suggested, waiting on review"
+                >
+                  {s.label} (pending review)
+                </span>
+              ))}
             </div>
 
             {isOwner && availableTags.length > 0 && (
@@ -926,6 +945,27 @@ export default async function ProposalPage({
                     </form>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Open to anyone signed in, not just the owner — unlike
+                "Add a tag" above, this doesn't touch the real tags list.
+                It just logs a request an admin reviews. */}
+            {user && (
+              <div className="mt-3 border-t border-neutral-100 pt-3">
+                <p className="text-xs text-neutral-500">Don't see the right tag?</p>
+                <form action={suggestTag} className="mt-2 flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="proposal_id" value={proposal.id} />
+                  <input
+                    name="label"
+                    required
+                    placeholder="Suggest a new tag..."
+                    className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+                  />
+                  <button className="shrink-0 rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50">
+                    Suggest
+                  </button>
+                </form>
               </div>
             )}
           </div>

@@ -31,13 +31,15 @@ export default async function RootLayout({
   } = await supabase.auth.getUser();
 
   let displayName: string | null = null;
+  let isAdmin = false;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("display_name")
+      .select("display_name, is_admin")
       .eq("id", user.id)
       .maybeSingle();
     displayName = profile?.display_name ?? user.email ?? null;
+    isAdmin = profile?.is_admin ?? false;
   }
 
   return (
@@ -58,6 +60,14 @@ export default async function RootLayout({
               </Link>
               {user ? (
                 <div className="flex items-center gap-3">
+                  {isAdmin && (
+                    <Link
+                      href="/admin/tag-suggestions"
+                      className="text-neutral-600 hover:underline"
+                    >
+                      Admin
+                    </Link>
+                  )}
                   <Link href="/profile" className="text-neutral-600 hover:underline">
                     Hello, {displayName}
                   </Link>

@@ -498,6 +498,28 @@ export async function addProposalTags(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
+// Anyone signed in can suggest a brand-new tag that doesn't exist yet —
+// unlike addProposalTags (owner-only, picks from the existing list),
+// this is open to any user and doesn't touch the real tags table.
+// It just logs a pending request; an admin reviews it at
+// /admin/tag-suggestions and either creates the real tag (which also
+// attaches it to this proposal) or rejects it.
+export async function suggestTag(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return;
+
+  await supabase.from("tag_suggestions").insert({
+    proposal_id: proposalId,
+    suggested_by: user.id,
+    label,
+  });
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
 // Removes a single tag from this proposal (owner only). The tag itself
 // stays in the shared tags table — this only removes the link.
 export async function removeProposalTag(formData: FormData) {

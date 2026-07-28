@@ -17,6 +17,7 @@ create table public.profiles (
   race_ethnicity text, -- how well participation reflects Philadelphia's real
   gender text, -- population and council districts. Never required.
   accepted_guidelines_at timestamptz, -- respectful-dialogue prompt acknowledgment
+  is_admin boolean not null default false, -- gates admin-only screens, e.g. tag-suggestion review
   created_at timestamptz not null default now()
 );
 
@@ -103,6 +104,19 @@ create table public.proposal_tags (
   proposal_id uuid references public.proposals(id) on delete cascade,
   tag_id int references public.tags(id) on delete cascade,
   primary key (proposal_id, tag_id)
+);
+
+-- Anyone signed in can propose a new tag on a proposal; it sits pending
+-- until an admin approves it (creating the real row in `tags` and
+-- attaching it to this proposal) or rejects it. Same review-queue shape
+-- as the "suggested edit" flow on comments, just for tags.
+create table public.tag_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  proposal_id uuid not null references public.proposals(id) on delete cascade,
+  suggested_by uuid not null references public.profiles(id) on delete cascade,
+  label text not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default now()
 );
 
 -- Frozen snapshot each time the owner advances the canonical text.
@@ -259,6 +273,7 @@ alter table public.proposal_power_tree_nodes enable row level security;
 alter table public.comments enable row level security;
 alter table public.reactions enable row level security;
 alter table public.proposal_flags enable row level security;
+alter table public.tag_suggestions enable row level security;
 
 -- Reference data + published content: readable by anyone
 create policy "public read categories" on public.categories for select using (true);
@@ -272,6 +287,7 @@ create policy "public read comments" on public.comments for select using (true);
 create policy "public read reactions" on public.reactions for select using (true);
 create policy "public read flags" on public.proposal_flags for select using (true);
 create policy "public read zip council districts" on public.zip_council_districts for select using (true);
+create policy "public read tag_suggestions" on public.tag_suggestions for select using (true);
 
 -- Profiles: anyone can read display names; only the owner can update their own row
 create policy "public read profiles" on public.profiles for select using (true);
@@ -306,6 +322,16 @@ create policy "user removes own reaction" on public.reactions for delete
 
 create policy "authenticated create flags" on public.proposal_flags for insert
   with check (auth.uid() = user_id);
+
+create policy "authenticated create tag_suggestions" on public.tag_suggestions for insert
+  with check (auth.uid() = suggested_by);
+create policy "admin updates tag_suggestions" on public.tag_suggestions for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+-- Approving a suggestion inserts a brand-new row into the shared tags
+-- table — previously nothing but the initial seed data could do that.
+create policy "admin inserts tags" on public.tags for insert
+  with check (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
 -- Anyone signed in can add a missing decision-maker to the shared registry
 -- (crowdsourced, like the rest of the platform) — but only the proposal
