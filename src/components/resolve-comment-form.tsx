@@ -2,19 +2,20 @@
 
 import { useState } from "react";
 import { resolveComment } from "@/app/proposals/actions";
-import { statusColorClasses } from "@/lib/status-colors";
 
-// Two things fixed here. First, the colored "Resolve"/"Change decision"
+// Several things fixed here. The colored "Resolve"/"Change decision"
 // pill button read as an unnecessary extra step — swapped for plain
 // grey "Update" text, same treatment across all three options (Accept,
 // Accept with contingency, Reject) rather than auto-submitting some and
 // not others, which would've been a more surprising, less predictable
-// interaction. Second, once a decision was made, the note box kept
-// showing the just-typed contingency text even though that same text
-// was now also displayed as a permanent "Contingency:" line on the
-// comment — this collapses back to a compact status badge + a small
-// "Change decision" toggle after saving, instead of leaving the form
-// (and the now-duplicated text) sitting open.
+// interaction. Once a decision was made, the note box kept showing the
+// just-typed contingency text even though that same text was now also
+// displayed as a permanent "Contingency:" line on the comment — this
+// collapses back to just a "Change decision" toggle after saving,
+// instead of leaving the form (and the now-duplicated text) sitting
+// open. And the collapsed state used to repeat the status as a colored
+// badge here too, on top of the one that already sits next to the
+// commenter's name — dropped that repeat, just the toggle now.
 export function ResolveCommentForm({
   commentId,
   proposalId,
@@ -33,21 +34,16 @@ export function ResolveCommentForm({
 
   if (!editing) {
     return (
-      <div className="mt-2 flex items-center gap-2">
-        <span className={`rounded-full px-2 py-1 text-xs ${statusColorClasses(status)}`}>
-          {status.replace(/_/g, " ")}
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            setPendingStatus(status);
-            setEditing(true);
-          }}
-          className="text-xs text-neutral-500 underline hover:text-neutral-700"
-        >
-          Change decision
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => {
+          setPendingStatus(status);
+          setEditing(true);
+        }}
+        className="mt-2 text-xs text-neutral-500 underline hover:text-neutral-700"
+      >
+        Change decision
+      </button>
     );
   }
 

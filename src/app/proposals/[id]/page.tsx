@@ -11,15 +11,16 @@ import {
   removePowerTreeNode,
   removeProposalTag,
   suggestTag,
-  updateProposalImage,
 } from "@/app/proposals/actions";
 import { CollapsibleReplies } from "@/components/collapsible-replies";
 import { CommentBody } from "@/components/comment-body";
+import { CoverImageControl } from "@/components/cover-image-control";
 import { DecisionChainNote } from "@/components/decision-chain-note";
 import { DecisionMakerField } from "@/components/decision-maker-field";
 import { EditProposalForm } from "@/components/edit-proposal-form";
 import { ReplyToggle } from "@/components/reply-toggle";
 import { ResolveCommentForm } from "@/components/resolve-comment-form";
+import { ThreadCollapser } from "@/components/thread-collapser";
 import { ResettableForm } from "@/components/resettable-form";
 import { VersionCarousel } from "@/components/version-carousel";
 import { statusColorClasses } from "@/lib/status-colors";
@@ -112,13 +113,12 @@ export default async function ProposalPage({
     if (user && r.user_id === user.id) myCommentVotes.set(r.comment_id, r.value);
   }
 
-  // Replies (one level deep — a reply to a reply still threads under the
-  // original top-level comment rather than nesting further, to keep the
-  // UI simple) grouped by their parent, and top-level comments sorted
-  // per the ?sort= toggle. "new" and "top" are display-only — the
-  // underlying query above stays oldest-first ascending, which is what
-  // latestCommentId (right below) depends on to find the single most
-  // recent comment overall.
+  // Replies (true recursive threading — a reply can itself be replied
+  // to, as deep as a conversation needs) grouped by their parent, and
+  // top-level comments sorted per the ?sort= toggle. "new" and "top" are
+  // display-only — the underlying query above stays oldest-first
+  // ascending, which is what latestCommentId (right below) depends on to
+  // find the single most recent comment overall.
   const sortMode = searchParams?.sort === "top" || searchParams?.sort === "new"
     ? searchParams.sort
     : "oldest";
@@ -130,6 +130,17 @@ export default async function ProposalPage({
       list.push(c);
       repliesByParent.set(c.parent_comment_id, list);
     }
+  }
+
+  // Total nested replies below a comment, recursively — used for the
+  // "Show N more replies in this thread" count on ThreadCollapser, which
+  // collapses a deep chain rather than just a wide one (that's what
+  // CollapsibleReplies, above/below this, already handles).
+  function countDescendants(commentId: string): number {
+    const direct = repliesByParent.get(commentId) ?? [];
+    let total = direct.length;
+    for (const child of direct) total += countDescendants(child.id);
+    return total;
   }
   const sortedTopLevelComments = [...topLevelComments].sort((a, b) => {
     if (sortMode === "top") {
@@ -195,7 +206,7 @@ export default async function ProposalPage({
   // more than a single reply layer. Each level indents a bit further via
   // the border-l wrapper below, so depth stays visible without needing
   // "replying to @X" labels.
-  function renderComment(c: any, isReply: boolean) {
+  function renderComment(c: any, depth: number) {
     const score = commentScores.get(c.id) ?? 0;
     const myVoteOnComment = myCommentVotes.get(c.id) ?? null;
     const replies = repliesByParent.get(c.id) ?? [];
@@ -317,9 +328,17 @@ export default async function ProposalPage({
 
         {replies.length > 0 && (
           <ul className="mt-3 space-y-3 border-l-2 border-neutral-100 pl-3">
-            <CollapsibleReplies
-              replies={replies.map((reply: any) => renderComment(reply, true))}
-            />
+            {depth >= 1 ? (
+              <ThreadCollapser count={countDescendants(c.id)}>
+                <CollapsibleReplies
+                  replies={replies.map((reply: any) => renderComment(reply, depth + 1))}
+                />
+              </ThreadCollapser>
+            ) : (
+              <CollapsibleReplies
+                replies={replies.map((reply: any) => renderComment(reply, depth + 1))}
+              />
+            )}
           </ul>
         )}
       </li>
@@ -351,12 +370,22 @@ export default async function ProposalPage({
               style={{ borderColor: `${proposal.categories?.color ?? "#d4d4d4"}aa` }}
             >
               {proposal.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={proposal.image_url}
-                  alt=""
-                  className="h-48 w-full object-cover sm:h-64"
-                />
+                <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={proposal.image_url}
+                    alt=""
+                    className="h-48 w-full object-cover sm:h-64"
+                  />
+                  {isOwner && (
+                    <CoverImageControl
+                      proposalId={proposal.id}
+                      hasImage
+                      categoryColor={categoryColor}
+                      variant="overlay"
+                    />
+                  )}
+                </div>
               )}
               <div className="p-4">
                 <span className="text-xs text-neutral-500">📍 {location}</span>
@@ -438,24 +467,17 @@ export default async function ProposalPage({
                   // the native triangle; the <details>/<summary> behavior
                   // (click to expand) is unchanged underneath.
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <details>
-                      <summary className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 [&::-webkit-details-marker]:hidden">
-                        🖼️ {proposal.image_url ? "Change cover image" : "Add a cover image"}
-                      </summary>
-                      <form
-                        action={updateProposalImage}
-                        className="mt-2 flex flex-wrap items-center gap-2"
-                      >
-                        <input type="hidden" name="proposal_id" value={proposal.id} />
-                        <input type="file" name="image" accept="image/*" className="text-xs" />
-                        <button
-                          className="rounded px-3 py-1 text-xs text-white"
-                          style={{ backgroundColor: categoryColor }}
-                        >
-                          Upload
-                        </button>
-                      </form>
-                    </details>
+                    {/* Once there's an image, the control to change it
+                        lives as an overlay on the image itself (see
+                        above) instead of duplicating it here too. */}
+                    {!proposal.image_url && (
+                      <CoverImageControl
+                        proposalId={proposal.id}
+                        hasImage={false}
+                        categoryColor={categoryColor}
+                        variant="pill"
+                      />
+                    )}
 
                     {/* Lets the owner change title/type/category/geography
                         after posting — previously the only way to fix a
@@ -631,7 +653,7 @@ export default async function ProposalPage({
               </div>
             </div>
             <ul className="mt-3 space-y-4">
-              {sortedTopLevelComments.map((c) => renderComment(c, false))}
+              {sortedTopLevelComments.map((c) => renderComment(c, 0))}
               {(!comments || comments.length === 0) && (
                 <p className="text-sm text-neutral-500">
                   No comments yet — be the first to weigh in.
