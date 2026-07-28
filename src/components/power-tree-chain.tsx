@@ -62,13 +62,15 @@ export function PowerTreeChain({
 
   // Resync if the underlying data changed (node added/removed elsewhere,
   // or the server's revalidated result differs from our optimistic one).
-  // Has to include more than just the id list — adding a note or editing
-  // a role note doesn't change which nodes exist, just their content, and
-  // that was getting silently swallowed: the key matched, so the stale
-  // local copy (from before the note was added) kept being shown even
-  // though the server had the new one all along.
+  // Has to include more than just the id list — adding a note, editing a
+  // role note, or approving a suggestion doesn't change which nodes
+  // exist, just their content/status, and that was getting silently
+  // swallowed: the key matched, so the stale local copy kept being shown
+  // even though the server had the update all along. (This exact bug is
+  // why clicking Approve looked like it did nothing — the database was
+  // updated correctly, the card just never re-rendered to show it.)
   const currentKey = nodesAscending
-    .map((n) => `${n.id}:${n.updates.length}:${n.note ?? ""}`)
+    .map((n) => `${n.id}:${n.updates.length}:${n.note ?? ""}:${n.status}`)
     .join("|");
   const [syncedKey, setSyncedKey] = useState(currentKey);
   if (currentKey !== syncedKey) {
@@ -118,6 +120,23 @@ export function PowerTreeChain({
     // it just lands pending until the owner approves it.
     if (!canContribute) return null;
     const isOpen = openGap === displayGapIndex;
+
+    // The insert-position math checks out for every gap, but the topmost
+    // and bottommost "+" have special meaning that wasn't obvious from a
+    // generic "+" button: the very top one doesn't just insert "near the
+    // top," it makes the new entry the final decision-maker, which reads
+    // as "it jumped to the top of the chain" if you weren't expecting
+    // that. Spelling it out here so the position is a deliberate choice,
+    // not a surprise after the fact.
+    const gapHint =
+      display.length === 0
+        ? "Insert the first decision-maker here"
+        : displayGapIndex === 0
+        ? "Insert here — this becomes the final decision-maker, at the top of the chain"
+        : displayGapIndex === display.length
+        ? "Insert here — this becomes the first step, closest to We the people"
+        : "Insert a decision-maker here, between the two adjacent entries";
+
     return (
       <li
         onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
@@ -138,6 +157,7 @@ export function PowerTreeChain({
               name="insert_index"
               value={ascendingInsertIndexForGap(displayGapIndex)}
             />
+            <p className="text-[11px] text-neutral-500">{gapHint}</p>
             <DecisionMakerField decisionMakers={decisionMakers} />
             <div className="flex gap-2">
               <button
@@ -160,7 +180,7 @@ export function PowerTreeChain({
             type="button"
             onClick={() => setOpenGap(displayGapIndex)}
             className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
-            title="Insert a decision-maker here"
+            title={gapHint}
           >
             +
           </button>
