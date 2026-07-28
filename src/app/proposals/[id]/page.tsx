@@ -123,48 +123,44 @@ export default async function ProposalPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main column */}
         <div className="space-y-6 lg:col-span-2">
-          <div
-            className="overflow-hidden rounded-lg border bg-white"
-            style={{ borderColor: `${proposal.categories?.color ?? "#d4d4d4"}aa` }}
-          >
-            {proposal.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={proposal.image_url}
-                alt=""
-                className="h-48 w-full object-cover sm:h-64"
-              />
-            ) : (
-              <div
-                className="h-3"
-                style={{ backgroundColor: proposal.categories?.color ?? "#e5e5e5" }}
-              />
-            )}
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className="rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700"
-                    style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33` }}
-                  >
-                    {proposal.categories?.label}
-                  </span>
-                  <span className="text-xs uppercase tracking-wide text-neutral-400">
-                    {proposal.type}
-                  </span>
-                </div>
-                <span className="shrink-0 text-xs text-neutral-500">📍 {location}</span>
-              </div>
+          <div>
+            {/* "Filing tab" sticking up from the card's top-left corner,
+                colored to the category — category + type now live here
+                instead of as pills inside the card, per Samantha's
+                drawing. Sits flush against the card with no gap, and the
+                card's own top-left corner is left square (rounded-tl
+                omitted) so the tab reads as physically attached to it,
+                like a folder tab. */}
+            <div
+              className="inline-block rounded-t-lg px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white"
+              style={{ backgroundColor: proposal.categories?.color ?? "#a3a3a3" }}
+            >
+              {proposal.categories?.label} • {proposal.type}
+            </div>
+            <div
+              className="overflow-hidden rounded-tr-lg rounded-br-lg rounded-bl-lg border bg-white"
+              style={{ borderColor: `${proposal.categories?.color ?? "#d4d4d4"}aa` }}
+            >
+              {proposal.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={proposal.image_url}
+                  alt=""
+                  className="h-48 w-full object-cover sm:h-64"
+                />
+              )}
+              <div className="p-4">
+                <span className="text-xs text-neutral-500">📍 {location}</span>
 
-              <h1 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">
-                {proposal.title}
-              </h1>
+                <h1 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">
+                  {proposal.title}
+                </h1>
 
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-xs text-neutral-500">
-                  by {ownerProfile?.display_name ?? "a resident"}
-                </span>
-                <div className="flex items-center gap-2">
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+                    {proposal.type} by {ownerProfile?.display_name ?? "a resident"}
+                  </span>
+                  <div className="flex items-center gap-2">
                   <form action={react}>
                     <input type="hidden" name="proposal_id" value={proposal.id} />
                     <input type="hidden" name="value" value="1" />
@@ -213,132 +209,138 @@ export default async function ProposalPage({
                   <span className="text-sm font-medium">
                     {score >= 0 ? `+${score}` : score} net support
                   </span>
+                  </div>
                 </div>
+
+                {isOwner && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
+                      {proposal.image_url ? "Change cover image" : "Add a cover image"}
+                    </summary>
+                    <form
+                      action={updateProposalImage}
+                      className="mt-2 flex flex-wrap items-center gap-2"
+                    >
+                      <input type="hidden" name="proposal_id" value={proposal.id} />
+                      <input type="file" name="image" accept="image/*" className="text-xs" />
+                      <button className="rounded bg-duty-purple px-3 py-1 text-xs text-white">
+                        Upload
+                      </button>
+                    </form>
+                  </details>
+                )}
+
+                {isOwner && (
+                  // Lets the owner change title/type/category/geography
+                  // after posting — previously the only way to fix a wrong
+                  // category was to delete the whole proposal and repost
+                  // it. Keyed to the fields it edits so it remounts
+                  // (picking up the saved values, and re-syncing its
+                  // internal scope state) right after a successful save.
+                  <details
+                    key={`${proposal.title}-${proposal.category_id}-${proposal.geography_scope}-${proposal.geography_label}-${proposal.council_district}`}
+                    className="mt-2"
+                  >
+                    <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
+                      Edit proposal details
+                    </summary>
+                    <EditProposalForm
+                      proposalId={proposal.id}
+                      categories={allCategories ?? []}
+                      initial={{
+                        title: proposal.title,
+                        type: proposal.type,
+                        category_id: proposal.category_id,
+                        geography_scope: proposal.geography_scope,
+                        geography_label: proposal.geography_label,
+                        council_district: proposal.council_district,
+                      }}
+                    />
+                  </details>
+                )}
               </div>
 
+              {/* Thin colored divider, same category color as the tab —
+                  keeps the header and the version text as one continuous
+                  card instead of two separate boxes, matching the mockup. */}
+              <div
+                className="h-[3px]"
+                style={{ backgroundColor: proposal.categories?.color ?? "#e5e5e5" }}
+              />
+
+              <div className="p-4">
+                {/* Keyed to how many versions exist so the carousel
+                    remounts and its internal index recalculates to the
+                    newest version right after "Advance to a new version"
+                    — otherwise it kept showing whatever version was
+                    selected before the publish, which read as if the new
+                    version hadn't shown up. */}
+                <VersionCarousel key={versions.length} versions={versions} />
+              </div>
+
+              {/* Escalation flag buttons ("ready to bring to officials" /
+                  "needs legal help") pulled per Samantha's request — she'd
+                  rather have a "project stage" bar instead (proposal ->
+                  discussion -> petition -> ready for officials, etc.) once
+                  that's designed. See project notes. The proposal_flags
+                  table and flagProposal action are left in place, just
+                  unused, so nothing's lost if we bring a version of this
+                  back. */}
+
               {isOwner && (
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
-                    {proposal.image_url ? "Change cover image" : "Add a cover image"}
-                  </summary>
-                  <form
-                    action={updateProposalImage}
-                    className="mt-2 flex flex-wrap items-center gap-2"
+                // Moved from a separate box below the card into the
+                // bottom of the card itself, styled as a solid color bar
+                // instead of a plain white bordered panel, per Samantha's
+                // new drawing — reads less "backend," more like a real
+                // call-to-action. Being the last element inside the
+                // overflow-hidden card means it automatically picks up
+                // the card's rounded bottom corners whether collapsed or
+                // expanded. Keyed to how many versions exist so it
+                // collapses back down right after a successful publish.
+                <details key={versions.length}>
+                  <summary
+                    className="flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-sm font-semibold text-white"
+                    style={{ backgroundColor: proposal.categories?.color ?? "#a3a3a3" }}
                   >
-                    <input type="hidden" name="proposal_id" value={proposal.id} />
-                    <input type="file" name="image" accept="image/*" className="text-xs" />
-                    <button className="rounded bg-duty-purple px-3 py-1 text-xs text-white">
-                      Upload
-                    </button>
-                  </form>
-                </details>
-              )}
-
-              {isOwner && (
-                // Lets the owner change title/type/category/geography after
-                // posting — previously the only way to fix a wrong category
-                // was to delete the whole proposal and repost it. Keyed to
-                // the fields it edits so it remounts (picking up the saved
-                // values, and re-syncing its internal scope state) right
-                // after a successful save.
-                <details
-                  key={`${proposal.title}-${proposal.category_id}-${proposal.geography_scope}-${proposal.geography_label}-${proposal.council_district}`}
-                  className="mt-2"
-                >
-                  <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-600">
-                    Edit proposal details
+                    <span>Advance to a new version</span>
+                    <span className="text-xs font-normal text-white/80">
+                      Last updated:{" "}
+                      {new Date(
+                        currentVersion?.created_at ?? proposal.created_at
+                      ).toLocaleDateString()}
+                    </span>
                   </summary>
-                  <EditProposalForm
-                    proposalId={proposal.id}
-                    categories={allCategories ?? []}
-                    initial={{
-                      title: proposal.title,
-                      type: proposal.type,
-                      category_id: proposal.category_id,
-                      geography_scope: proposal.geography_scope,
-                      geography_label: proposal.geography_label,
-                      council_district: proposal.council_district,
-                    }}
-                  />
+                  <div
+                    className="p-4"
+                    style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33` }}
+                  >
+                    <p className="text-xs text-neutral-600">
+                      Starts pre-filled with the current version's text —
+                      edit what you need to, or select all and delete it to
+                      start from scratch.
+                    </p>
+                    <form action={advanceVersion} className="mt-3 space-y-3">
+                      <input type="hidden" name="proposal_id" value={proposal.id} />
+                      <textarea
+                        name="body"
+                        defaultValue={currentVersion?.body ?? proposal.body}
+                        rows={8}
+                        className="input font-mono text-sm"
+                      />
+                      <input
+                        name="change_note"
+                        placeholder="What changed and why?"
+                        className="input"
+                      />
+                      <button className="rounded-md bg-duty-purple px-3 py-1.5 text-sm text-white">
+                        Publish new version
+                      </button>
+                    </form>
+                  </div>
                 </details>
               )}
-            </div>
-
-            {/* Thin colored divider, same category color as the top —
-                keeps the header and the version text as one continuous
-                card instead of two separate boxes, matching the mockup. */}
-            <div
-              className="h-[3px]"
-              style={{ backgroundColor: proposal.categories?.color ?? "#e5e5e5" }}
-            />
-
-            <div className="p-4">
-              {/* Keyed to how many versions exist so the carousel remounts
-                  and its internal index recalculates to the newest version
-                  right after "Advance to a new version" — otherwise it kept
-                  showing whatever version was selected before the publish,
-                  which read as if the new version hadn't shown up. */}
-              <VersionCarousel key={versions.length} versions={versions} />
             </div>
           </div>
-
-          {/* Escalation flag buttons ("ready to bring to officials" /
-              "needs legal help") pulled per Samantha's request — she'd
-              rather have a "project stage" bar instead (proposal ->
-              discussion -> petition -> ready for officials, etc.) once
-              that's designed. See project notes. The proposal_flags
-              table and flagProposal action are left in place, just
-              unused, so nothing's lost if we bring a version of this
-              back. */}
-
-          {isOwner && (
-            // Keyed to how many versions exist so the whole panel remounts
-            // (and collapses back down) right after a successful publish —
-            // otherwise it just sat open with what looked like the same
-            // text still in the box, and there was no clear sign it had
-            // actually worked.
-            <details
-              key={versions.length}
-              className="overflow-hidden rounded-lg border border-neutral-200"
-            >
-              <summary className="flex cursor-pointer items-center justify-between gap-3 bg-white p-4 text-sm font-semibold">
-                <span>Advance to a new version (owner only)</span>
-                <span className="text-xs font-normal text-neutral-400">
-                  Last updated:{" "}
-                  {new Date(
-                    currentVersion?.created_at ?? proposal.created_at
-                  ).toLocaleDateString()}
-                </span>
-              </summary>
-              <div
-                className="p-4"
-                style={{ backgroundColor: `${proposal.categories?.color ?? "#e5e5e5"}33` }}
-              >
-              <p className="text-xs text-neutral-600">
-                Starts pre-filled with the current version's text — edit
-                what you need to, or select all and delete it to start
-                from scratch.
-              </p>
-              <form action={advanceVersion} className="mt-3 space-y-3">
-                <input type="hidden" name="proposal_id" value={proposal.id} />
-                <textarea
-                  name="body"
-                  defaultValue={currentVersion?.body ?? proposal.body}
-                  rows={8}
-                  className="input font-mono text-sm"
-                />
-                <input
-                  name="change_note"
-                  placeholder="What changed and why?"
-                  className="input"
-                />
-                <button className="rounded-md bg-duty-purple px-3 py-1.5 text-sm text-white">
-                  Publish new version
-                </button>
-              </form>
-              </div>
-            </details>
-          )}
 
           <div>
             <h2 className="text-lg font-semibold">Discussion</h2>
