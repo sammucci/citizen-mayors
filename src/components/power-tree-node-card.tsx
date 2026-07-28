@@ -12,6 +12,7 @@ type Update = {
   id: string;
   body: string;
   created_at: string;
+  authorId: string;
   authorName: string;
   parentUpdateId: string | null;
   talkedTo: boolean;
@@ -78,7 +79,13 @@ export function PowerTreeNodeCard({
   for (const list of repliesByParent.values()) {
     list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }
-  const talkedToCount = node.updates.filter((u) => u.talkedTo).length;
+  // Unique people, not unique notes — someone flagging "talked to them"
+  // on more than one note (e.g. an original note plus a later reply)
+  // shouldn't inflate the count past the actual number of people who've
+  // reached out.
+  const talkedToCount = new Set(
+    node.updates.filter((u) => u.talkedTo).map((u) => u.authorId)
+  ).size;
 
   // Escape closes the modal, same as clicking the backdrop or the ✕ —
   // standard modal behavior, easy to miss if you only wire up clicks.
@@ -279,12 +286,14 @@ export function PowerTreeNodeCard({
                 <ul className="mt-1.5 space-y-1.5">
                   {topLevel.map((u) => (
                     <li key={u.id} className="rounded bg-neutral-50 p-2 text-xs text-neutral-700">
-                      {u.talkedTo && (
-                        <span className="mb-1 inline-block rounded-full bg-[#bee1ca] px-2 py-0.5 text-[10px] font-medium text-neutral-700">
-                          💬 Talked to them
-                        </span>
-                      )}
-                      <p className="whitespace-pre-wrap">{u.body}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="whitespace-pre-wrap">{u.body}</p>
+                        {u.talkedTo && (
+                          <span className="shrink-0 rounded-full bg-[#bee1ca] px-2 py-0.5 text-[10px] font-medium text-neutral-700">
+                            💬 Talked to them
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-1 flex items-center gap-2 text-neutral-400">
                         <span>
                           {u.authorName} · {formatDate(u.created_at)}
@@ -304,12 +313,14 @@ export function PowerTreeNodeCard({
                         <ul className="mt-1.5 space-y-1.5 border-l-2 border-neutral-200 pl-2.5">
                           {repliesByParent.get(u.id)!.map((r) => (
                             <li key={r.id}>
-                              {r.talkedTo && (
-                                <span className="mb-1 inline-block rounded-full bg-[#bee1ca] px-2 py-0.5 text-[10px] font-medium text-neutral-700">
-                                  💬 Talked to them
-                                </span>
-                              )}
-                              <p className="whitespace-pre-wrap">{r.body}</p>
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="whitespace-pre-wrap">{r.body}</p>
+                                {r.talkedTo && (
+                                  <span className="shrink-0 rounded-full bg-[#bee1ca] px-2 py-0.5 text-[10px] font-medium text-neutral-700">
+                                    💬 Talked to them
+                                  </span>
+                                )}
+                              </div>
                               <p className="mt-1 text-neutral-400">
                                 {r.authorName} · {formatDate(r.created_at)}
                               </p>

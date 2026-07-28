@@ -10,6 +10,7 @@ type Update = {
   id: string;
   body: string;
   created_at: string;
+  authorId: string;
   authorName: string;
   parentUpdateId: string | null;
   talkedTo: boolean;
