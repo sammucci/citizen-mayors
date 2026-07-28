@@ -1,8 +1,26 @@
 import Link from "next/link";
+import nextDynamicImport from "next/dynamic";
 import { createClient } from "@/lib/supabase/server";
 import { ProposalFilters } from "@/components/proposal-filters";
 
 export const dynamic = "force-dynamic";
+
+// Leaflet touches window/document at import time, so it can't run during
+// server rendering — loaded client-only via next/dynamic (imported here
+// as nextDynamicImport since the route-config export above is required
+// to be named exactly "dynamic"). Was its own /map page; merged onto the
+// dashboard instead so there's one view of the same proposals, not two.
+const PhillyMap = nextDynamicImport(
+  () => import("@/components/philly-map").then((m) => m.PhillyMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[360px] items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-sm text-neutral-500">
+        Loading map…
+      </div>
+    ),
+  }
+);
 
 type SearchParams = {
   type?: string;
@@ -60,6 +78,14 @@ export default async function HomePage({
       )
     : proposals ?? [];
 
+  // Only proposals with a council-district point actually plot — same
+  // Phase 1 limitation as before (real addresses aren't geocoded yet).
+  // Respects whatever filters are active, so the map and the grid below
+  // always show the same set.
+  const onMap = filteredProposals.filter(
+    (p: any) => p.geography_scope === "council_district" && p.council_district
+  );
+
   return (
     <div>
       <h1 className="text-2xl font-semibold">If I were mayor...</h1>
@@ -76,7 +102,21 @@ export default async function HomePage({
         </p>
       </div>
 
-      <ul className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6">
+        {/* Supabase's loose typing for the embedded categories join infers
+            an array shape even though it's actually a single object at
+            runtime for this to-one relationship — same mismatch handled
+            with `any` elsewhere in this codebase. */}
+        <PhillyMap proposals={onMap as any} />
+        <p className="mt-1.5 text-xs text-neutral-400">
+          Pins sit at the middle of each council district for now, not an
+          exact address — proposals located by neighborhood, zip, address,
+          or citywide don&apos;t have map coordinates yet and only show up
+          in the list below.
+        </p>
+      </div>
+
+      <ul className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {filteredProposals.map((p: any) => {
           const score = (p.reactions ?? []).reduce(
             (sum: number, r: any) => sum + r.value,

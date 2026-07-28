@@ -38,19 +38,30 @@ export default async function ProfilePage() {
 
   const { data: myComments } = await supabase
     .from("comments")
-    .select("id, body, is_suggested_edit, status, created_at, proposal_id, proposals ( title )")
+    .select(
+      "id, body, is_suggested_edit, status, created_at, proposal_id, proposals ( title, categories ( color ) )"
+    )
     .eq("author_id", user.id)
     .order("created_at", { ascending: false });
 
   // Grouped by proposal so "Your comments" reads as one row per
   // conversation you've been part of, not a flat list repeating the
   // same proposal title over and over if you commented several times
-  // in the same thread.
-  const commentsByProposal = new Map<string, { title: string; comments: any[] }>();
+  // in the same thread. Carries the category color along too, so you
+  // can tell what kind of project each conversation was about at a
+  // glance, same as the proposal cards.
+  const commentsByProposal = new Map<
+    string,
+    { title: string; color: string | null; comments: any[] }
+  >();
   for (const c of (myComments ?? []) as any[]) {
     const key = c.proposal_id;
     if (!commentsByProposal.has(key)) {
-      commentsByProposal.set(key, { title: c.proposals?.title ?? "A proposal", comments: [] });
+      commentsByProposal.set(key, {
+        title: c.proposals?.title ?? "A proposal",
+        color: c.proposals?.categories?.color ?? null,
+        comments: [],
+      });
     }
     commentsByProposal.get(key)!.comments.push(c);
   }
@@ -66,48 +77,52 @@ export default async function ProfilePage() {
 
       <div>
         <h2 className="text-lg font-semibold">Your proposals</h2>
-        {/* Mini versions of the homepage dashboard cards, not the old flat
-            tinted boxes — a small thumbnail plus title/category/type so
-            these read as the same kind of card everywhere on the site. */}
-        <ul className="mt-3 space-y-2">
-          {myProposals?.map((p: any) => (
-            <li
-              key={p.id}
-              className="flex items-center gap-3 overflow-hidden rounded-lg border border-neutral-200 bg-white p-2"
-            >
-              <div
-                className="h-14 w-14 shrink-0 overflow-hidden rounded-md"
-                style={{ backgroundColor: p.categories?.color ?? "#e5e5e5" }}
+        {/* Two-column grid of small "mini cards" — half the width of the
+            old full-width rows — each tinted with its category color so
+            the colors read at a glance again, not just on the thumbnail. */}
+        <ul className="mt-3 grid grid-cols-2 gap-2.5">
+          {myProposals?.map((p: any) => {
+            const color = p.categories?.color ?? "#e5e5e5";
+            return (
+              <li
+                key={p.id}
+                className="flex flex-col overflow-hidden rounded-lg border"
+                style={{ backgroundColor: `${color}1a`, borderColor: `${color}66` }}
               >
-                {p.image_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={p.image_url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    style={{
-                      objectPosition: `${p.image_position_x ?? 50}% ${p.image_position_y ?? 50}%`,
-                    }}
-                  />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <Link
-                  href={`/proposals/${p.id}`}
-                  className="block truncate text-sm font-semibold hover:underline"
+                <div
+                  className="h-16 w-full shrink-0 overflow-hidden"
+                  style={{ backgroundColor: color }}
                 >
-                  {p.title}
-                </Link>
-                <p className="mt-0.5 text-xs uppercase tracking-wide text-neutral-500">
-                  {p.categories?.label}
-                  {p.categories?.label ? " · " : ""}
-                  {p.type}
-                </p>
-              </div>
-            </li>
-          ))}
+                  {p.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.image_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      style={{
+                        objectPosition: `${p.image_position_x ?? 50}% ${p.image_position_y ?? 50}%`,
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 p-2">
+                  <Link
+                    href={`/proposals/${p.id}`}
+                    className="block truncate text-xs font-semibold hover:underline"
+                  >
+                    {p.title}
+                  </Link>
+                  <p className="mt-0.5 truncate text-[10px] uppercase tracking-wide text-neutral-500">
+                    {p.categories?.label}
+                    {p.categories?.label ? " · " : ""}
+                    {p.type}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
           {(!myProposals || myProposals.length === 0) && (
-            <p className="text-sm text-neutral-500">
+            <p className="col-span-2 text-sm text-neutral-500">
               You haven&apos;t posted a proposal yet.
             </p>
           )}
@@ -118,12 +133,15 @@ export default async function ProfilePage() {
         <h2 className="text-lg font-semibold">Your comments</h2>
         {/* One dropdown per proposal you've commented on, instead of a
             flat list that repeats the proposal title for every comment —
-            click to see the comments you made there. */}
+            click to see the comments you made there. A left-edge color
+            stripe (same idea as the proposal cards) gives a quick visual
+            read of what kind of project each conversation was about. */}
         <ul className="mt-3 space-y-2">
           {[...commentsByProposal.entries()].map(([proposalId, group]) => (
             <li
               key={proposalId}
-              className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
+              className="overflow-hidden rounded-lg border border-l-4 border-neutral-200 bg-white"
+              style={{ borderLeftColor: group.color ?? "#d4d4d4" }}
             >
               <details>
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium marker:content-none">
