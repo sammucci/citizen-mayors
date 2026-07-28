@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createProposal } from "@/app/proposals/actions";
 import { NeighborhoodField } from "@/components/neighborhood-field";
+import { readableTextColor } from "@/lib/readable-text-color";
 
 type Category = { id: number; label: string; requires_budget: boolean; color: string };
 type Tag = { id: number; label: string };
@@ -185,8 +186,8 @@ export function NewProposalForm({
 
       <button
         type="submit"
-        className="rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-        style={{ backgroundColor: selectedColor }}
+        className="rounded-md px-4 py-2 text-sm font-medium hover:opacity-90"
+        style={{ backgroundColor: selectedColor, color: readableTextColor(selectedColor) }}
       >
         Post proposal
       </button>

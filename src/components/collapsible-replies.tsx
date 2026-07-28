@@ -23,14 +23,16 @@ export function CollapsibleReplies({
   return (
     <>
       {visible}
-      {!expanded && hiddenCount > 0 && (
+      {hiddenCount > 0 && (
         <li>
           <button
             type="button"
-            onClick={() => setExpanded(true)}
+            onClick={() => setExpanded(!expanded)}
             className="text-xs text-neutral-500 underline hover:text-neutral-700"
           >
-            Show {hiddenCount} more {hiddenCount === 1 ? "reply" : "replies"}
+            {expanded
+              ? "Show fewer replies"
+              : `Show ${hiddenCount} more ${hiddenCount === 1 ? "reply" : "replies"}`}
           </button>
         </li>
       )}

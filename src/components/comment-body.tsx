@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { editComment } from "@/app/proposals/actions";
+import { readableTextColor } from "@/lib/readable-text-color";
 
 type Comment = {
   id: string;
@@ -66,8 +67,8 @@ export function CommentBody({
       )}
       <div className="flex gap-2">
         <button
-          className="rounded px-2 py-1 text-xs text-white"
-          style={{ backgroundColor: categoryColor }}
+          className="rounded px-2 py-1 text-xs"
+          style={{ backgroundColor: categoryColor, color: readableTextColor(categoryColor) }}
         >
           Save edit
         </button>

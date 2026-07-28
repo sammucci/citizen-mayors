@@ -1,49 +1,35 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   addComment,
-  addPowerTreeNode,
   addProposalTags,
   advanceVersion,
   flagUnresolved,
-  movePowerTreeNode,
   react,
-  removePowerTreeNode,
   removeProposalTag,
   suggestTag,
 } from "@/app/proposals/actions";
 import { CollapsibleReplies } from "@/components/collapsible-replies";
 import { CommentBody } from "@/components/comment-body";
 import { CoverImageControl } from "@/components/cover-image-control";
-import { DecisionChainNote } from "@/components/decision-chain-note";
-import { DecisionMakerField } from "@/components/decision-maker-field";
 import { EditProposalForm } from "@/components/edit-proposal-form";
+import { PowerTreeChain } from "@/components/power-tree-chain";
+import { RepositionableImage } from "@/components/repositionable-image";
 import { ReplyToggle } from "@/components/reply-toggle";
 import { ResolveCommentForm } from "@/components/resolve-comment-form";
+import { SortableComments } from "@/components/sortable-comments";
 import { ThreadCollapser } from "@/components/thread-collapser";
 import { ResettableForm } from "@/components/resettable-form";
 import { VersionCarousel } from "@/components/version-carousel";
+import { readableTextColor } from "@/lib/readable-text-color";
+import { splitDecisionMakerLabel } from "@/lib/decision-maker-label";
 import { statusColorClasses } from "@/lib/status-colors";
 
 export const dynamic = "force-dynamic";
 
-// Council-roster entries are stored as "Name (Role, District X)" — this
-// splits that into a bold primary name and a smaller subtitle underneath,
-// instead of showing the whole string as one flat bolded line.
-function splitDecisionMakerLabel(name: string): { primary: string; subtitle: string | null } {
-  const match = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
-  if (match) {
-    return { primary: match[1].trim(), subtitle: match[2].trim() };
-  }
-  return { primary: name, subtitle: null };
-}
-
 export default async function ProposalPage({
   params,
-  searchParams,
 }: {
   params: { id: string };
-  searchParams: { sort?: string };
 }) {
   const supabase = createClient();
   const {
@@ -114,14 +100,11 @@ export default async function ProposalPage({
   }
 
   // Replies (true recursive threading — a reply can itself be replied
-  // to, as deep as a conversation needs) grouped by their parent, and
-  // top-level comments sorted per the ?sort= toggle. "new" and "top" are
-  // display-only — the underlying query above stays oldest-first
+  // to, as deep as a conversation needs) grouped by their parent.
+  // Sorting itself now happens client-side (SortableComments) instead
+  // of via a ?sort= URL param — the underlying query stays oldest-first
   // ascending, which is what latestCommentId (right below) depends on to
   // find the single most recent comment overall.
-  const sortMode = searchParams?.sort === "top" || searchParams?.sort === "new"
-    ? searchParams.sort
-    : "oldest";
   const topLevelComments = (comments ?? []).filter((c) => !c.parent_comment_id);
   const repliesByParent = new Map<string, NonNullable<typeof comments>>();
   for (const c of comments ?? []) {
@@ -142,17 +125,6 @@ export default async function ProposalPage({
     for (const child of direct) total += countDescendants(child.id);
     return total;
   }
-  const sortedTopLevelComments = [...topLevelComments].sort((a, b) => {
-    if (sortMode === "top") {
-      const diff = (commentScores.get(b.id) ?? 0) - (commentScores.get(a.id) ?? 0);
-      if (diff !== 0) return diff;
-    }
-    if (sortMode === "top" || sortMode === "new") {
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    }
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-  });
-
   // Only the single most recent comment on the whole proposal is still
   // editable by its author — once anything else gets posted after it,
   // editing locks so nobody can retroactively change context others have
@@ -176,7 +148,9 @@ export default async function ProposalPage({
 
   const { data: powerTreeNodes } = await supabase
     .from("proposal_power_tree_nodes")
-    .select("id, note, parent_node_id, decision_makers ( name, kind )")
+    .select(
+      "id, note, parent_node_id, decision_makers ( name, kind ), power_tree_node_updates ( id, body, created_at, profiles ( display_name ) )"
+    )
     .eq("proposal_id", proposal.id)
     .order("sort_order");
 
@@ -295,36 +269,44 @@ export default async function ProposalPage({
           </p>
         )}
 
-        {isOwner && c.is_suggested_edit && (
-          <ResolveCommentForm
-            key={`${c.status}-${c.status_note ?? ""}`}
-            commentId={c.id}
-            proposalId={proposal.id}
-            status={c.status}
-            statusNote={c.status_note}
-          />
-        )}
+        {/* Resolve/flag controls on the left, Reply pinned to the right
+            edge of the card — used to just flow inline next to each
+            other on the left, which read like Reply belonged to the
+            same cluster of "decide what happened here" controls instead
+            of being its own separate action. */}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {isOwner && c.is_suggested_edit && (
+              <ResolveCommentForm
+                key={`${c.status}-${c.status_note ?? ""}`}
+                commentId={c.id}
+                proposalId={proposal.id}
+                status={c.status}
+                statusNote={c.status_note}
+              />
+            )}
 
-        {!isOwner && c.status !== "open" && !c.unresolved_flagged && (
-          <form action={flagUnresolved} className="mt-2">
-            <input type="hidden" name="comment_id" value={c.id} />
-            <input type="hidden" name="proposal_id" value={proposal.id} />
-            <button className="text-xs text-amber-700 underline">
-              Still not addressed
-            </button>
-          </form>
-        )}
+            {!isOwner && c.status !== "open" && !c.unresolved_flagged && (
+              <form action={flagUnresolved}>
+                <input type="hidden" name="comment_id" value={c.id} />
+                <input type="hidden" name="proposal_id" value={proposal.id} />
+                <button className="text-xs text-amber-700 underline">
+                  Still not addressed
+                </button>
+              </form>
+            )}
+          </div>
 
-
-        {user && (
-          <ReplyToggle
-            key={replies.length}
-            proposalId={proposal.id}
-            versionId={currentVersion?.id ?? ""}
-            parentCommentId={c.id}
-            categoryColor={categoryColor}
-          />
-        )}
+          {user && (
+            <ReplyToggle
+              key={replies.length}
+              proposalId={proposal.id}
+              versionId={currentVersion?.id ?? ""}
+              parentCommentId={c.id}
+              categoryColor={categoryColor}
+            />
+          )}
+        </div>
 
         {replies.length > 0 && (
           <ul className="mt-3 space-y-3 border-l-2 border-neutral-100 pl-3">
@@ -359,8 +341,11 @@ export default async function ProposalPage({
                 omitted) so the tab reads as physically attached to it,
                 like a folder tab. */}
             <div
-              className="inline-block rounded-t-lg px-5 py-3 text-xs uppercase tracking-wide text-white"
-              style={{ backgroundColor: proposal.categories?.color ?? "#a3a3a3" }}
+              className="inline-block whitespace-nowrap rounded-t-lg px-5 py-3 text-xs uppercase tracking-wide"
+              style={{
+                backgroundColor: proposal.categories?.color ?? "#a3a3a3",
+                color: readableTextColor(proposal.categories?.color ?? "#a3a3a3"),
+              }}
             >
               <span className="font-semibold">{proposal.categories?.label}</span>{" "}
               • <span className="font-normal">{proposal.type}</span>
@@ -370,13 +355,15 @@ export default async function ProposalPage({
               style={{ borderColor: `${proposal.categories?.color ?? "#d4d4d4"}aa` }}
             >
               {proposal.image_url && (
-                <div className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={proposal.image_url}
-                    alt=""
-                    className="h-48 w-full object-cover sm:h-64"
-                  />
+                <RepositionableImage
+                  proposalId={proposal.id}
+                  src={proposal.image_url}
+                  alt=""
+                  className="h-48 w-full object-cover sm:h-64"
+                  initialX={proposal.image_position_x ?? 50}
+                  initialY={proposal.image_position_y ?? 50}
+                  isOwner={isOwner}
+                >
                   {isOwner && (
                     <CoverImageControl
                       proposalId={proposal.id}
@@ -385,7 +372,7 @@ export default async function ProposalPage({
                       variant="overlay"
                     />
                   )}
-                </div>
+                </RepositionableImage>
               )}
               <div className="p-4">
                 <span className="text-xs text-neutral-500">📍 {location}</span>
@@ -553,11 +540,20 @@ export default async function ProposalPage({
                 // collapses back down right after a successful publish.
                 <details key={versions.length}>
                   <summary
-                    className="flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-sm font-semibold text-white"
-                    style={{ backgroundColor: proposal.categories?.color ?? "#a3a3a3" }}
+                    className="flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-sm font-semibold"
+                    style={{
+                      backgroundColor: proposal.categories?.color ?? "#a3a3a3",
+                      color: readableTextColor(proposal.categories?.color ?? "#a3a3a3"),
+                    }}
                   >
                     <span>Advance to a new version</span>
-                    <span className="text-xs font-normal text-white/80">
+                    <span
+                      className="text-xs font-normal"
+                      style={{
+                        color: readableTextColor(proposal.categories?.color ?? "#a3a3a3"),
+                        opacity: 0.75,
+                      }}
+                    >
                       Last updated:{" "}
                       {new Date(
                         currentVersion?.created_at ?? proposal.created_at
@@ -595,8 +591,8 @@ export default async function ProposalPage({
                         className="input"
                       />
                       <button
-                        className="rounded-md px-3 py-1.5 text-sm text-white"
-                        style={{ backgroundColor: categoryColor }}
+                        className="rounded-md px-3 py-1.5 text-sm"
+                        style={{ backgroundColor: categoryColor, color: readableTextColor(categoryColor) }}
                       >
                         Publish new version
                       </button>
@@ -608,58 +604,22 @@ export default async function ProposalPage({
           </div>
 
           <div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Discussion</h2>
-              {/* Sort toggle — Next's <Link>, not a plain <a>. Same
-                  ?sort= URL pattern (still works with no JS, still
-                  server-rendered), but Link intercepts the click and
-                  does a client-side transition instead of a full
-                  browser page reload, so switching sort no longer
-                  flashes/reloads the whole page. */}
-              <div className="flex items-center gap-1 text-xs">
-                <Link
-                  href="?sort=oldest"
-                  className="rounded-full px-2 py-1"
-                  style={
-                    sortMode === "oldest"
-                      ? { backgroundColor: categoryColor, color: "white" }
-                      : undefined
-                  }
-                >
-                  Oldest
-                </Link>
-                <Link
-                  href="?sort=new"
-                  className="rounded-full px-2 py-1"
-                  style={
-                    sortMode === "new"
-                      ? { backgroundColor: categoryColor, color: "white" }
-                      : undefined
-                  }
-                >
-                  Newest
-                </Link>
-                <Link
-                  href="?sort=top"
-                  className="rounded-full px-2 py-1"
-                  style={
-                    sortMode === "top"
-                      ? { backgroundColor: categoryColor, color: "white" }
-                      : undefined
-                  }
-                >
-                  Most active
-                </Link>
-              </div>
-            </div>
-            <ul className="mt-3 space-y-4">
-              {sortedTopLevelComments.map((c) => renderComment(c, 0))}
-              {(!comments || comments.length === 0) && (
-                <p className="text-sm text-neutral-500">
-                  No comments yet — be the first to weigh in.
-                </p>
-              )}
-            </ul>
+            {/* Sorting happens entirely client-side now — no ?sort= URL
+                param, no server round-trip. Each comment's already
+                rendered here (renderComment), so this just hands the
+                elements plus their sort keys to a component that
+                reorders them in the browser (and owns the "Discussion"
+                heading row too, so the sort toggle still sits right
+                next to it like before). */}
+            <SortableComments
+              categoryColor={categoryColor}
+              items={topLevelComments.map((c) => ({
+                id: c.id,
+                score: commentScores.get(c.id) ?? 0,
+                createdAt: c.created_at,
+                element: renderComment(c, 0),
+              }))}
+            />
 
             {user ? (
               // Keyed to the comment count so the whole form remounts
@@ -701,8 +661,8 @@ export default async function ProposalPage({
                 </details>
                 <div className="flex justify-end">
                   <button
-                    className="rounded-md px-3 py-1.5 text-sm text-white"
-                    style={{ backgroundColor: categoryColor }}
+                    className="rounded-md px-3 py-1.5 text-sm"
+                    style={{ backgroundColor: categoryColor, color: readableTextColor(categoryColor) }}
                   >
                     Post comment
                   </button>
@@ -727,16 +687,21 @@ export default async function ProposalPage({
               behaves as a single item for the sidebar's own space-y-6
               spacing against the Tags box below. */}
           <div>
-            {/* Invisible spacer that exactly mirrors the filing tab's own
+            {/* Invisible spacer that mirrors the filing tab's own
                 padding/text/line-height (just without color or a visible
                 background) — pushes the sidebar's first white box down
                 by the same height as the tab, so the two white areas
                 start flush with each other instead of the sidebar lining
-                up with the top of the tab. Using the same markup instead
-                of a fixed pixel value keeps this correct even if the tab
-                ever wraps to two lines for a long category name. */}
+                up with the top of the tab. Both this and the real tab are
+                forced to a single line (whitespace-nowrap): the sidebar
+                column is narrower than the main column, so without this
+                a long category name could wrap here but not on the real
+                tab, throwing the heights out of sync — that was the bug
+                behind some proposals lining up and others not.
+                overflow-hidden just keeps any invisible overflow from
+                affecting page width. */}
             <div
-              className="invisible px-5 py-3 text-xs uppercase tracking-wide"
+              className="invisible overflow-hidden whitespace-nowrap px-5 py-3 text-xs uppercase tracking-wide"
               aria-hidden="true"
             >
               {proposal.categories?.label} • {proposal.type}
@@ -744,98 +709,41 @@ export default async function ProposalPage({
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
             <h2 className="text-base font-semibold">Decision chain</h2>
             <p className="mt-1 text-xs text-neutral-500">
-              Who this proposal would move through, in order.
+              Who this proposal would move through, in order — climbing from
+              "We the people" at the bottom up to the final decision-maker on
+              top.
             </p>
 
-            <ul className="mt-3 space-y-2">
-              {powerTreeNodes?.map((node: any, i: number) => {
+            <PowerTreeChain
+              proposalId={proposal.id}
+              categoryColor={categoryColor}
+              isOwner={isOwner}
+              canContribute={Boolean(user)}
+              decisionMakers={allDecisionMakers ?? []}
+              nodesAscending={(powerTreeNodes ?? []).map((node: any) => {
                 const { primary, subtitle } = splitDecisionMakerLabel(
                   node.decision_makers?.name ?? ""
                 );
-                return (
-                <li
-                  key={node.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm"
-                >
-                  <div>
-                    <span className="text-base font-semibold">{primary}</span>
-                    <span className="block text-xs font-normal text-neutral-500">
-                      {subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ")}
-                    </span>
-                    {isOwner ? (
-                      <DecisionChainNote
-                        note={node.note}
-                        proposalId={proposal.id}
-                        nodeId={node.id}
-                        categoryColor={categoryColor}
-                      />
-                    ) : (
-                      node.note && <p className="mt-1 text-xs text-neutral-500">{node.note}</p>
-                    )}
-                  </div>
-                  {isOwner && (
-                    <div className="flex shrink-0 flex-col gap-1">
-                      <form action={movePowerTreeNode}>
-                        <input type="hidden" name="proposal_id" value={proposal.id} />
-                        <input type="hidden" name="node_id" value={node.id} />
-                        <input type="hidden" name="direction" value="up" />
-                        <button
-                          disabled={i === 0}
-                          className="rounded border border-neutral-300 bg-white px-2 py-0.5 text-xs disabled:opacity-30"
-                        >
-                          ▲
-                        </button>
-                      </form>
-                      <form action={movePowerTreeNode}>
-                        <input type="hidden" name="proposal_id" value={proposal.id} />
-                        <input type="hidden" name="node_id" value={node.id} />
-                        <input type="hidden" name="direction" value="down" />
-                        <button
-                          disabled={i === powerTreeNodes.length - 1}
-                          className="rounded border border-neutral-300 bg-white px-2 py-0.5 text-xs disabled:opacity-30"
-                        >
-                          ▼
-                        </button>
-                      </form>
-                      <form action={removePowerTreeNode}>
-                        <input type="hidden" name="proposal_id" value={proposal.id} />
-                        <input type="hidden" name="node_id" value={node.id} />
-                        <button
-                          className="rounded border border-neutral-300 bg-white px-2 py-0.5 text-xs text-neutral-500 hover:border-duty-red hover:text-duty-red"
-                          title="Remove from this proposal's chain"
-                        >
-                          ✕
-                        </button>
-                      </form>
-                    </div>
-                  )}
-                </li>
-                );
+                return {
+                  id: node.id,
+                  name: primary,
+                  subtitle: subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ") ?? null,
+                  note: node.note,
+                  updates: (node.power_tree_node_updates ?? [])
+                    .slice()
+                    .sort(
+                      (a: any, b: any) =>
+                        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                    )
+                    .map((u: any) => ({
+                      id: u.id,
+                      body: u.body,
+                      created_at: u.created_at,
+                      authorName: u.profiles?.display_name ?? "A resident",
+                    })),
+                };
               })}
-              {(!powerTreeNodes || powerTreeNodes.length === 0) && (
-                <p className="text-sm text-neutral-500">Not mapped out yet.</p>
-              )}
-            </ul>
-
-            {isOwner && (
-              <form action={addPowerTreeNode} className="mt-3 space-y-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-                <input type="hidden" name="proposal_id" value={proposal.id} />
-                {/* Keyed to the node count so this fully remounts (and
-                    clears back to blank) right after a successful add —
-                    it's a controlled component internally, so a plain
-                    form.reset() wouldn't touch its React state. */}
-                <DecisionMakerField
-                  key={powerTreeNodes?.length ?? 0}
-                  decisionMakers={allDecisionMakers ?? []}
-                />
-                <button
-                  className="w-full rounded px-3 py-1.5 text-sm text-white"
-                  style={{ backgroundColor: categoryColor }}
-                >
-                  + Add decision maker
-                </button>
-              </form>
-            )}
+            />
           </div>
           </div>
 

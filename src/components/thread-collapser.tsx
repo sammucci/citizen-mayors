@@ -19,17 +19,20 @@ export function ThreadCollapser({
 }) {
   const [open, setOpen] = useState(false);
 
-  if (open) return <>{children}</>;
-
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-xs text-neutral-500 underline hover:text-neutral-700"
-      >
-        Show {count} more {count === 1 ? "reply" : "replies"} in this thread
-      </button>
-    </li>
+    <>
+      <li>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="text-xs text-neutral-500 underline hover:text-neutral-700"
+        >
+          {open
+            ? "Hide replies in this thread"
+            : `Show ${count} more ${count === 1 ? "reply" : "replies"} in this thread`}
+        </button>
+      </li>
+      {open && children}
+    </>
   );
 }

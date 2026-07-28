@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { updateProposalDetails } from "@/app/proposals/actions";
 import { NeighborhoodField } from "@/components/neighborhood-field";
+import { readableTextColor } from "@/lib/readable-text-color";
 
 type Category = { id: number; label: string };
 
@@ -124,8 +125,8 @@ export function EditProposalForm({
       )}
 
       <button
-        className="rounded-md px-3 py-1.5 text-xs font-medium text-white"
-        style={{ backgroundColor: categoryColor }}
+        className="rounded-md px-3 py-1.5 text-xs font-medium"
+        style={{ backgroundColor: categoryColor, color: readableTextColor(categoryColor) }}
       >
         Save changes
       </button>

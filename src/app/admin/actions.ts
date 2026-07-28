@@ -90,3 +90,35 @@ export async function rejectTagSuggestion(formData: FormData) {
   revalidatePath("/admin/tag-suggestions");
   revalidatePath(`/proposals/${proposalId}`);
 }
+
+// Removes an entry from the shared decision-makers registry — typos,
+// duplicates (e.g. a stray lowercase "quetcy lozada" next to the real
+// "Quetcy Lozada"), anything that shouldn't be an option anymore.
+// Anyone signed in can add to this registry, but only an admin can
+// remove from it. If it's currently in use in any proposal's decision
+// chain, the delete fails on the foreign key rather than silently
+// orphaning that proposal's data — the caller surfaces that as a
+// friendly message instead of a crash.
+export async function deleteDecisionMaker(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const decisionMakerId = String(formData.get("decision_maker_id"));
+
+  const { error } = await supabase
+    .from("decision_makers")
+    .delete()
+    .eq("id", decisionMakerId);
+
+  if (error) {
+    return {
+      error: /foreign key|violates/i.test(error.message)
+        ? "Can't delete — it's currently used in at least one proposal's decision chain. Remove it from those first."
+        : "Something went wrong deleting that entry.",
+    };
+  }
+
+  revalidatePath("/admin/decision-makers");
+  return {};
+}

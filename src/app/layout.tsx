@@ -61,10 +61,7 @@ export default async function RootLayout({
               {user ? (
                 <div className="flex items-center gap-3">
                   {isAdmin && (
-                    <Link
-                      href="/admin/tag-suggestions"
-                      className="text-neutral-600 hover:underline"
-                    >
+                    <Link href="/admin" className="text-neutral-600 hover:underline">
                       Admin
                     </Link>
                   )}

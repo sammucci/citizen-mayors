@@ -140,16 +140,17 @@ function isNonEmptyFile(value: FormDataEntryValue | null): value is File {
 
 // Shared by createProposal and updateProposalImage. Always saves to the
 // same path per proposal (with upsert) so re-uploading just replaces the
-// old cover image instead of piling up orphaned files. Never throws —
-// an image problem shouldn't take down the whole proposal action. If the
-// "proposal-images" bucket hasn't been created yet (migration not run),
-// this fails quietly instead of crashing; the console.error at least
-// leaves a clear trail in Vercel's function logs.
+// old cover image instead of piling up orphaned files. Returns an error
+// string instead of throwing (an image problem shouldn't take down the
+// whole proposal action) — but unlike before, that error string used to
+// just get logged server-side and silently dropped, so a too-large file
+// looked exactly like a dead button with nothing on screen explaining
+// why. Callers that can show it (updateProposalImage) now do.
 async function uploadProposalImage(
   supabase: ReturnType<typeof createClient>,
   proposalId: string,
   file: File
-) {
+): Promise<{ error?: string }> {
   try {
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${proposalId}/cover.${ext}`;
@@ -158,7 +159,11 @@ async function uploadProposalImage(
       .upload(path, file, { contentType: file.type, upsert: true });
     if (uploadError) {
       console.error("uploadProposalImage: storage upload failed", uploadError);
-      return;
+      const msg = uploadError.message ?? "";
+      if (/size|large|payload|413/i.test(msg)) {
+        return { error: "Your image is too big — try a smaller file (under 20MB)." };
+      }
+      return { error: "That image couldn't be uploaded. Try a different file." };
     }
 
     const { data: pub } = supabase.storage.from("proposal-images").getPublicUrl(path);
@@ -168,15 +173,20 @@ async function uploadProposalImage(
       .eq("id", proposalId);
     if (updateError) {
       console.error("uploadProposalImage: saving image_url failed", updateError);
+      return { error: "Image uploaded, but saving it to the proposal failed. Try again." };
     }
+    return {};
   } catch (err) {
     console.error("uploadProposalImage: unexpected error", err);
+    return { error: "Something went wrong uploading that image. Try again." };
   }
 }
 
 // Lets the owner add or replace a proposal's cover image after it's
 // already been posted — the create form only asks once.
-export async function updateProposalImage(formData: FormData) {
+export async function updateProposalImage(
+  formData: FormData
+): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
@@ -191,13 +201,44 @@ export async function updateProposalImage(formData: FormData) {
     throw new Error("Only the proposal owner can change the image.");
   }
   if (!isNonEmptyFile(imageFile)) {
-    throw new Error("Choose an image file first.");
+    return { error: "Choose an image file first." };
   }
 
-  await uploadProposalImage(supabase, proposalId, imageFile);
+  const result = await uploadProposalImage(supabase, proposalId, imageFile);
 
   revalidatePath(`/proposals/${proposalId}`);
   revalidatePath("/");
+  return result;
+}
+
+// Lets the owner set the cover image's focal point — the crop
+// (object-cover) can cut off the part of the photo that actually
+// matters, so this stores where "the important part" is as an x/y
+// percentage pair and every render uses it as the CSS object-position.
+// No revalidatePath("/") here on purpose: this fires on every drag-end
+// while dragging, and the homepage doesn't need a live update mid-drag.
+export async function updateProposalImagePosition(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const x = Math.min(100, Math.max(0, Math.round(Number(formData.get("x")))));
+  const y = Math.min(100, Math.max(0, Math.round(Number(formData.get("y")))));
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can reposition the image.");
+  }
+
+  await supabase
+    .from("proposals")
+    .update({ image_position_x: x, image_position_y: y })
+    .eq("id", proposalId);
+
+  revalidatePath(`/proposals/${proposalId}`);
 }
 
 // Lets the owner edit the proposal's basic details (title, type, category,
@@ -585,18 +626,41 @@ function toTitleCase(name: string): string {
     .replace(/(^|\s|-|')([a-z])/g, (_match, sep, letter) => sep + letter.toUpperCase());
 }
 
-// Adds a decision-maker to this proposal's power tree. Looks up the shared
-// registry by name first (case-insensitive) so re-typing "Streets Department"
-// reuses the same row instead of creating a duplicate; creates a new
-// registry entry only if nothing matched, which is the "add new" path.
+// Reassigns sort_order = array position for a whole ordered list of node
+// ids in one go. Backing both "insert at a specific spot" and drag
+// reorder with the same full-reindex approach means neither has to deal
+// with the edge cases of fractional ordering or shifting a partial
+// range — just rewrite the whole list's positions every time. Fine for
+// how many decision-makers a proposal's chain realistically has.
+async function reindexPowerTreeNodes(
+  supabase: ReturnType<typeof createClient>,
+  orderedIds: string[]
+) {
+  await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from("proposal_power_tree_nodes").update({ sort_order: index }).eq("id", id)
+    )
+  );
+}
+
+// Adds a decision-maker to this proposal's power tree, at a specific
+// position rather than always appended at the end — insertIndex is a
+// 0-based position in ascending sort_order terms (lowest = closest to
+// "We the people", highest = the final decision-maker). Omitting it
+// appends at the end, same as the old behavior.
+//
+// Looks up the shared registry by name first (case-insensitive) so
+// re-typing "Streets Department" reuses the same row instead of
+// creating a duplicate; creates a new registry entry only if nothing
+// matched, which is the "add new" path.
 export async function addPowerTreeNode(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
   const rawName = String(formData.get("decision_maker_name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "other");
-  const parentNodeId = formData.get("parent_node_id");
   const note = String(formData.get("note") ?? "").trim();
+  const insertIndexRaw = formData.get("insert_index");
 
   const { data: proposal } = await supabase
     .from("proposals")
@@ -626,32 +690,45 @@ export async function addPowerTreeNode(formData: FormData) {
 
   const { data: existingNodes } = await supabase
     .from("proposal_power_tree_nodes")
-    .select("sort_order")
+    .select("id, sort_order")
     .eq("proposal_id", proposalId)
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  const nextSortOrder = (existingNodes?.[0]?.sort_order ?? -1) + 1;
+    .order("sort_order", { ascending: true });
+  const existingIds = (existingNodes ?? []).map((n) => n.id);
 
-  await supabase.from("proposal_power_tree_nodes").insert({
-    proposal_id: proposalId,
-    decision_maker_id: decisionMaker.id,
-    parent_node_id: parentNodeId ? String(parentNodeId) : null,
-    note: note || null,
-    sort_order: nextSortOrder,
-  });
+  const { data: newNode, error: insertError } = await supabase
+    .from("proposal_power_tree_nodes")
+    .insert({
+      proposal_id: proposalId,
+      decision_maker_id: decisionMaker.id,
+      note: note || null,
+      sort_order: existingIds.length, // placeholder — reindexed below
+    })
+    .select("id")
+    .single();
+  if (insertError || !newNode) {
+    throw new Error(insertError?.message ?? "Could not add that decision-maker.");
+  }
+
+  const insertIndex =
+    insertIndexRaw != null && insertIndexRaw !== ""
+      ? Math.max(0, Math.min(existingIds.length, Number(insertIndexRaw)))
+      : existingIds.length;
+  existingIds.splice(insertIndex, 0, newNode.id);
+  await reindexPowerTreeNodes(supabase, existingIds);
 
   revalidatePath(`/proposals/${proposalId}`);
 }
 
-// Moves a decision-maker up or down in the power tree by swapping
-// sort_order with its neighbor. Simple up/down buttons instead of
-// drag-and-drop — easier to build correctly and more reliable on phones.
-export async function movePowerTreeNode(formData: FormData) {
+// Full drag-and-drop reorder — the client sends the whole chain's node
+// ids in the new order it wants (ascending sort_order terms; the
+// component reversed-for-display list converts back before sending),
+// and this just reindexes to match. Replaces the old up/down arrow
+// swap, which read as messy clutter next to everything else here.
+export async function reorderPowerTreeNodes(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
-  const nodeId = String(formData.get("node_id"));
-  const direction = String(formData.get("direction")); // "up" | "down"
+  const orderedIds = formData.getAll("node_id").map(String);
 
   const { data: proposal } = await supabase
     .from("proposals")
@@ -661,29 +738,32 @@ export async function movePowerTreeNode(formData: FormData) {
   if (proposal?.owner_id !== user.id) {
     throw new Error("Only the proposal owner can reorder its power tree.");
   }
+  if (orderedIds.length === 0) return;
 
-  const { data: nodes } = await supabase
-    .from("proposal_power_tree_nodes")
-    .select("id, sort_order")
-    .eq("proposal_id", proposalId)
-    .order("sort_order", { ascending: true });
+  await reindexPowerTreeNodes(supabase, orderedIds);
 
-  if (!nodes) return;
-  const index = nodes.findIndex((n) => n.id === nodeId);
-  const swapIndex = direction === "up" ? index - 1 : index + 1;
-  if (index === -1 || swapIndex < 0 || swapIndex >= nodes.length) return;
+  revalidatePath(`/proposals/${proposalId}`);
+}
 
-  const current = nodes[index];
-  const swapWith = nodes[swapIndex];
+// Adds one dated entry to a decision-maker's running update log for
+// this proposal — when someone talked to them, what came of it,
+// anything learned about working with them. Open to any signed-in
+// person, not just the proposal owner: this kind of on-the-ground
+// knowledge is useful from whoever has it. No edit/delete in this
+// first pass.
+export async function addPowerTreeNodeUpdate(formData: FormData) {
+  const { supabase, user } = await requireUser();
 
-  await supabase
-    .from("proposal_power_tree_nodes")
-    .update({ sort_order: swapWith.sort_order })
-    .eq("id", current.id);
-  await supabase
-    .from("proposal_power_tree_nodes")
-    .update({ sort_order: current.sort_order })
-    .eq("id", swapWith.id);
+  const proposalId = String(formData.get("proposal_id"));
+  const nodeId = String(formData.get("node_id"));
+  const body = String(formData.get("body") ?? "").trim();
+  if (!body) return;
+
+  await supabase.from("power_tree_node_updates").insert({
+    node_id: nodeId,
+    author_id: user.id,
+    body,
+  });
 
   revalidatePath(`/proposals/${proposalId}`);
 }

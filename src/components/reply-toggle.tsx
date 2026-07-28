@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { addComment } from "@/app/proposals/actions";
+import { readableTextColor } from "@/lib/readable-text-color";
 
 // Was a native <details>/<summary> — closed by default, but once a
 // person actually clicked "Reply" and posted, the browser leaves that
@@ -43,7 +44,7 @@ export function ReplyToggle({
         await addComment(formData);
         setOpen(false);
       }}
-      className="mt-2 space-y-2"
+      className="mt-2 w-full space-y-2"
     >
       <input type="hidden" name="proposal_id" value={proposalId} />
       <input type="hidden" name="version_id" value={versionId} />
@@ -58,8 +59,8 @@ export function ReplyToggle({
       />
       <div className="flex gap-2">
         <button
-          className="rounded px-2 py-1 text-xs text-white"
-          style={{ backgroundColor: categoryColor }}
+          className="rounded px-2 py-1 text-xs"
+          style={{ backgroundColor: categoryColor, color: readableTextColor(categoryColor) }}
         >
           Post reply
         </button>

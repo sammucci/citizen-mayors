@@ -32,7 +32,7 @@ export default async function HomePage({
   let query = supabase
     .from("proposals")
     .select(
-      `id, title, type, summary, geography_scope, geography_label, council_district, created_at, image_url,
+      `id, title, type, summary, geography_scope, geography_label, council_district, created_at, image_url, image_position_x, image_position_y,
        categories!inner ( slug, label, color ),
        proposal_tags ( tags ( slug, label ) ),
        reactions ( value )`
@@ -105,7 +105,14 @@ export default async function HomePage({
               />
               {p.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.image_url} alt="" className="h-36 w-full object-cover" />
+                <img
+                  src={p.image_url}
+                  alt=""
+                  className="h-36 w-full object-cover"
+                  style={{
+                    objectPosition: `${p.image_position_x ?? 50}% ${p.image_position_y ?? 50}%`,
+                  }}
+                />
               )}
               <div className="flex flex-1 flex-col p-4">
                 <div className="flex flex-wrap items-center gap-2">
