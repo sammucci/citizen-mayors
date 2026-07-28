@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createProposal } from "@/app/proposals/actions";
+import { NeighborhoodField } from "@/components/neighborhood-field";
 
 type Category = { id: number; label: string; requires_budget: boolean; color: string };
 type Tag = { id: number; label: string };
@@ -126,7 +127,7 @@ export function NewProposalForm({
 
       {scope === "neighborhood" && (
         <Field label="Neighborhood name">
-          <input name="geography_label" required className="input" placeholder="e.g. Fishtown" />
+          <NeighborhoodField name="geography_label" placeholder="e.g. Fishtown" />
         </Field>
       )}
 

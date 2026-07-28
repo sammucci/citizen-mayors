@@ -83,11 +83,19 @@ export function PhillyMap({ proposals }: { proposals: Proposal[] }) {
       scrollWheelZoom={false}
       className="h-[500px] w-full rounded-lg"
     >
+      {/* Light-grey basemap (CartoDB Positron) instead of standard OSM
+          tiles — the default OSM style is busy with labels, roads, and
+          saturated colors that fight with the proposal pins for
+          attention. Positron strips that down to a pale grey canvas so
+          the colored pins (and the purple district outlines) are what
+          actually stands out. Free, no API key. */}
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        subdomains="abcd"
+        maxZoom={19}
       />
-      <GeoJSON data={districts} style={{ color: "#6C3FD1", weight: 1, fillOpacity: 0.03 }} />
+      <GeoJSON data={districts} style={{ color: "#6C3FD1", weight: 1.5, fillOpacity: 0.04 }} />
       {Array.from(byDistrict.entries()).flatMap(([district, ps]) => {
         const centroid = centroids[String(district)];
         if (!centroid) return [];

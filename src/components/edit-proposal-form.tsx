@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updateProposalDetails } from "@/app/proposals/actions";
+import { NeighborhoodField } from "@/components/neighborhood-field";
 
 type Category = { id: number; label: string };
 
@@ -90,11 +91,9 @@ export function EditProposalForm({
 
       {scope === "neighborhood" && (
         <Field label="Neighborhood name">
-          <input
+          <NeighborhoodField
             name="geography_label"
-            required
             defaultValue={initial.geography_label ?? ""}
-            className="input"
             placeholder="e.g. Fishtown"
           />
         </Field>

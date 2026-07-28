@@ -241,7 +241,7 @@ export default async function ProposalPage({
             <button
               aria-label="Upvote comment"
               className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
-                myVoteOnComment === 1 ? "bg-green-600" : "bg-green-100 hover:bg-green-200"
+                myVoteOnComment === 1 ? "bg-green-600" : "bg-green-300 hover:bg-green-400"
               }`}
             >
               <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
@@ -256,7 +256,7 @@ export default async function ProposalPage({
             <button
               aria-label="Downvote comment"
               className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
-                myVoteOnComment === -1 ? "bg-duty-red" : "bg-red-100 hover:bg-red-200"
+                myVoteOnComment === -1 ? "bg-duty-red" : "bg-red-300 hover:bg-red-400"
               }`}
             >
               <span className="inline-block" style={{ filter: "brightness(0) invert(1)" }}>
@@ -326,7 +326,7 @@ export default async function ProposalPage({
                   className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
                 />
                 <button
-                  className="shrink-0 rounded px-2 py-1 text-xs text-white"
+                  className="shrink-0 rounded-full px-3 py-1 text-xs text-white"
                   style={{ backgroundColor: categoryColor }}
                 >
                   {c.status === "open" ? "Resolve" : "Change decision"}
@@ -443,7 +443,7 @@ export default async function ProposalPage({
                           className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
                             myVote === 1
                               ? "bg-green-600"
-                              : "bg-green-100 hover:bg-green-200"
+                              : "bg-green-300 hover:bg-green-400"
                           }`}
                         >
                           {/* CSS trick: emoji render with their own
@@ -470,7 +470,7 @@ export default async function ProposalPage({
                           className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
                             myVote === -1
                               ? "bg-duty-red"
-                              : "bg-red-100 hover:bg-red-200"
+                              : "bg-red-300 hover:bg-red-400"
                           }`}
                         >
                           <span
