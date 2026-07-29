@@ -631,7 +631,7 @@ export async function addProposalTags(formData: FormData) {
 // unlike addProposalTags (owner-only, picks from the existing list),
 // this is open to any user and doesn't touch the real tags table.
 // It just logs a pending request; an admin reviews it at
-// /admin/tag-suggestions and either creates the real tag (which also
+// /admin/tags and either creates the real tag (which also
 // attaches it to this proposal) or rejects it.
 export async function suggestTag(formData: FormData) {
   const { supabase, user } = await requireUser();

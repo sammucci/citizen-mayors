@@ -42,15 +42,8 @@ export default async function AdminHomePage() {
             Tags
           </Link>
           <p className="mt-0.5 text-xs text-neutral-500">
-            The full shared tag registry — rename or remove any existing tag.
-          </p>
-        </li>
-        <li className="rounded-lg border border-neutral-200 bg-white p-4">
-          <Link href="/admin/tag-suggestions" className="text-sm font-semibold underline">
-            Tag suggestions
-          </Link>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            Review and approve or reject brand-new tags people have suggested.
+            Pending suggestions, project tags, and volunteer-hours categories
+            &amp; groups — everything crowdsourced, in one place.
           </p>
         </li>
         <li className="rounded-lg border border-neutral-200 bg-white p-4">
@@ -67,14 +60,6 @@ export default async function AdminHomePage() {
           </Link>
           <p className="mt-0.5 text-xs text-neutral-500">
             Everyone who's registered on the platform.
-          </p>
-        </li>
-        <li className="rounded-lg border border-neutral-200 bg-white p-4">
-          <Link href="/admin/volunteer-categories" className="text-sm font-semibold underline">
-            Volunteer categories
-          </Link>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            The shared list people pick from when logging volunteer hours.
           </p>
         </li>
         <li className="rounded-lg border border-neutral-200 bg-white p-4">

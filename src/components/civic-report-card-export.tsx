@@ -192,11 +192,15 @@ export function CivicReportCardExport({
                   {proposals.length === 0 ? (
                     <p className="mt-1 text-xs text-neutral-400">None yet.</p>
                   ) : (
-                    <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-neutral-700">
+                    <ul className="mt-1.5 space-y-1.5">
                       {proposals.map((p, i) => (
-                        <li key={i}>
-                          {p.label}
-                          {p.sublabel ? ` — ${p.sublabel}` : ""}
+                        <li key={i} className="flex flex-wrap items-baseline gap-x-2">
+                          <span className="text-xs font-bold text-neutral-900">{p.label}</span>
+                          {p.sublabel && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+                              {p.sublabel}
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>

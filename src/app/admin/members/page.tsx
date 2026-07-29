@@ -47,7 +47,10 @@ export default async function AdminMembersPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-xl font-bold">Members</h1>
+      <Link href="/admin" className="text-xs text-neutral-500 underline hover:text-neutral-700">
+        ← Back to admin dashboard
+      </Link>
+      <h1 className="mt-2 text-xl font-bold">Members</h1>
       <p className="mt-1 text-sm text-neutral-500">
         Everyone registered on the platform, newest first — {members?.length ?? 0} total.
       </p>

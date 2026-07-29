@@ -112,8 +112,14 @@ function ComparisonRow({
     <li className="text-xs">
       <div className="flex items-center justify-between">
         <span className="truncate font-medium text-neutral-700">{label}</span>
-        <span className="shrink-0 text-neutral-500">
-          {memberPct}% here · {censusPct}% Philly
+        {/* Just the two numbers now — "50% here · 34% Philly" on every
+            single row read as noisy repetition once there were several
+            rows in a column. The one-time Key at the bottom of the card
+            explains what purple vs. grey means instead. */}
+        <span className="shrink-0">
+          <span className="font-semibold text-duty-purple">{memberPct}%</span>
+          <span className="mx-1 text-neutral-300">•</span>
+          <span className="text-neutral-500">{censusPct}%</span>
         </span>
       </div>
       <div className="mt-1.5 space-y-1.5">
@@ -128,6 +134,25 @@ function ComparisonRow({
   );
 }
 
+// One-time legend for the purple-vs-grey convention used by every
+// ComparisonRow in the card — replaces repeating "here"/"Philly" as text
+// on every single row.
+function ComparisonKey() {
+  return (
+    <div className="flex items-center gap-3 text-xs">
+      <span className="font-semibold text-neutral-500">Key</span>
+      <span className="flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-duty-purple" />
+        <span className="font-medium text-duty-purple">Here</span>
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-neutral-400" />
+        <span className="font-medium text-neutral-500">Philly</span>
+      </span>
+    </div>
+  );
+}
+
 // The profile form's own options don't use the same words as the
 // Census's categories (a member picks "Woman"/"Man"; ACS reports
 // "Female"/"Male" — same underlying question, different label) or split
@@ -137,9 +162,9 @@ function ComparisonRow({
 // together in the ACS numbers this dashboard pulls from). These two
 // remaps exist purely so the comparison lines up two versions of the
 // SAME category instead of silently showing two different ones side by
-// side — "Non-binary" and "Prefer to self-describe" are left as their
-// own bars on purpose, correctly showing 0% on the Census side, since
-// ACS doesn't collect that as a category at all.
+// side — "Non-binary" and "Other" are left as their own bars on
+// purpose, correctly showing 0% on the Census side, since ACS doesn't
+// collect that as a category at all.
 function remapGenderForComparison(label: string): string {
   if (label === "Woman") return "Female";
   if (label === "Man") return "Male";
@@ -442,22 +467,27 @@ export default async function CommunityDashboardPage({
         </div>
 
         {/* Real comparison now, not a placeholder: Philadelphia's actual
-            2022 ACS population data, joined to council districts the
+            2020-2024 ACS population data (refreshed in v60 from the prior
+            2022 vintage), joined to council districts the
             same way as the zip crosswalk (tract centroid vs. district
             polygon). See lib/census-district-demographics.ts for the
             full sourcing note and known limitations (no non-binary
             category in Census data, "Other" groups several small race
             categories together, "Unhoused" isn't something ACS housing
             tenure can measure). Age isn't included yet — same data
-            source, just needs one more processing pass. */}
+            source, just needs one more processing pass. Each row now
+            just shows the two bare percentages (purple = here, grey =
+            Philly) instead of repeating "here"/"Philly" as text on every
+            line — the one-time Key at the bottom of the card explains
+            the color convention instead. */}
         <div className="mt-5 rounded-md border border-neutral-200 bg-white p-4">
           <InfoHeading
             className="text-sm font-semibold text-neutral-800"
-            tooltip={`Real 2022 Census (ACS5) data by council district, not an estimate. ${
+            tooltip={`Real 2020-2024 Census (ACS5) data by council district, not an estimate. ${
               selectedDistrict ? `Comparing District ${selectedDistrict} only.` : "Citywide comparison."
             } Race/ethnicity and gender categories don't map 1:1 to the options above — see each column's own info icon for specifics. Age isn't in this comparison yet.`}
           >
-            How this compares to Philadelphia's real population
+            How this compares to Philadelphia
           </InfoHeading>
           <div className="mt-5 grid grid-cols-1 gap-7 sm:grid-cols-3">
             <CensusComparisonSection
@@ -470,7 +500,7 @@ export default async function CommunityDashboardPage({
             />
             <CensusComparisonSection
               title="Gender (vs. Census sex)"
-              tooltip={`Sex and gender aren't the same thing. The Census only collects "sex" (male/female) — it has no gender-identity category at all. "Woman"/"Man" are shown here matched against "Female"/"Male" as the closest available comparison, not a claim they mean the same thing. "Non-binary" and "Prefer to self-describe" are real answers people gave here; they show 0% on the Census side because ACS simply doesn't ask that question, not because the number is actually zero.`}
+              tooltip={`Sex and gender aren't the same thing. The Census only collects "sex" (male/female) — it has no gender-identity category at all. "Woman"/"Man" are shown here matched against "Female"/"Male" as the closest available comparison, not a claim they mean the same thing. "Non-binary" and "Other" are real answers people gave here; they show 0% on the Census side because ACS simply doesn't ask that question, not because the number is actually zero.`}
               memberItems={regroup(genderBreakdown, remapGenderForComparison)}
               censusItems={
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.gender : citywideCensusStats().gender) ?? []
@@ -484,6 +514,9 @@ export default async function CommunityDashboardPage({
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.housing : citywideCensusStats().housing) ?? []
               }
             />
+          </div>
+          <div className="mt-5 flex justify-end border-t border-neutral-100 pt-3">
+            <ComparisonKey />
           </div>
         </div>
       </div>

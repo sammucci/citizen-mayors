@@ -55,6 +55,12 @@ export default async function HomePage({
        proposal_tags ( tags ( slug, label ) ),
        reactions ( value )`
     )
+    // Unpublished proposals are drafts — visible to their owner on their
+    // own profile/proposal page, but never here. Without this filter,
+    // anyone's in-progress draft (even an empty-summary title-only one,
+    // now that drafts only require a title) would show up in the public
+    // grid, which is misleading since it hasn't actually been submitted.
+    .eq("published", true)
     .order("created_at", { ascending: false });
 
   if (searchParams.type) query = query.eq("type", searchParams.type);

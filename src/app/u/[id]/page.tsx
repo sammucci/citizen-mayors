@@ -33,6 +33,10 @@ export default async function PublicProfilePage({ params }: { params: { id: stri
         "id, title, type, created_at, image_url, image_position_x, image_position_y, categories ( label, color )"
       )
       .eq("owner_id", profile.id)
+      // Same fix as the homepage grid: this page's whole premise is "only
+      // ever shows what's already public elsewhere," so an unpublished
+      // draft has no business appearing on someone's public profile.
+      .eq("published", true)
       .order("created_at", { ascending: false }),
     supabase
       .from("comments")

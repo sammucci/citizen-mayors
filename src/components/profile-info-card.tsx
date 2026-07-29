@@ -260,7 +260,7 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             <option value="Woman">Woman</option>
             <option value="Man">Man</option>
             <option value="Non-binary">Non-binary</option>
-            <option value="Prefer to self-describe">Prefer to self-describe</option>
+            <option value="Other">Other</option>
           </select>
         </label>
 

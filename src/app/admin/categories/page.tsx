@@ -43,7 +43,10 @@ export default async function CategoriesAdminPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-xl font-bold">Categories</h1>
+      <Link href="/admin" className="text-xs text-neutral-500 underline hover:text-neutral-700">
+        ← Back to admin dashboard
+      </Link>
+      <h1 className="mt-2 text-xl font-bold">Categories</h1>
       <p className="mt-1 text-sm text-neutral-500">
         The 7 founding budget categories every proposal picks from. Fixed set
         by design — no adding or removing here, just fixing a label, color,

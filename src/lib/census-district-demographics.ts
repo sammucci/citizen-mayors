@@ -1,25 +1,23 @@
 // Real Philadelphia population by council district, sourced from the
-// Census Bureau's 2022 5-year American Community Survey (ACS5) — NOT an
-// estimate or guess.
+// Census Bureau's 2020-2024 5-year American Community Survey (ACS5) —
+// NOT an estimate or guess. Refreshed in v60 from the prior 2022 ACS5
+// vintage (Census Bureau released 2020-2024 on January 29, 2026).
 //
-// STILL ON 2022 DATA as of v59 — flagging, not silently updating. The
-// Census Bureau released the newer 2020-2024 ACS5 estimates on January
-// 29, 2026 (data.census.gov), which IS more current than what's below.
-// But refreshing these numbers means rerunning the exact same tract-to-
-// district spatial join described below against the new release — every
-// one of Philadelphia's ~391 tracts re-summed into a district — which
-// needs either the 2020-2024 tract-level ACS tables pulled fresh from
-// the Census API, or Samantha re-exporting them the way she did the
-// first time. Not something to fake inline with placeholder numbers, so
-// this is a flagged follow-up rather than a done thing. Built the same
-// way as the zip/district crosswalk:
-// every one of the city's 391 populated census tracts (2020 tract
-// boundaries) was matched to a council district by checking the tract's
-// internal centroid point against the district polygons Samantha
-// uploaded (Council_Districts_2024.geojson), then each tract's ACS
-// values were summed up into its district. A handful of unpopulated
-// tracts (airport, parks, river) were excluded — they don't map cleanly
-// to a district and have ~0 population anyway.
+// Built the same way as the original 2022 pull: every one of
+// Philadelphia's 408 census tracts (2020 tract boundaries, pulled from
+// TIGERweb) was matched to a council district by checking the tract's
+// centroid point (simple average of its boundary vertices — plenty
+// precise for a tract-sized area) against the 10 district polygons
+// (Council_Districts_2024.geojson). Each tract's ACS values were then
+// summed into whichever district contained its centroid. All 408
+// tracts had a centroid falling inside a district polygon or close
+// enough to snap to the nearest one (only 2 needed that nearest-match
+// fallback, both slivers along a district boundary from simplified
+// polygon edges) — no tracts were dropped this time, unlike the 391-of-
+// however-many-total figure from the 2022 pull's methodology note.
+// City-wide total across all 10 districts: 1,579,706 — in line with
+// Philadelphia's actual population, a sanity check that the join
+// worked.
 //
 // Race/ethnicity categories mirror the Census's own non-Hispanic-race +
 // separate-Hispanic-any-race convention (B03002), not a perfect 1:1 with
@@ -44,183 +42,183 @@ export type DistrictCensusStats = {
 
 export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> = {
   1: {
-    totalPopulation: 152429,
+    totalPopulation: 168131,
     race: [
-      { label: "White", count: 94997 },
-      { label: "Black or African American", count: 9973 },
-      { label: "Asian", count: 20129 },
-      { label: "Hispanic or Latino", count: 19829 },
-      { label: "Other", count: 152429 - 94997 - 9973 - 20129 - 19829 },
+      { label: "White", count: 99793 },
+      { label: "Black or African American", count: 13905 },
+      { label: "Asian", count: 21303 },
+      { label: "Hispanic or Latino", count: 21878 },
+      { label: "Other", count: 168131 - 99793 - 13905 - 21303 - 21878 },
     ],
     gender: [
-      { label: "Male", count: 76714 },
-      { label: "Female", count: 75715 },
+      { label: "Male", count: 82937 },
+      { label: "Female", count: 85194 },
     ],
     housing: [
-      { label: "Homeowner", count: 38421 },
-      { label: "Renter", count: 34172 },
+      { label: "Homeowner", count: 42351 },
+      { label: "Renter", count: 40655 },
     ],
   },
   2: {
-    totalPopulation: 150053,
+    totalPopulation: 145698,
     race: [
-      { label: "White", count: 62145 },
-      { label: "Black or African American", count: 57982 },
-      { label: "Asian", count: 13531 },
-      { label: "Hispanic or Latino", count: 9672 },
-      { label: "Other", count: 150053 - 62145 - 57982 - 13531 - 9672 },
+      { label: "White", count: 59669 },
+      { label: "Black or African American", count: 54228 },
+      { label: "Asian", count: 14467 },
+      { label: "Hispanic or Latino", count: 10013 },
+      { label: "Other", count: 145698 - 59669 - 54228 - 14467 - 10013 },
     ],
     gender: [
-      { label: "Male", count: 70466 },
-      { label: "Female", count: 79587 },
+      { label: "Male", count: 68463 },
+      { label: "Female", count: 77235 },
     ],
     housing: [
-      { label: "Homeowner", count: 34226 },
-      { label: "Renter", count: 35491 },
+      { label: "Homeowner", count: 33670 },
+      { label: "Renter", count: 36313 },
     ],
   },
   3: {
-    totalPopulation: 155415,
+    totalPopulation: 151294,
     race: [
-      { label: "White", count: 30711 },
-      { label: "Black or African American", count: 97889 },
-      { label: "Asian", count: 11449 },
-      { label: "Hispanic or Latino", count: 6711 },
-      { label: "Other", count: 155415 - 30711 - 97889 - 11449 - 6711 },
+      { label: "White", count: 32072 },
+      { label: "Black or African American", count: 91970 },
+      { label: "Asian", count: 11121 },
+      { label: "Hispanic or Latino", count: 6706 },
+      { label: "Other", count: 151294 - 32072 - 91970 - 11121 - 6706 },
     ],
     gender: [
-      { label: "Male", count: 71836 },
-      { label: "Female", count: 83579 },
+      { label: "Male", count: 69183 },
+      { label: "Female", count: 82111 },
     ],
     housing: [
-      { label: "Homeowner", count: 22564 },
-      { label: "Renter", count: 39167 },
+      { label: "Homeowner", count: 22801 },
+      { label: "Renter", count: 41421 },
     ],
   },
   4: {
-    totalPopulation: 157026,
+    totalPopulation: 156280,
     race: [
-      { label: "White", count: 49091 },
-      { label: "Black or African American", count: 91344 },
-      { label: "Asian", count: 3966 },
-      { label: "Hispanic or Latino", count: 6916 },
-      { label: "Other", count: 157026 - 49091 - 91344 - 3966 - 6916 },
+      { label: "White", count: 48127 },
+      { label: "Black or African American", count: 90235 },
+      { label: "Asian", count: 3929 },
+      { label: "Hispanic or Latino", count: 7679 },
+      { label: "Other", count: 156280 - 48127 - 90235 - 3929 - 7679 },
     ],
     gender: [
-      { label: "Male", count: 73541 },
-      { label: "Female", count: 83485 },
+      { label: "Male", count: 72479 },
+      { label: "Female", count: 83801 },
     ],
     housing: [
-      { label: "Homeowner", count: 35600 },
-      { label: "Renter", count: 33643 },
+      { label: "Homeowner", count: 35689 },
+      { label: "Renter", count: 35898 },
     ],
   },
   5: {
-    totalPopulation: 155128,
+    totalPopulation: 158091,
     race: [
-      { label: "White", count: 49909 },
-      { label: "Black or African American", count: 68908 },
-      { label: "Asian", count: 9218 },
-      { label: "Hispanic or Latino", count: 21676 },
-      { label: "Other", count: 155128 - 49909 - 68908 - 9218 - 21676 },
+      { label: "White", count: 52258 },
+      { label: "Black or African American", count: 66613 },
+      { label: "Asian", count: 10396 },
+      { label: "Hispanic or Latino", count: 22075 },
+      { label: "Other", count: 158091 - 52258 - 66613 - 10396 - 22075 },
     ],
     gender: [
-      { label: "Male", count: 71815 },
-      { label: "Female", count: 83313 },
+      { label: "Male", count: 72790 },
+      { label: "Female", count: 85301 },
     ],
     housing: [
-      { label: "Homeowner", count: 26156 },
-      { label: "Renter", count: 43911 },
+      { label: "Homeowner", count: 27684 },
+      { label: "Renter", count: 47105 },
     ],
   },
   6: {
-    totalPopulation: 150142,
+    totalPopulation: 146475,
     race: [
-      { label: "White", count: 76409 },
-      { label: "Black or African American", count: 18522 },
-      { label: "Asian", count: 14534 },
-      { label: "Hispanic or Latino", count: 32740 },
-      { label: "Other", count: 150142 - 76409 - 18522 - 14534 - 32740 },
+      { label: "White", count: 66028 },
+      { label: "Black or African American", count: 23272 },
+      { label: "Asian", count: 14384 },
+      { label: "Hispanic or Latino", count: 32849 },
+      { label: "Other", count: 146475 - 66028 - 23272 - 14384 - 32849 },
     ],
     gender: [
-      { label: "Male", count: 72858 },
-      { label: "Female", count: 77284 },
+      { label: "Male", count: 71804 },
+      { label: "Female", count: 74671 },
     ],
     housing: [
-      { label: "Homeowner", count: 36829 },
-      { label: "Renter", count: 20997 },
+      { label: "Homeowner", count: 35953 },
+      { label: "Renter", count: 21005 },
     ],
   },
   7: {
-    totalPopulation: 174407,
+    totalPopulation: 159748,
     race: [
-      { label: "White", count: 23926 },
-      { label: "Black or African American", count: 42885 },
-      { label: "Asian", count: 8330 },
-      { label: "Hispanic or Latino", count: 94441 },
-      { label: "Other", count: 174407 - 23926 - 42885 - 8330 - 94441 },
+      { label: "White", count: 21795 },
+      { label: "Black or African American", count: 40129 },
+      { label: "Asian", count: 8890 },
+      { label: "Hispanic or Latino", count: 84071 },
+      { label: "Other", count: 159748 - 21795 - 40129 - 8890 - 84071 },
     ],
     gender: [
-      { label: "Male", count: 86576 },
-      { label: "Female", count: 87831 },
+      { label: "Male", count: 78045 },
+      { label: "Female", count: 81703 },
     ],
     housing: [
-      { label: "Homeowner", count: 34097 },
-      { label: "Renter", count: 26113 },
+      { label: "Homeowner", count: 33145 },
+      { label: "Renter", count: 24280 },
     ],
   },
   8: {
-    totalPopulation: 158970,
+    totalPopulation: 159357,
     race: [
-      { label: "White", count: 25930 },
-      { label: "Black or African American", count: 112353 },
-      { label: "Asian", count: 3442 },
-      { label: "Hispanic or Latino", count: 10498 },
-      { label: "Other", count: 158970 - 25930 - 112353 - 3442 - 10498 },
+      { label: "White", count: 28212 },
+      { label: "Black or African American", count: 108196 },
+      { label: "Asian", count: 2863 },
+      { label: "Hispanic or Latino", count: 12921 },
+      { label: "Other", count: 159357 - 28212 - 108196 - 2863 - 12921 },
     ],
     gender: [
-      { label: "Male", count: 72279 },
-      { label: "Female", count: 86691 },
+      { label: "Male", count: 72286 },
+      { label: "Female", count: 87071 },
     ],
     housing: [
-      { label: "Homeowner", count: 34760 },
-      { label: "Renter", count: 33132 },
+      { label: "Homeowner", count: 35758 },
+      { label: "Renter", count: 34081 },
     ],
   },
   9: {
-    totalPopulation: 176054,
+    totalPopulation: 172424,
     race: [
-      { label: "White", count: 18126 },
-      { label: "Black or African American", count: 103586 },
-      { label: "Asian", count: 13391 },
-      { label: "Hispanic or Latino", count: 32592 },
-      { label: "Other", count: 176054 - 18126 - 103586 - 13391 - 32592 },
+      { label: "White", count: 17029 },
+      { label: "Black or African American", count: 100223 },
+      { label: "Asian", count: 14730 },
+      { label: "Hispanic or Latino", count: 31706 },
+      { label: "Other", count: 172424 - 17029 - 100223 - 14730 - 31706 },
     ],
     gender: [
-      { label: "Male", count: 81162 },
-      { label: "Female", count: 94892 },
+      { label: "Male", count: 79878 },
+      { label: "Female", count: 92546 },
     ],
     housing: [
-      { label: "Homeowner", count: 41465 },
-      { label: "Renter", count: 23146 },
+      { label: "Homeowner", count: 43981 },
+      { label: "Renter", count: 22701 },
     ],
   },
   10: {
-    totalPopulation: 163584,
+    totalPopulation: 162208,
     race: [
-      { label: "White", count: 103047 },
-      { label: "Black or African American", count: 17173 },
-      { label: "Asian", count: 22118 },
-      { label: "Hispanic or Latino", count: 14648 },
-      { label: "Other", count: 163584 - 103047 - 17173 - 22118 - 14648 },
+      { label: "White", count: 99402 },
+      { label: "Black or African American", count: 16762 },
+      { label: "Asian", count: 22838 },
+      { label: "Hispanic or Latino", count: 15984 },
+      { label: "Other", count: 162208 - 99402 - 16762 - 22838 - 15984 },
     ],
     gender: [
-      { label: "Male", count: 79836 },
-      { label: "Female", count: 83748 },
+      { label: "Male", count: 79521 },
+      { label: "Female", count: 82687 },
     ],
     housing: [
-      { label: "Homeowner", count: 40031 },
-      { label: "Renter", count: 25208 },
+      { label: "Homeowner", count: 40873 },
+      { label: "Renter", count: 24064 },
     ],
   },
 };

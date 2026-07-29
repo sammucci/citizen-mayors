@@ -44,7 +44,10 @@ export default async function DecisionMakersAdminPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-xl font-bold">Decision makers</h1>
+      <Link href="/admin" className="text-xs text-neutral-500 underline hover:text-neutral-700">
+        ← Back to admin dashboard
+      </Link>
+      <h1 className="mt-2 text-xl font-bold">Decision makers</h1>
       <p className="mt-1 text-sm text-neutral-500">
         The shared registry anyone can add to when building a proposal's
         decision chain. Click a name to rename it (or fix its kind) in place —

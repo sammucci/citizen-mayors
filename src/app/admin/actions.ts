@@ -72,7 +72,7 @@ export async function approveTagSuggestion(formData: FormData) {
     .update({ status: "approved" })
     .eq("id", suggestionId);
 
-  revalidatePath("/admin/tag-suggestions");
+  revalidatePath("/admin/tags");
   revalidatePath(`/proposals/${proposalId}`);
 }
 
@@ -87,7 +87,7 @@ export async function rejectTagSuggestion(formData: FormData) {
     .update({ status: "rejected" })
     .eq("id", suggestionId);
 
-  revalidatePath("/admin/tag-suggestions");
+  revalidatePath("/admin/tags");
   revalidatePath(`/proposals/${proposalId}`);
 }
 
@@ -308,7 +308,7 @@ export async function addVolunteerCategoryAdmin(formData: FormData): Promise<{ e
   const { error } = await supabase.from("volunteer_categories").insert({ label });
   if (error) return { error: "Something went wrong adding that category." };
 
-  revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/admin/tags");
   return {};
 }
 
@@ -354,7 +354,7 @@ export async function resolveOrphanedVolunteerCategory(formData: FormData): Prom
     await supabase.from("volunteer_categories").insert({ label });
   }
 
-  revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/admin/tags");
   revalidatePath("/profile");
   revalidatePath("/community-dashboard");
 }
@@ -396,7 +396,7 @@ export async function renameVolunteerCategory(formData: FormData): Promise<{ err
     await supabase.from("civic_logs").update({ category: label }).eq("category", oldLabel);
   }
 
-  revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/admin/tags");
   revalidatePath("/profile");
   revalidatePath("/community-dashboard");
   return {};
@@ -432,7 +432,7 @@ export async function deleteVolunteerCategory(formData: FormData): Promise<{ err
   const { error } = await supabase.from("volunteer_categories").delete().eq("id", id);
   if (error) return { error: "Something went wrong deleting that category." };
 
-  revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/admin/tags");
   return {};
 }
 
@@ -456,7 +456,7 @@ export async function addVolunteerCategoryGroup(formData: FormData): Promise<{ e
     };
   }
 
-  revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/admin/tags");
   return {};
 }
 
@@ -476,7 +476,7 @@ export async function renameVolunteerCategoryGroup(formData: FormData): Promise<
     };
   }
 
-  revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/admin/tags");
   return {};
 }
 
@@ -490,7 +490,7 @@ export async function deleteVolunteerCategoryGroup(formData: FormData): Promise<
   const { error } = await supabase.from("volunteer_category_groups").delete().eq("id", id);
   if (error) return { error: "Something went wrong deleting that group." };
 
-  revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/admin/tags");
   return {};
 }
 
@@ -511,6 +511,6 @@ export async function setVolunteerCategoryGroup(formData: FormData): Promise<{ e
     .eq("id", id);
   if (error) return { error: "Something went wrong updating that category's group." };
 
-  revalidatePath("/admin/volunteer-categories");
+  revalidatePath("/admin/tags");
   return {};
 }
