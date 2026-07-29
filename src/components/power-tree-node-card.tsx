@@ -7,6 +7,7 @@ import {
   addPowerTreeNodeUpdate,
   approvePowerTreeNode,
   removePowerTreeNode,
+  toggleNodeCompleted,
   updatePowerTreeNodeNote,
 } from "@/app/proposals/actions";
 import { readableTextColor } from "@/lib/readable-text-color";
@@ -38,6 +39,16 @@ function formatDate(iso: string) {
 // then never see it again. The modal always shows the whole log, plus
 // the role note and the add-note box, all in one place you can actually
 // read.
+//
+// A node is one of two kinds now (node.nodeType): the original
+// 'decision_maker' (a person/office), or 'funding' (money that has to
+// be secured at this exact point in the chain — see grantUrl). Rather
+// than a parallel set of styles, a funding node reuses the same
+// name/subtitle slots (its "name" is the grant name or "Funding
+// needed," its "subtitle" is the funder or "Source not yet
+// identified") — the one visible difference is the 💰 badge below, so
+// it still reads at a glance without a second, differently-shaped card
+// type to learn.
 export function PowerTreeNodeCard({
   proposalId,
   node,
@@ -50,12 +61,15 @@ export function PowerTreeNodeCard({
   proposalId: string;
   node: {
     id: string;
+    nodeType: "decision_maker" | "funding";
     name: string;
     subtitle: string | null;
     note: string | null;
     status: "pending" | "approved";
+    completed: boolean;
     submittedByName: string;
     submittedById: string | null;
+    grantUrl: string | null;
     updates: Update[];
   };
   isFinal: boolean;
@@ -80,6 +94,12 @@ export function PowerTreeNodeCard({
   const router = useRouter();
   const finalTextColor = readableTextColor(categoryColor);
   const isPending = node.status === "pending";
+  const isFunding = node.nodeType === "funding";
+  // Pending or final still get the two-row layout (badge row above the
+  // name) same as before; a completed node now does too, so there's
+  // somewhere for the "Done" badge to live without cramming it onto the
+  // name/subtitle line.
+  const showBadgeRow = isPending || isFinal || node.completed;
 
   // Top-level notes only, newest first (already the order they arrive
   // in) — replies are looked up per-parent below and rendered nested,
@@ -115,12 +135,49 @@ export function PowerTreeNodeCard({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [modalOpen]);
 
+  function CompleteToggleButton({ className }: { className?: string }) {
+    if (isPending || !isOwner) return null;
+    return (
+      <form
+        action={async (formData) => {
+          await toggleNodeCompleted(formData);
+          router.refresh();
+        }}
+      >
+        <input type="hidden" name="proposal_id" value={proposalId} />
+        <input type="hidden" name="node_id" value={node.id} />
+        <input type="hidden" name="completed" value={String(!node.completed)} />
+        <button
+          className={
+            className ??
+            `rounded-full border px-1.5 text-xs ${
+              node.completed
+                ? "border-green-600 bg-green-600 text-white"
+                : "border-neutral-300 text-neutral-500 hover:border-green-600 hover:text-green-600"
+            }`
+          }
+          title={node.completed ? "Mark as not done yet" : "Mark as done"}
+        >
+          ✔
+        </button>
+      </form>
+    );
+  }
+
   return (
     <>
       <li
-        className={`overflow-hidden rounded-lg border bg-white ${isPending ? "border-dashed" : ""}`}
+        className={`overflow-hidden rounded-lg border bg-white ${isPending ? "border-dashed" : ""} ${
+          node.completed ? "opacity-70" : ""
+        }`}
         style={{
-          borderColor: isPending ? "#a3a3a3" : isFinal ? categoryColor : `${categoryColor}55`,
+          borderColor: isPending
+            ? "#a3a3a3"
+            : node.completed
+            ? "#16a34a"
+            : isFinal
+            ? categoryColor
+            : `${categoryColor}55`,
         }}
       >
         <div
@@ -131,20 +188,18 @@ export function PowerTreeNodeCard({
               : { backgroundColor: isFinal ? categoryColor : `${categoryColor}1a` }
           }
         >
-          {/* A badge (pending or final) needs its own row above the name —
-              cramming "Approve" + "✕" into the same row as the badge
-              squeezed the badge onto two lines. But when there's NO
-              badge (the common case — an ordinary, non-final approved
-              entry), splitting into two rows just left the drag dots
-              stranded above an empty row with nothing next to them,
-              adding dead space and knocking them out of line with the
-              name and the ✕. So: two rows only when there's an actual
-              badge to separate out; one aligned row otherwise, same as
-              before badges existed. */}
-          {isPending || isFinal ? (
+          {/* A badge (pending, final, or done) needs its own row above
+              the name — cramming "Approve" + "✕" into the same row as
+              the badge squeezed it onto two lines. But when there's NO
+              badge (the common case — an ordinary, non-final,
+              not-yet-done entry), splitting into two rows just left the
+              drag dots stranded above an empty row with nothing next to
+              them. So: two rows only when there's an actual badge to
+              separate out; one aligned row otherwise. */}
+          {showBadgeRow ? (
             <>
               <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                   {isOwner && (
                     <span
                       {...dragHandleProps}
@@ -156,16 +211,30 @@ export function PowerTreeNodeCard({
                       ⠿
                     </span>
                   )}
-                  {isPending ? (
+                  {isPending && (
                     <span className="inline-block shrink-0 whitespace-nowrap rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
                       ⏳ Pending approval
                     </span>
-                  ) : (
+                  )}
+                  {isFunding && (
+                    <span
+                      className="inline-block shrink-0 whitespace-nowrap rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                      style={isFinal && !isPending ? { color: finalTextColor } : { color: "#a16207" }}
+                    >
+                      💰 Funding
+                    </span>
+                  )}
+                  {isFinal && !isPending && (
                     <span
                       className="inline-block shrink-0 whitespace-nowrap rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
                       style={{ color: finalTextColor }}
                     >
                       🏁 Final decision-maker
+                    </span>
+                  )}
+                  {node.completed && (
+                    <span className="inline-block shrink-0 whitespace-nowrap rounded-full bg-green-600/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-700">
+                      ✅ Done
                     </span>
                   )}
                 </div>
@@ -194,6 +263,7 @@ export function PowerTreeNodeCard({
                         </button>
                       </form>
                     )}
+                    <CompleteToggleButton />
                     <button
                       type="button"
                       onClick={() => setConfirmingRemove(true)}
@@ -231,7 +301,7 @@ export function PowerTreeNodeCard({
                   {node.name}
                 </span>
                 <span
-                  className="block text-xs"
+                  className="block truncate text-xs"
                   style={
                     isFinal && !isPending
                       ? { color: finalTextColor, opacity: 0.8 }
@@ -247,12 +317,13 @@ export function PowerTreeNodeCard({
                 </span>
                 {/* The actual point of this whole card — what this
                     decision-maker's role is in getting the proposal done
-                    (e.g. "administer a permit") — used to only be
-                    visible after clicking into the modal. That defeated
-                    the purpose of a high-level chain view: someone
-                    scanning the collapsed cards couldn't tell "apply for
-                    permit" from "administer permit" from "bring to
-                    council" without opening every single one. */}
+                    (e.g. "administer a permit"), or for a funding node,
+                    what's needed and why — used to only be visible after
+                    clicking into the modal. That defeated the purpose of
+                    a high-level chain view: someone scanning the
+                    collapsed cards couldn't tell "apply for permit" from
+                    "administer permit" from "bring to council" without
+                    opening every single one. */}
                 {node.note && (
                   <span
                     className="mt-0.5 block truncate text-xs italic"
@@ -286,8 +357,11 @@ export function PowerTreeNodeCard({
                   className="min-w-0 text-left"
                   title="View notes and civic dialogue"
                 >
-                  <span className="block truncate text-base font-semibold">{node.name}</span>
-                  <span className="block text-xs" style={{ color: "#737373" }}>
+                  <span className="block truncate text-base font-semibold">
+                    {isFunding ? "💰 " : ""}
+                    {node.name}
+                  </span>
+                  <span className="block truncate text-xs" style={{ color: "#737373" }}>
                     {node.subtitle}
                     {node.updates.length > 0
                       ? `${node.subtitle ? " · " : ""}${node.updates.length} note${
@@ -303,14 +377,17 @@ export function PowerTreeNodeCard({
                 </button>
               </div>
               {isOwner && (
-                <button
-                  type="button"
-                  onClick={() => setConfirmingRemove(true)}
-                  className="shrink-0 rounded-full border border-neutral-300 px-1.5 text-xs text-neutral-500 hover:border-duty-red hover:text-duty-red"
-                  title="Remove from this proposal's chain"
-                >
-                  ✕
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <CompleteToggleButton />
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingRemove(true)}
+                    className="rounded-full border border-neutral-300 px-1.5 text-xs text-neutral-500 hover:border-duty-red hover:text-duty-red"
+                    title="Remove from this proposal's chain"
+                  >
+                    ✕
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -381,20 +458,34 @@ export function PowerTreeNodeCard({
               }
             >
               <div className="min-w-0">
-                {isPending ? (
-                  <span className="mb-1 inline-block rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
-                    ⏳ Pending approval
-                  </span>
-                ) : (
-                  isFinal && (
+                <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                  {isPending && (
+                    <span className="inline-block rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                      ⏳ Pending approval
+                    </span>
+                  )}
+                  {isFunding && (
                     <span
-                      className="mb-1 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                      className="inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                      style={isFinal && !isPending ? { color: finalTextColor } : { color: "#a16207" }}
+                    >
+                      💰 Funding
+                    </span>
+                  )}
+                  {isFinal && !isPending && (
+                    <span
+                      className="inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
                       style={{ color: finalTextColor }}
                     >
                       🏁 Final decision-maker
                     </span>
-                  )
-                )}
+                  )}
+                  {node.completed && (
+                    <span className="inline-block rounded-full bg-green-600/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-700">
+                      ✅ Done
+                    </span>
+                  )}
+                </div>
                 <h3
                   className="truncate text-lg font-semibold"
                   style={isFinal && !isPending ? { color: finalTextColor } : undefined}
@@ -411,24 +502,45 @@ export function PowerTreeNodeCard({
                 >
                   {isPending ? `Suggested by ${node.submittedByName}` : node.subtitle}
                 </p>
-                {isPending && isOwner && (
-                  <form
-                    action={async (formData) => {
-                      await approvePowerTreeNode(formData);
-                      router.refresh();
-                    }}
-                    className="mt-1.5"
+                {isFunding && node.grantUrl && (
+                  <a
+                    href={node.grantUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs underline"
+                    style={isFinal && !isPending ? { color: finalTextColor } : { color: "#a16207" }}
                   >
-                    <input type="hidden" name="proposal_id" value={proposalId} />
-                    <input type="hidden" name="node_id" value={node.id} />
-                    <button
-                      className="rounded-full px-3 py-1 text-xs font-medium text-white"
-                      style={{ backgroundColor: categoryColor }}
-                    >
-                      Approve this suggestion
-                    </button>
-                  </form>
+                    View funding program ↗
+                  </a>
                 )}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {isPending && isOwner && (
+                    <form
+                      action={async (formData) => {
+                        await approvePowerTreeNode(formData);
+                        router.refresh();
+                      }}
+                    >
+                      <input type="hidden" name="proposal_id" value={proposalId} />
+                      <input type="hidden" name="node_id" value={node.id} />
+                      <button
+                        className="rounded-full px-3 py-1 text-xs font-medium text-white"
+                        style={{ backgroundColor: categoryColor }}
+                      >
+                        Approve this suggestion
+                      </button>
+                    </form>
+                  )}
+                  {!isPending && isOwner && (
+                    <CompleteToggleButton
+                      className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                        node.completed
+                          ? "border-green-600 bg-green-600 text-white"
+                          : "border-neutral-300 text-neutral-600 hover:border-green-600 hover:text-green-600"
+                      }`}
+                    />
+                  )}
+                </div>
               </div>
               <button
                 type="button"

@@ -17,8 +17,6 @@ import { CoverImageControl } from "@/components/cover-image-control";
 import { EditProposalForm } from "@/components/edit-proposal-form";
 import { PublishToggleButton } from "@/components/publish-toggle-button";
 import { PowerTreeChain } from "@/components/power-tree-chain";
-import { FundingNeededToggle } from "@/components/funding-needed-toggle";
-import { FundingLeadsSection } from "@/components/funding-leads-section";
 import { RepositionableImage } from "@/components/repositionable-image";
 import { ReplyToggle } from "@/components/reply-toggle";
 import { ResolveCommentForm } from "@/components/resolve-comment-form";
@@ -166,41 +164,24 @@ export default async function ProposalPage({
     .select("id, name, kind")
     .order("name");
 
+  // node_type/completed/grant_id are the funding-as-chain-node redesign:
+  // a link in this chain is either a decision-maker (unchanged) or a
+  // funding entry (grants join, only ever set for those) — see
+  // power-tree-chain.tsx / power-tree-node-card.tsx for how the two
+  // share the same ordered list and mostly the same rendering.
   const { data: powerTreeNodes } = await supabase
     .from("proposal_power_tree_nodes")
     .select(
-      "id, note, parent_node_id, status, submitted_by, decision_makers ( name, kind ), profiles ( display_name ), power_tree_node_updates ( id, body, created_at, author_id, parent_update_id, talked_to, profiles ( display_name ) )"
+      "id, node_type, note, parent_node_id, status, completed, submitted_by, decision_makers ( name, kind ), grants ( name, funder, url ), profiles ( display_name ), power_tree_node_updates ( id, body, created_at, author_id, parent_update_id, talked_to, profiles ( display_name ) )"
     )
     .eq("proposal_id", proposal.id)
     .order("sort_order");
 
-  // "Funding leads" (see funding-leads-section.tsx) only ever queried/
-  // rendered when the flag's actually on — most proposals don't need
-  // funding at all, so there's no reason to fetch this otherwise.
-  const { data: allGrants } = proposal.funding_needed
-    ? await supabase.from("grants").select("id, name, funder").order("name")
-    : { data: [] as any[] };
-  const { data: proposalGrantsRaw } = proposal.funding_needed
-    ? await supabase
-        .from("proposal_grants")
-        .select(
-          "id, note, submitted_by, grants ( id, name, funder, url, description ), profiles ( display_name )"
-        )
-        .eq("proposal_id", proposal.id)
-        .order("created_at")
-    : { data: [] as any[] };
-  const proposalGrants = (proposalGrantsRaw ?? []).map((pg: any) => ({
-    id: pg.id,
-    note: pg.note,
-    submittedByName: pg.profiles?.display_name ?? "a resident",
-    grant: {
-      id: pg.grants?.id,
-      name: pg.grants?.name ?? "A grant",
-      funder: pg.grants?.funder ?? null,
-      url: pg.grants?.url ?? null,
-      description: pg.grants?.description ?? null,
-    },
-  }));
+  // Needed any time someone might insert a funding node into the chain
+  // (i.e. always, now that funding isn't gated behind a proposal-wide
+  // flag anymore) — the GrantField autocomplete in power-tree-chain.tsx
+  // matches against this shared, growing list.
+  const { data: allGrants } = await supabase.from("grants").select("id, name, funder").order("name");
 
   const { data: allTags } = await supabase.from("tags").select("id, label").order("label");
   const appliedTagIds = new Set(
@@ -802,23 +783,17 @@ export default async function ProposalPage({
             </div>
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
             {/* Renamed from "Decision chain" — this section covers more
-                than just who has to sign off now (funding leads live
-                here too, see below), so the name needed to cover both:
-                who this moves through, AND what it actually takes to
-                make it real. */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold">Getting it done</h2>
-              {isOwner && (
-                <FundingNeededToggle
-                  proposalId={proposal.id}
-                  fundingNeeded={proposal.funding_needed}
-                />
-              )}
-            </div>
+                than just who has to sign off now (funding is one of the
+                link types in the chain itself, see below), so the name
+                needed to cover both: who this moves through, AND what it
+                actually takes to make it real. */}
+            <h2 className="text-base font-semibold">Getting it done</h2>
             <p className="mt-1 text-xs text-neutral-500">
-              Who this proposal would move through and what it takes to get it
-              done — climbing from "We the people" at the bottom up to the
-              final decision-maker on top.
+              Who (and what funding) this proposal would move through and
+              what it takes to get it done — climbing from "We the people"
+              at the bottom up to the final decision-maker on top. Tap a
+              "+" to insert a decision-maker or a funding need at that
+              exact point in the chain.
             </p>
 
             <PowerTreeChain
@@ -828,18 +803,25 @@ export default async function ProposalPage({
               canContribute={Boolean(user)}
               peopleActionNote={proposal.people_action_note}
               decisionMakers={allDecisionMakers ?? []}
+              grants={allGrants ?? []}
               nodesAscending={(powerTreeNodes ?? []).map((node: any) => {
-                const { primary, subtitle } = splitDecisionMakerLabel(
-                  node.decision_makers?.name ?? ""
-                );
+                const isFunding = node.node_type === "funding";
+                const { primary, subtitle } = isFunding
+                  ? { primary: "", subtitle: "" }
+                  : splitDecisionMakerLabel(node.decision_makers?.name ?? "");
                 return {
                   id: node.id,
-                  name: primary,
-                  subtitle: subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ") ?? null,
+                  nodeType: isFunding ? "funding" : "decision_maker",
+                  name: isFunding ? node.grants?.name ?? "Funding needed" : primary,
+                  subtitle: isFunding
+                    ? node.grants?.funder ?? "Source not yet identified"
+                    : subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ") ?? null,
                   note: node.note,
                   status: node.status === "pending" ? "pending" : "approved",
+                  completed: Boolean(node.completed),
                   submittedByName: node.profiles?.display_name ?? "A resident",
                   submittedById: node.submitted_by ?? null,
+                  grantUrl: node.grants?.url ?? null,
                   updates: (node.power_tree_node_updates ?? [])
                     .slice()
                     .sort(
@@ -858,18 +840,6 @@ export default async function ProposalPage({
                 };
               })}
             />
-
-            {proposal.funding_needed && (
-              <FundingLeadsSection
-                proposalId={proposal.id}
-                grants={proposalGrants}
-                allGrants={allGrants ?? []}
-                isOwner={isOwner}
-                isAdmin={isAdmin}
-                canContribute={Boolean(user)}
-                categoryColor={categoryColor}
-              />
-            )}
           </div>
           </div>
 
@@ -966,9 +936,16 @@ export default async function ProposalPage({
               })}
             </div>
 
+            {/* Collapsed by default — as the shared tag registry grows,
+                this used to render every single available tag as a chip
+                right on the page, which kept getting longer with every
+                tag added. A <details> costs nothing when closed and
+                still lets anyone expand it to browse/click a tag. */}
             {isOwner && availableTags.length > 0 && (
-              <div className="mt-3 border-t border-neutral-100 pt-3">
-                <p className="text-xs text-neutral-500">Add a tag</p>
+              <details className="mt-3 border-t border-neutral-100 pt-3">
+                <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-700">
+                  Add a tag ({availableTags.length} available)
+                </summary>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {availableTags.map((t) => (
                     <form key={t.id} action={addProposalTags}>
@@ -983,7 +960,7 @@ export default async function ProposalPage({
                     </form>
                   ))}
                 </div>
-              </div>
+              </details>
             )}
 
             {/* Open to anyone signed in, not just the owner — unlike

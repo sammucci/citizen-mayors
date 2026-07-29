@@ -17,6 +17,17 @@ create table public.profiles (
   race_ethnicity text, -- how well participation reflects Philadelphia's real
   gender text, -- population and council districts. Never required.
   housing_status text, -- homeowner / renter / unhoused / prefer not to say — same treatment as the other demographics: optional, aggregate-only, never shown on a public profile
+  -- Same treatment as the other demographics above: optional, self-reported,
+  -- aggregate-only. The point is being able to show that support for
+  -- quality-of-life proposals isn't confined to one party — never shown
+  -- next to a person's name or on their public profile, anywhere, under
+  -- any circumstance. (RLS on this table is row-level, not column-level —
+  -- see the note above the "public read profiles" policy below. The real
+  -- guarantee is that no query in this codebase ever selects this column
+  -- except the owner editing their own profile and the server-side
+  -- aggregate count on the community dashboard, neither of which returns
+  -- a raw, per-person value to the client.)
+  political_affiliation text,
   bio text, -- short, optional civic summary shown on the person's PUBLIC profile (/u/[id]) — the only free-text field that's ever public
   accepted_guidelines_at timestamptz, -- respectful-dialogue prompt acknowledgment
   is_admin boolean not null default false, -- gates admin-only screens, e.g. tag-suggestion review
@@ -261,29 +272,58 @@ create table public.proposal_versions (
   unique (proposal_id, version_number)
 );
 
--- Per-proposal decision-making / power tree: who this specific proposal would
--- actually have to move through, built by the owner from the shared
--- decision_makers registry (with "add new" when someone's missing).
+-- Per-proposal decision-making / power tree: who (or what) this specific
+-- proposal would actually have to move through, built by the owner from
+-- the shared decision_makers registry (with "add new" when someone's
+-- missing).
+--
+-- Two kinds of link share this same ordered chain, distinguished by
+-- node_type: a 'decision_maker' entry (the original kind — a person or
+-- office, from decision_makers) and a 'funding' entry (money that has
+-- to be secured at that specific point in the chain — see grant_id
+-- below). Funding used to be a single proposal-wide flag plus a flat
+-- list; that didn't capture a project needing money at more than one
+-- distinct stage (e.g. permitting, then construction). Modeling it as
+-- its own node type, sequenced right alongside decision-makers, does.
 create table public.proposal_power_tree_nodes (
   id uuid primary key default gen_random_uuid(),
   proposal_id uuid not null references public.proposals(id) on delete cascade,
-  decision_maker_id uuid not null references public.decision_makers(id),
+  node_type text not null default 'decision_maker' check (node_type in ('decision_maker', 'funding')),
+  -- Required for a decision_maker node, always null for a funding node —
+  -- enforced by the check constraint below rather than a plain not-null,
+  -- since this column now has to be nullable to allow funding nodes at all.
+  decision_maker_id uuid references public.decision_makers(id),
+  -- Only ever set for a funding node — which shared grants/funding
+  -- program (if any) is the likely source at this point in the chain.
+  -- Nullable even for a funding node: "money is needed here" can be
+  -- logged before anyone's identified a specific program yet.
+  grant_id uuid references public.grants(id),
   parent_node_id uuid references public.proposal_power_tree_nodes(id),
-  note text, -- e.g. "final sign-off", "committee review first"
+  note text, -- decision_maker: e.g. "final sign-off"; funding: e.g. "$50k needed for permitting"
   sort_order int not null default 0,
   -- Open to the whole community, not just the proposal owner: anyone
-  -- signed in can suggest adding a decision-maker to the chain. The
-  -- owner's own additions land approved immediately (unchanged
-  -- behavior); anyone else's land pending until the owner approves or
-  -- removes them, so the chain stays owner-curated even though
-  -- suggestions can come from anywhere.
+  -- signed in can suggest adding a link to the chain (decision-maker or
+  -- funding). The owner's own additions land approved immediately
+  -- (unchanged behavior); anyone else's land pending until the owner
+  -- approves or removes them, so the chain stays owner-curated even
+  -- though suggestions can come from anywhere.
   status text not null default 'approved' check (status in ('pending', 'approved')),
   submitted_by uuid references public.profiles(id), -- who suggested it, if not the owner
+  -- Marks a link as actually done — a decision-maker really engaged, or
+  -- funding actually secured. Visual, motivating progress marker on the
+  -- chain, not a permission gate; any node can be checked off and
+  -- unchecked again.
+  completed boolean not null default false,
+  completed_at timestamptz,
   created_at timestamptz not null default now(),
   -- Bumped whenever status changes (e.g. approved) — lets notifications
   -- tell "your suggested link was approved" apart from "you just added
   -- this," since a fresh row's created_at and updated_at start equal.
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint power_tree_node_type_fields check (
+    (node_type = 'decision_maker' and decision_maker_id is not null)
+    or (node_type = 'funding' and decision_maker_id is null)
+  )
 );
 
 -- Running log of dated notes on a specific decision-maker within a
@@ -505,7 +545,18 @@ create policy "public read flags" on public.proposal_flags for select using (tru
 create policy "public read zip council districts" on public.zip_council_districts for select using (true);
 create policy "public read tag_suggestions" on public.tag_suggestions for select using (true);
 
--- Profiles: anyone can read display names; only the owner can update their own row
+-- Profiles: anyone can read display names; only the owner can update their own row.
+-- IMPORTANT: this is row-level security, not column-level — Postgres RLS
+-- can't hide one column of an otherwise-readable row. The private
+-- demographic fields (age_range, race_ethnicity, gender, housing_status,
+-- political_affiliation) are only ever kept private because the app code
+-- never selects them except (a) a user loading their OWN row to edit it,
+-- and (b) a server-side aggregate count for the community dashboard that
+-- never sends a raw per-person row to the client. If a future query ever
+-- does `select("*")` on profiles for a public-facing page, that
+-- discipline breaks. A stricter version of this (a view that omits these
+-- columns entirely for anon/public reads) would be worth doing if this
+-- ever needs a harder guarantee than "the code is careful."
 create policy "public read profiles" on public.profiles for select using (true);
 create policy "user manages own profile" on public.profiles for update using (auth.uid() = id);
 create policy "user creates own profile" on public.profiles for insert with check (auth.uid() = id);

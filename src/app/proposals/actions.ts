@@ -380,30 +380,10 @@ export async function toggleProposalPublished(formData: FormData) {
   revalidatePath("/");
 }
 
-// Owner-only flag: does this proposal actually need funding to happen?
-// Off by default — a lot of policy proposals cost nothing to pass. When
-// on, the "Funding leads" subsection under "Getting it done" shows up;
-// when off, it's hidden entirely rather than showing an empty section
-// on every proposal regardless of whether funding is even relevant.
-export async function toggleFundingNeeded(formData: FormData) {
-  const { supabase, user } = await requireUser();
-
-  const proposalId = String(formData.get("proposal_id"));
-  const nextValue = formData.get("funding_needed") === "true";
-
-  const { data: proposal } = await supabase
-    .from("proposals")
-    .select("owner_id")
-    .eq("id", proposalId)
-    .single();
-  if (proposal?.owner_id !== user.id) {
-    throw new Error("Only the proposal owner can change this.");
-  }
-
-  await supabase.from("proposals").update({ funding_needed: nextValue }).eq("id", proposalId);
-
-  revalidatePath(`/proposals/${proposalId}`);
-}
+// Note: the old owner-only "funding needed" flag + flat grants list is
+// gone — funding is now its own node type inside addPowerTreeNode above,
+// sequenced directly in the chain (see toggleNodeCompleted below for the
+// mark-as-done piece that applies to every node type).
 
 export async function addComment(formData: FormData) {
   const { supabase, user } = await requireUser();
@@ -924,29 +904,38 @@ async function reindexPowerTreeNodes(
   }
 }
 
-// Adds a decision-maker to this proposal's power tree, at a specific
-// position rather than always appended at the end — insertIndex is a
-// 0-based position in ascending sort_order terms (lowest = closest to
-// "We the people", highest = the final decision-maker). Omitting it
-// appends at the end, same as the old behavior.
+// Adds a link to this proposal's power tree, at a specific position
+// rather than always appended at the end — insertIndex is a 0-based
+// position in ascending sort_order terms (lowest = closest to "We the
+// people", highest = the final decision-maker/top of the chain).
+// Omitting it appends at the end, same as the old behavior.
 //
-// Looks up the shared registry by name first (case-insensitive) so
-// re-typing "Streets Department" reuses the same row instead of
-// creating a duplicate; creates a new registry entry only if nothing
-// matched, which is the "add new" path.
-// Open to the whole community now, not just the proposal owner — the
-// decision chain is meant to be a shared, crowdsourced record, and
-// requiring the owner to add every entry themselves was the one part
-// of it that wasn't. The owner's own additions still land approved
-// immediately (unchanged); anyone else's land 'pending' until the
-// owner approves or removes them, so the chain stays owner-curated
-// even though the suggestions can come from anywhere.
+// Branches on node_type, since a chain link is one of two different
+// things now:
+//   'decision_maker' (default, unchanged): looks up the shared
+//   decision_makers registry by name first (case-insensitive) so
+//   re-typing "Streets Department" reuses the same row instead of
+//   creating a duplicate; creates a new registry entry only if nothing
+//   matched.
+//   'funding': money that has to be secured at this exact point in the
+//   chain — Samantha's call after realizing a project can need funding
+//   at more than one stage, so this isn't a single flag anymore, it's
+//   its own kind of link, sequenced right alongside decision-makers.
+//   Optionally names a specific grant/program (same create-or-reuse
+//   match against the shared grants registry as the old
+//   addProposalGrant did); the grant_name field can be left blank —
+//   "funding is needed here" is worth logging even before anyone's
+//   identified a specific source.
+//
+// Open to the whole community either way, not just the proposal owner
+// — the chain is meant to be a shared, crowdsourced record. The
+// owner's own additions still land approved immediately; anyone else's
+// land 'pending' until the owner approves or removes them.
 export async function addPowerTreeNode(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
-  const rawName = String(formData.get("decision_maker_name") ?? "").trim();
-  const kind = String(formData.get("kind") ?? "other");
+  const nodeType = formData.get("node_type") === "funding" ? "funding" : "decision_maker";
   const note = String(formData.get("note") ?? "").trim();
   const insertIndexRaw = formData.get("insert_index");
 
@@ -957,22 +946,61 @@ export async function addPowerTreeNode(formData: FormData) {
     .single();
   if (!proposal) throw new Error("Proposal not found.");
   const isOwner = proposal.owner_id === user.id;
-  if (!rawName) throw new Error("Pick or name a decision-maker.");
 
-  let { data: decisionMaker } = await supabase
-    .from("decision_makers")
-    .select("id")
-    .ilike("name", rawName)
-    .maybeSingle();
+  let decisionMakerId: string | null = null;
+  let grantId: string | null = null;
 
-  if (!decisionMaker) {
-    const { data: created, error } = await supabase
+  if (nodeType === "decision_maker") {
+    const rawName = String(formData.get("decision_maker_name") ?? "").trim();
+    const kind = String(formData.get("kind") ?? "other");
+    if (!rawName) throw new Error("Pick or name a decision-maker.");
+
+    let { data: decisionMaker } = await supabase
       .from("decision_makers")
-      .insert({ name: toTitleCase(rawName), kind, added_by: user.id })
       .select("id")
-      .single();
-    if (error || !created) throw new Error(error?.message ?? "Could not add that decision-maker.");
-    decisionMaker = created;
+      .ilike("name", rawName)
+      .maybeSingle();
+
+    if (!decisionMaker) {
+      const { data: created, error } = await supabase
+        .from("decision_makers")
+        .insert({ name: toTitleCase(rawName), kind, added_by: user.id })
+        .select("id")
+        .single();
+      if (error || !created) throw new Error(error?.message ?? "Could not add that decision-maker.");
+      decisionMaker = created;
+    }
+    decisionMakerId = decisionMaker.id;
+  } else {
+    const rawGrantName = String(formData.get("grant_name") ?? "").trim();
+    if (rawGrantName) {
+      const funder = String(formData.get("funder") ?? "").trim();
+      const url = String(formData.get("url") ?? "").trim();
+      const description = String(formData.get("description") ?? "").trim();
+
+      let { data: grant } = await supabase
+        .from("grants")
+        .select("id")
+        .ilike("name", rawGrantName)
+        .maybeSingle();
+
+      if (!grant) {
+        const { data: created, error } = await supabase
+          .from("grants")
+          .insert({
+            name: rawGrantName,
+            funder: funder || null,
+            url: url || null,
+            description: description || null,
+            added_by: user.id,
+          })
+          .select("id")
+          .single();
+        if (error || !created) throw new Error(error?.message ?? "Could not add that grant.");
+        grant = created;
+      }
+      grantId = grant.id;
+    }
   }
 
   const { data: existingNodes } = await supabase
@@ -986,7 +1014,9 @@ export async function addPowerTreeNode(formData: FormData) {
     .from("proposal_power_tree_nodes")
     .insert({
       proposal_id: proposalId,
-      decision_maker_id: decisionMaker.id,
+      node_type: nodeType,
+      decision_maker_id: decisionMakerId,
+      grant_id: grantId,
       note: note || null,
       sort_order: existingIds.length, // placeholder — reindexed below
       status: isOwner ? "approved" : "pending",
@@ -995,7 +1025,7 @@ export async function addPowerTreeNode(formData: FormData) {
     .select("id")
     .single();
   if (insertError || !newNode) {
-    throw new Error(insertError?.message ?? "Could not add that decision-maker.");
+    throw new Error(insertError?.message ?? "Could not add that link.");
   }
 
   const insertIndex =
@@ -1008,77 +1038,33 @@ export async function addPowerTreeNode(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
-// Attaches a grant lead to a proposal — creates the shared registry
-// entry if it doesn't already exist (case-insensitive match against
-// `name`, same create-or-reuse pattern as addPowerTreeNode above), or
-// reuses the existing one if it does. Open to anyone signed in, no
-// approval step: unlike a decision-maker suggestion, this never lands
-// "pending" — a funding lead is information, not a claim being made on
-// the proposal's behalf, so there's nothing for the owner to approve.
-export async function addProposalGrant(formData: FormData): Promise<{ error?: string }> {
+// Marks a chain link — decision-maker or funding, doesn't matter which
+// — as actually done: a decision-maker really engaged, or funding
+// actually secured. Deliberately not a permission gate on anything
+// else, just a visual, motivating progress marker; owner-only to keep
+// it consistent with the rest of the chain-editing actions (approve,
+// remove, reorder), even though notes/updates themselves stay open to
+// everyone.
+export async function toggleNodeCompleted(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
-  const rawName = String(formData.get("grant_name") ?? "").trim();
-  const funder = String(formData.get("funder") ?? "").trim();
-  const url = String(formData.get("url") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const note = String(formData.get("note") ?? "").trim();
+  const nodeId = String(formData.get("node_id"));
+  const completed = formData.get("completed") === "true";
 
-  if (!rawName) return { error: "Give the grant or funding program a name." };
-
-  let { data: grant } = await supabase
-    .from("grants")
-    .select("id")
-    .ilike("name", rawName)
-    .maybeSingle();
-
-  if (!grant) {
-    const { data: created, error } = await supabase
-      .from("grants")
-      .insert({
-        name: rawName,
-        funder: funder || null,
-        url: url || null,
-        description: description || null,
-        added_by: user.id,
-      })
-      .select("id")
-      .single();
-    if (error || !created) return { error: error?.message ?? "Could not add that grant." };
-    grant = created;
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can mark a chain link done.");
   }
 
-  const { error: linkError } = await supabase
-    .from("proposal_grants")
-    .insert({
-      proposal_id: proposalId,
-      grant_id: grant.id,
-      note: note || null,
-      submitted_by: user.id,
-    });
-  if (linkError) {
-    return {
-      error: /duplicate|unique/i.test(linkError.message)
-        ? "That grant is already attached to this proposal."
-        : "Could not attach that grant. Try again.",
-    };
-  }
-
-  revalidatePath(`/proposals/${proposalId}`);
-  return {};
-}
-
-// Owner or admin only (enforced by RLS on proposal_grants' delete
-// policy) — removing a lead never touches the shared grants registry
-// entry itself, just this proposal's link to it.
-export async function removeProposalGrant(formData: FormData) {
-  const { supabase } = await requireUser();
-
-  const proposalId = String(formData.get("proposal_id"));
-  const proposalGrantId = String(formData.get("proposal_grant_id"));
-
-  await supabase.from("proposal_grants").delete().eq("id", proposalGrantId);
+  await supabase
+    .from("proposal_power_tree_nodes")
+    .update({ completed, completed_at: completed ? new Date().toISOString() : null })
+    .eq("id", nodeId);
 
   revalidatePath(`/proposals/${proposalId}`);
 }

@@ -71,9 +71,13 @@ function CommunityStrip({
   districts: number;
 }) {
   const items: { icon: StatIconName; value: string; label: string }[] = [
-    { icon: "users", value: String(members), label: `registered member${members === 1 ? "" : "s"}` },
-    { icon: "mapPin", value: String(zipCodes), label: `zip code${zipCodes === 1 ? "" : "s"}` },
-    { icon: "buildingLibrary", value: `${districts}/10`, label: "districts represented" },
+    { icon: "registeredMembers", value: String(members), label: `registered member${members === 1 ? "" : "s"}` },
+    { icon: "zipCodes", value: String(zipCodes), label: `zip code${zipCodes === 1 ? "" : "s"}` },
+    // Reuses the "elected official" icon rather than a dedicated
+    // districts glyph (there wasn't one in the export set) — Samantha's
+    // call, since council districts and elected officials read as the
+    // same idea here.
+    { icon: "contactedAnElected", value: `${districts}/10`, label: "districts represented" },
   ];
   return (
     <div className="mt-4 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 rounded-2xl bg-neutral-50 px-6 py-4">
@@ -400,7 +404,9 @@ export default async function CommunityDashboardPage({
       .eq("status", "published"),
     supabase
       .from("profiles")
-      .select("age_range, race_ethnicity, gender, housing_status, zip_code, council_district"),
+      .select(
+        "age_range, race_ethnicity, gender, housing_status, political_affiliation, zip_code, council_district"
+      ),
     supabase
       .from("volunteer_categories")
       .select("label, volunteer_category_groups ( label )"),
@@ -485,6 +491,13 @@ export default async function CommunityDashboardPage({
   const raceBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.race_ethnicity })));
   const genderBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.gender })));
   const housingBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.housing_status })));
+  // No Census comparison for this one (obviously — ACS doesn't ask
+  // political affiliation) — just the self-reported member breakdown, same
+  // as everything else here: aggregate counts only, computed server-side,
+  // never a raw per-person value sent to the client.
+  const politicalBreakdown = breakdown(
+    districtProfiles.map((p: any) => ({ value: p.political_affiliation }))
+  );
 
   const districts = Array.from({ length: 10 }, (_, i) => i + 1);
 
@@ -506,7 +519,7 @@ export default async function CommunityDashboardPage({
         items={[
           {
             key: "proposalsMade",
-            icon: "megaphone",
+            icon: "proposalsMade",
             label: "Proposals made",
             value: proposalsMade ?? 0,
             color: STAT_COLORS.proposals,
@@ -514,7 +527,7 @@ export default async function CommunityDashboardPage({
           },
           {
             key: "contributedToOthers",
-            icon: "handThumbUp",
+            icon: "contributionToOthers",
             label: "Contributions to others",
             value: contributedToOthers,
             color: STAT_COLORS.contributed,
@@ -522,7 +535,7 @@ export default async function CommunityDashboardPage({
           },
           {
             key: "commentsMade",
-            icon: "chatBubbleLeftRight",
+            icon: "commentsMade",
             label: "Comments made",
             value: commentsMade ?? 0,
             color: STAT_COLORS.comments,
@@ -530,7 +543,7 @@ export default async function CommunityDashboardPage({
           },
           {
             key: "decisionMakersEngaged",
-            icon: "buildingLibrary",
+            icon: "decisionMakersEngaged",
             label: "Decision-makers engaged",
             value: decisionMakersEngaged,
             color: STAT_COLORS.decisionMakers,
@@ -538,8 +551,8 @@ export default async function CommunityDashboardPage({
           },
           {
             key: "lettersWritten",
-            icon: "newspaper",
-            label: "Letters written to the editor",
+            icon: "lettersToTheEditor",
+            label: "Letters to the editor",
             value: lettersWritten,
             sublabel: lettersPublished > 0 ? `${lettersPublished} published` : undefined,
             color: STAT_COLORS.letters,
@@ -547,7 +560,7 @@ export default async function CommunityDashboardPage({
           },
           {
             key: "contactedOfficials",
-            icon: "phone",
+            icon: "contactedAnElected",
             label: "Contacted an elected official",
             value: contactedOfficials,
             color: STAT_COLORS.contactedOfficials,
@@ -555,7 +568,7 @@ export default async function CommunityDashboardPage({
           },
           {
             key: "meetingsAttended",
-            icon: "calendar",
+            icon: "communityMeetingsAttended",
             label: "Community meetings attended",
             value: meetingsAttended,
             color: STAT_COLORS.meetings,
@@ -563,7 +576,7 @@ export default async function CommunityDashboardPage({
           },
           {
             key: "volunteerHours",
-            icon: "handRaised",
+            icon: "hoursVolunteered",
             label: "Hours volunteered",
             value: volunteerHours,
             color: STAT_COLORS.volunteerHours,
@@ -571,7 +584,7 @@ export default async function CommunityDashboardPage({
           },
           {
             key: "testimonyGiven",
-            icon: "microphone",
+            icon: "testimonyGiven",
             label: "Testimony given",
             value: testimonyGiven,
             color: STAT_COLORS.testimony,
@@ -642,6 +655,12 @@ export default async function CommunityDashboardPage({
             title="Housing status"
             items={housingBreakdown}
             respondedCount={housingBreakdown.reduce((s, i) => s + i.count, 0)}
+            totalCount={districtProfiles.length}
+          />
+          <BreakdownList
+            title="Political affiliation"
+            items={politicalBreakdown}
+            respondedCount={politicalBreakdown.reduce((s, i) => s + i.count, 0)}
             totalCount={districtProfiles.length}
           />
         </div>

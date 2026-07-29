@@ -49,18 +49,23 @@ export function FlippableStatTile({
         className="relative h-full transition-transform duration-500 [transform-style:preserve-3d]"
         style={{ transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}
       >
-        {/* Front — same design as before: color cap, number + icon,
-            bold label, optional sublabel. */}
-        <div className="absolute inset-0 flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg [backface-visibility:hidden]">
-          <div className="h-3 shrink-0" style={{ backgroundColor: color }} aria-hidden="true" />
+        {/* Front — tinted with the tile's own color (a soft wash across
+            the whole card, not just a thin top cap) so the big bold
+            number on a plain white background doesn't read as clinical.
+            Icon circle gets a stronger tint of the same color so it
+            still stands out against the now-tinted card. */}
+        <div
+          className="absolute inset-0 flex flex-col overflow-hidden rounded-2xl border shadow-sm transition hover:-translate-y-1 hover:shadow-lg [backface-visibility:hidden]"
+          style={{ backgroundColor: `${color}14`, borderColor: `${color}33` }}
+        >
           <div className="flex flex-1 flex-col p-4">
             <div className="flex items-start justify-between gap-2">
               <p className={`${font} text-5xl leading-none tracking-tight`} style={{ color }}>
                 {value}
               </p>
               <div
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
-                style={{ backgroundColor: `${color}1a`, color }}
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-2xl"
+                style={{ backgroundColor: `${color}33`, color }}
               >
                 <StatIcon name={icon} className="h-7 w-7" />
               </div>

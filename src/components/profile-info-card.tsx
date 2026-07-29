@@ -15,6 +15,7 @@ type Profile = {
   race_ethnicity: string | null;
   gender: string | null;
   housing_status: string | null;
+  political_affiliation: string | null;
   bio: string | null;
   avatar_url: string | null;
 } | null;
@@ -35,6 +36,7 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
     ["Race / ethnicity", profile?.race_ethnicity],
     ["Gender", profile?.gender],
     ["Housing status", profile?.housing_status],
+    ["Political affiliation", profile?.political_affiliation],
   ].filter(([, value]) => value) as [string, string][];
 
   if (!editing) {
@@ -276,6 +278,27 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             <option value="Renter">Renter</option>
             <option value="Unhoused">Unhoused</option>
           </SelectField>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-neutral-700">
+            Political affiliation (optional)
+          </span>
+          <SelectField
+            name="political_affiliation"
+            defaultValue={profile?.political_affiliation ?? ""}
+          >
+            <option value="">Prefer not to say</option>
+            <option value="Democrat">Democrat</option>
+            <option value="Republican">Republican</option>
+            <option value="Independent">Independent</option>
+            <option value="Other">Other</option>
+          </SelectField>
+          <span className="mt-1 block text-[11px] text-neutral-400">
+            Helps show that support for quality-of-life proposals isn&apos;t
+            confined to one party. Same rule as everything above: never
+            required, never shown next to your name, aggregate-only.
+          </span>
         </label>
 
         <button className="rounded-md bg-duty-purple px-4 py-2 text-sm font-medium text-white">
