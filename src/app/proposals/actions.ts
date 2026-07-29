@@ -380,6 +380,31 @@ export async function toggleProposalPublished(formData: FormData) {
   revalidatePath("/");
 }
 
+// Owner-only flag: does this proposal actually need funding to happen?
+// Off by default — a lot of policy proposals cost nothing to pass. When
+// on, the "Funding leads" subsection under "Getting it done" shows up;
+// when off, it's hidden entirely rather than showing an empty section
+// on every proposal regardless of whether funding is even relevant.
+export async function toggleFundingNeeded(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const nextValue = formData.get("funding_needed") === "true";
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can change this.");
+  }
+
+  await supabase.from("proposals").update({ funding_needed: nextValue }).eq("id", proposalId);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
 export async function addComment(formData: FormData) {
   const { supabase, user } = await requireUser();
 
@@ -979,6 +1004,81 @@ export async function addPowerTreeNode(formData: FormData) {
       : existingIds.length;
   existingIds.splice(insertIndex, 0, newNode.id);
   await reindexPowerTreeNodes(supabase, existingIds);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Attaches a grant lead to a proposal — creates the shared registry
+// entry if it doesn't already exist (case-insensitive match against
+// `name`, same create-or-reuse pattern as addPowerTreeNode above), or
+// reuses the existing one if it does. Open to anyone signed in, no
+// approval step: unlike a decision-maker suggestion, this never lands
+// "pending" — a funding lead is information, not a claim being made on
+// the proposal's behalf, so there's nothing for the owner to approve.
+export async function addProposalGrant(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const rawName = String(formData.get("grant_name") ?? "").trim();
+  const funder = String(formData.get("funder") ?? "").trim();
+  const url = String(formData.get("url") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+
+  if (!rawName) return { error: "Give the grant or funding program a name." };
+
+  let { data: grant } = await supabase
+    .from("grants")
+    .select("id")
+    .ilike("name", rawName)
+    .maybeSingle();
+
+  if (!grant) {
+    const { data: created, error } = await supabase
+      .from("grants")
+      .insert({
+        name: rawName,
+        funder: funder || null,
+        url: url || null,
+        description: description || null,
+        added_by: user.id,
+      })
+      .select("id")
+      .single();
+    if (error || !created) return { error: error?.message ?? "Could not add that grant." };
+    grant = created;
+  }
+
+  const { error: linkError } = await supabase
+    .from("proposal_grants")
+    .insert({
+      proposal_id: proposalId,
+      grant_id: grant.id,
+      note: note || null,
+      submitted_by: user.id,
+    });
+  if (linkError) {
+    return {
+      error: /duplicate|unique/i.test(linkError.message)
+        ? "That grant is already attached to this proposal."
+        : "Could not attach that grant. Try again.",
+    };
+  }
+
+  revalidatePath(`/proposals/${proposalId}`);
+  return {};
+}
+
+// Owner or admin only (enforced by RLS on proposal_grants' delete
+// policy) — removing a lead never touches the shared grants registry
+// entry itself, just this proposal's link to it.
+export async function removeProposalGrant(formData: FormData) {
+  const { supabase } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const proposalGrantId = String(formData.get("proposal_grant_id"));
+
+  await supabase.from("proposal_grants").delete().eq("id", proposalGrantId);
 
   revalidatePath(`/proposals/${proposalId}`);
 }

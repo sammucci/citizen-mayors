@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createProposal } from "@/app/proposals/actions";
 import { NeighborhoodField } from "@/components/neighborhood-field";
 import { readableTextColor } from "@/lib/readable-text-color";
+import { SelectField } from "@/components/select-field";
 
 type Category = { id: number; label: string; requires_budget: boolean; color: string };
 type Tag = { id: number; label: string };
@@ -21,6 +22,24 @@ const TITLE_SUGGESTIONS = [
   "Add exercise equipment for senior citizens in every neighborhood park",
   "Make the former Church of the Assumption a community center",
 ];
+
+// A blank textarea in front of "write it like real ordinance language"
+// is intimidating — this gives the body a light starting structure to
+// write into instead of against, using the same ##-heading markdown
+// already supported (and explained right below the box). It's a real
+// `defaultValue`, not just a placeholder, so it's actually there to edit
+// and replace rather than vanishing the moment someone starts typing —
+// the bracketed prompts are what signal "swap this out," not literal
+// content. Someone's still completely free to delete all of it and
+// write freeform instead.
+const BODY_STARTER = `## What it is
+[Describe the core idea in a sentence or two.]
+
+## Who it serves
+[Who benefits — and who else might this affect?]
+
+## Why it matters
+[The problem this solves, or the opportunity it creates.]`;
 
 export function NewProposalForm({
   categories,
@@ -58,17 +77,16 @@ export function NewProposalForm({
       </Field>
 
       <Field label="Type">
-        <select name="type" className="input" defaultValue="policy">
+        <SelectField name="type" defaultValue="policy">
           <option value="policy">Policy</option>
           <option value="project">Project</option>
-        </select>
+        </SelectField>
       </Field>
 
       <Field label="Category">
-        <select
+        <SelectField
           name="category_id"
           required
-          className="input"
           value={categoryId ?? ""}
           onChange={(e) => setCategoryId(Number(e.target.value))}
         >
@@ -78,7 +96,7 @@ export function NewProposalForm({
               {c.requires_budget ? "" : " (no direct budget line)"}
             </option>
           ))}
-        </select>
+        </SelectField>
       </Field>
 
       <Field label="Tags (select any that apply)">
@@ -93,9 +111,8 @@ export function NewProposalForm({
       </Field>
 
       <Field label="Geographic scope">
-        <select
+        <SelectField
           name="geography_scope"
-          className="input"
           value={scope}
           onChange={(e) => setScope(e.target.value)}
         >
@@ -104,7 +121,7 @@ export function NewProposalForm({
           <option value="neighborhood">Neighborhood</option>
           <option value="zip">Zip code</option>
           <option value="address">Specific address / intersection</option>
-        </select>
+        </SelectField>
       </Field>
 
       {scope === "citywide" && (
@@ -116,13 +133,13 @@ export function NewProposalForm({
 
       {scope === "council_district" && (
         <Field label="Which council district">
-          <select name="council_district" required className="input">
+          <SelectField name="council_district" required>
             {DISTRICTS.map((d) => (
               <option key={d} value={d}>
                 District {d}
               </option>
             ))}
-          </select>
+          </SelectField>
         </Field>
       )}
 
@@ -171,14 +188,15 @@ export function NewProposalForm({
       <Field label="Full proposal text">
         <textarea
           name="body"
-          rows={10}
+          rows={12}
           className="input font-mono text-sm"
-          placeholder="Write it the way you'd want it to read as real ordinance or project language..."
+          defaultValue={BODY_STARTER}
         />
         <p className="mt-1 text-xs text-neutral-500">
-          Start a line with <code className="rounded bg-neutral-100 px-1">#</code>{" "}
-          for a heading, or <code className="rounded bg-neutral-100 px-1">##</code>{" "}
-          for a smaller one.
+          A starting structure, not a requirement — write over it, rearrange it,
+          or clear it and write freeform. Start a line with{" "}
+          <code className="rounded bg-neutral-100 px-1">#</code> for a heading, or{" "}
+          <code className="rounded bg-neutral-100 px-1">##</code> for a smaller one.
         </p>
       </Field>
 

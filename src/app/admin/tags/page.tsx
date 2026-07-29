@@ -101,6 +101,20 @@ export default async function TagsAdminPage() {
     tagsByTagGroup.get(key)!.push(t);
   }
 
+  // Flat label + topic lookup handed to AddTagForm so it can warn about
+  // a likely duplicate AS SAMANTHA TYPES, instead of the only feedback
+  // being a "that tag already exists" error after hitting Add — the real
+  // problem she flagged wasn't that duplicates slip through (they don't:
+  // addTagAdmin already does a case-insensitive check, and the tags
+  // table has a unique constraint on slug as a backstop), it's that
+  // there was no easy way to SEE what already exists across topics
+  // without expanding every collapsed group one at a time first.
+  const tagGroupLabelById = new Map(tagGroupOptions.map((g) => [g.id, g.label]));
+  const existingTagsForDuplicateCheck = (tags ?? []).map((t: any) => ({
+    label: t.label,
+    groupLabel: t.group_id != null ? tagGroupLabelById.get(String(t.group_id)) ?? null : null,
+  }));
+
   const tagsByGroup = new Map<string, any[]>();
   const ungroupedTags: any[] = [];
   for (const c of volunteerCategories ?? []) {
@@ -227,12 +241,16 @@ export default async function TagsAdminPage() {
           categories below.
         </p>
         <div className="mt-3">
-          <AddTagForm />
+          <AddTagForm existingTags={existingTagsForDuplicateCheck} />
         </div>
         <div className="mt-3">
           <AddTagGroupForm />
         </div>
 
+        {/* Back to collapsed by default — now that the "Add a tag" form
+            itself warns about duplicates and near-duplicates as you
+            type (see AddTagForm), there's no need to force every topic
+            open just to check for those; compact browsing wins again. */}
         <ul className="mt-6 space-y-3">
           {tagGroupOptions.map((g) => {
             const groupTags = tagsByTagGroup.get(g.id) ?? [];

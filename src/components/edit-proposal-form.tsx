@@ -4,6 +4,7 @@ import { useState } from "react";
 import { updateProposalDetails } from "@/app/proposals/actions";
 import { NeighborhoodField } from "@/components/neighborhood-field";
 import { readableTextColor } from "@/lib/readable-text-color";
+import { SelectField } from "@/components/select-field";
 
 type Category = { id: number; label: string };
 
@@ -42,26 +43,25 @@ export function EditProposalForm({
       </Field>
 
       <Field label="Type">
-        <select name="type" className="input" defaultValue={initial.type}>
+        <SelectField name="type" defaultValue={initial.type}>
           <option value="policy">Policy</option>
           <option value="project">Project</option>
-        </select>
+        </SelectField>
       </Field>
 
       <Field label="Category">
-        <select name="category_id" required className="input" defaultValue={initial.category_id ?? ""}>
+        <SelectField name="category_id" required defaultValue={initial.category_id ?? ""}>
           {categories?.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
             </option>
           ))}
-        </select>
+        </SelectField>
       </Field>
 
       <Field label="Geographic scope">
-        <select
+        <SelectField
           name="geography_scope"
-          className="input"
           value={scope}
           onChange={(e) => setScope(e.target.value)}
         >
@@ -70,15 +70,14 @@ export function EditProposalForm({
           <option value="neighborhood">Neighborhood</option>
           <option value="zip">Zip code</option>
           <option value="address">Specific address / intersection</option>
-        </select>
+        </SelectField>
       </Field>
 
       {scope === "council_district" && (
         <Field label="Which council district">
-          <select
+          <SelectField
             name="council_district"
             required
-            className="input"
             defaultValue={initial.council_district ?? ""}
           >
             {DISTRICTS.map((d) => (
@@ -86,7 +85,7 @@ export function EditProposalForm({
                 District {d}
               </option>
             ))}
-          </select>
+          </SelectField>
         </Field>
       )}
 

@@ -98,6 +98,40 @@ create table public.decision_makers (
 create unique index decision_makers_name_kind_idx
   on public.decision_makers (lower(name), kind);
 
+-- Shared, crowdsourced registry of grants/funding programs — same shape
+-- and same trust model as decision_makers above (anyone signed in can
+-- add a new one, only an admin can rename or remove it from the shared
+-- list), so the same state grant program doesn't get retyped slightly
+-- differently on every proposal that could use it. Attaching one to a
+-- specific proposal (proposal_grants, right below) is open too, with no
+-- approval step — a grant lead is "go check this out," not a claim made
+-- on the proposal's behalf, so it doesn't need the same owner-approval
+-- gate as a decision-maker suggestion does.
+create table public.grants (
+  id uuid primary key default gen_random_uuid(),
+  name text not null, -- e.g. "PA DCED Redevelopment Assistance Capital Program"
+  funder text, -- who administers/offers it, e.g. "PA Dept of Community & Economic Development"
+  url text,
+  description text, -- what it typically funds / eligibility, in plain language
+  added_by uuid references public.profiles(id),
+  created_at timestamptz not null default now()
+);
+create unique index grants_name_idx on public.grants (lower(name));
+
+-- Links a grant to a specific proposal it might fund. `note` is the
+-- proposal-specific context ("this would likely qualify under the parks
+-- improvement track") — the grant row itself only holds the general,
+-- reusable description.
+create table public.proposal_grants (
+  id uuid primary key default gen_random_uuid(),
+  proposal_id uuid not null references public.proposals(id) on delete cascade,
+  grant_id uuid not null references public.grants(id) on delete cascade,
+  note text,
+  submitted_by uuid not null references public.profiles(id),
+  created_at timestamptz not null default now(),
+  unique (proposal_id, grant_id)
+);
+
 -- Shared, crowdsourced list of volunteer-hours categories (Environment,
 -- Youth, Food security, etc.) — same "grows via add-new" pattern as
 -- decision_makers and tags. Exists so "hours by category" reporting on
@@ -173,6 +207,14 @@ create table public.proposals (
   -- proposal", "Make petition") — that anchor has no other fields of
   -- its own; it's a static label in the UI, not a real power-tree node.
   people_action_note text,
+
+  -- Owner-set flag, off by default. Some proposals genuinely don't need
+  -- funding at all (a policy change costs nothing to pass); others are
+  -- completely reliant on it. Rather than showing a "Funding & grants"
+  -- subsection on every single proposal whether it's relevant or not,
+  -- this flag is what reveals that subsection under "Getting it done" —
+  -- see proposal_grants below.
+  funding_needed boolean not null default false,
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -378,7 +420,21 @@ insert into public.decision_makers (name, kind) values
   ('Parks & Recreation Department', 'department'),
   ('City Planning Commission', 'board_commission'),
   ('Zoning Board of Adjustment', 'board_commission'),
-  ('School District of Philadelphia', 'department');
+  ('School District of Philadelphia', 'department'),
+  -- Quasi-public authorities/bodies that come up constantly in real
+  -- land-use, waterfront, and neighborhood-development proposals — see
+  -- migration_local_authorities_seed.sql for the note on why RCO is one
+  -- generic entry rather than every individual neighborhood RCO.
+  ('Delaware River Waterfront Corporation (DRWC)', 'board_commission'),
+  ('Philadelphia Land Bank', 'board_commission'),
+  ('Registered Community Organization (RCO)', 'other'),
+  ('Philadelphia Redevelopment Authority (PRA)', 'board_commission'),
+  ('Philadelphia Housing Authority (PHA)', 'board_commission'),
+  ('Philadelphia Historical Commission', 'board_commission'),
+  ('Philadelphia Art Commission', 'board_commission'),
+  ('Department of Licenses & Inspections (L&I)', 'department'),
+  ('Philadelphia Water Department', 'department'),
+  ('SEPTA', 'board_commission');
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security
@@ -389,6 +445,8 @@ alter table public.categories enable row level security;
 alter table public.tags enable row level security;
 alter table public.tag_groups enable row level security;
 alter table public.decision_makers enable row level security;
+alter table public.grants enable row level security;
+alter table public.proposal_grants enable row level security;
 alter table public.volunteer_categories enable row level security;
 alter table public.volunteer_category_groups enable row level security;
 alter table public.proposals enable row level security;
@@ -410,6 +468,8 @@ create policy "admin updates categories" on public.categories for update
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 create policy "public read tags" on public.tags for select using (true);
 create policy "public read decision makers" on public.decision_makers for select using (true);
+create policy "public read grants" on public.grants for select using (true);
+create policy "public read proposal grants" on public.proposal_grants for select using (true);
 create policy "public read volunteer categories" on public.volunteer_categories for select using (true);
 -- Anyone signed in can add a brand-new category while logging volunteer
 -- hours (same "grows as you use it" idea as decision_makers) — but only
@@ -544,6 +604,27 @@ create policy "admin deletes decision makers" on public.decision_makers for dele
 -- in use in any proposal's decision chain.
 create policy "admin updates decision makers" on public.decision_makers for update
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+-- Same trust model as decision_makers: anyone signed in can add a grant
+-- to the shared registry, but only an admin can rename or remove the
+-- registry entry itself.
+create policy "authenticated add grants" on public.grants for insert
+  with check (auth.uid() = added_by);
+create policy "admin updates grants" on public.grants for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin deletes grants" on public.grants for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+-- Attaching a grant to a proposal is open to anyone signed in, no
+-- approval gate — it's a funding lead, not a claim made on the
+-- proposal's behalf. Removing one is owner-or-admin only.
+create policy "authenticated attach proposal grants" on public.proposal_grants for insert
+  with check (auth.uid() = submitted_by);
+create policy "owner or admin remove proposal grants" on public.proposal_grants for delete
+  using (
+    exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid())
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin)
+  );
 
 -- Anyone signed in can suggest a decision-maker for the chain, not just
 -- the owner — the app layer (addPowerTreeNode) decides whether that

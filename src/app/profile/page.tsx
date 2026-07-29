@@ -91,6 +91,38 @@ export default async function ProfilePage() {
   }
   const pendingReviewOnMyProposals = [...pendingReviewByProposal.entries()];
 
+  // Same persistent-status idea as the panel above, for a different real
+  // bug report: a decision-maker someone else suggested for one of your
+  // proposals (which lands "pending" until you approve it) used to only
+  // ever show up once, as a one-time notification-bell blip that
+  // vanished the moment the bell was opened — with no other place on the
+  // site showing it, even though the suggestion itself was still sitting
+  // there, unapproved. This mirrors pendingReviewOnMyProposals exactly.
+  const { data: pendingLinksOnMyProposalsRaw } =
+    myProposalIds.length > 0
+      ? await supabase
+          .from("proposal_power_tree_nodes")
+          .select("id, proposal_id, decision_makers ( name ), proposals ( title )")
+          .in("proposal_id", myProposalIds)
+          .eq("status", "pending")
+          .neq("submitted_by", user.id)
+      : { data: [] as any[] };
+
+  const pendingLinksByProposal = new Map<string, { title: string; names: string[] }>();
+  for (const n of (pendingLinksOnMyProposalsRaw ?? []) as any[]) {
+    const existing = pendingLinksByProposal.get(n.proposal_id);
+    const name = n.decision_makers?.name ?? "Someone";
+    if (existing) {
+      existing.names.push(name);
+    } else {
+      pendingLinksByProposal.set(n.proposal_id, {
+        title: n.proposals?.title ?? "A proposal",
+        names: [name],
+      });
+    }
+  }
+  const pendingLinksOnMyProposals = [...pendingLinksByProposal.entries()];
+
   // --- Civic report card: platform-engagement half is all computed
   // live from tables that already exist ("compute, don't duplicate" —
   // the same call made on the Meantime project) rather than tracked in
@@ -261,6 +293,26 @@ export default async function ProfilePage() {
               <li key={proposalId}>
                 <Link href={`/proposals/${proposalId}`} className="text-xs text-amber-800 underline">
                   {v.title} {v.count > 1 ? `(${v.count})` : ""}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {pendingLinksOnMyProposals.length > 0 && (
+        <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-amber-900">
+            <HourglassIcon className="h-4 w-4 shrink-0" />
+            {pendingLinksOnMyProposals.reduce((sum, [, v]) => sum + v.names.length, 0)} decision-maker
+            suggestion{pendingLinksOnMyProposals.reduce((sum, [, v]) => sum + v.names.length, 0) === 1 ? "" : "s"}{" "}
+            on your proposals still awaiting your approval
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {pendingLinksOnMyProposals.map(([proposalId, v]) => (
+              <li key={proposalId}>
+                <Link href={`/proposals/${proposalId}`} className="text-xs text-amber-800 underline">
+                  {v.title} — {v.names.join(", ")}
                 </Link>
               </li>
             ))}

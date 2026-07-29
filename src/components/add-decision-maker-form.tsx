@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { addDecisionMakerAdmin } from "@/app/admin/actions";
+import { SelectField } from "@/components/select-field";
 
 // Previously the only way into the shared registry was the "add new"
 // option in the combobox while building a specific proposal's chain —
@@ -38,12 +39,17 @@ export function AddDecisionMakerForm() {
         </label>
         <label>
           <span className="mb-1 block text-xs text-neutral-500">Kind</span>
-          <select name="kind" defaultValue="other" className="rounded border border-neutral-300 px-2 py-1 text-sm">
+          <SelectField
+            name="kind"
+            defaultValue="other"
+            fullWidth={false}
+            className="!rounded !py-1 !pl-2 !pr-6 !text-sm"
+          >
             <option value="elected_official">Elected official</option>
             <option value="department">City department</option>
             <option value="board_commission">Board / commission</option>
             <option value="other">Other</option>
-          </select>
+          </SelectField>
         </label>
         <button className="rounded bg-duty-purple px-3 py-1.5 text-sm font-medium text-white">
           Add

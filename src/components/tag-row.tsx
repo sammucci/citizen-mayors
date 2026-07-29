@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { deleteTag, renameTag, setTagGroup } from "@/app/admin/actions";
+import { SelectField } from "@/components/select-field";
 
 // Same inline-rename-plus-confirm-delete pattern as VolunteerCategoryRow
 // and DecisionMakerRow — the tags table previously had no admin edit
@@ -135,7 +136,7 @@ export function TagRow({
       {!editing && (
         <div className="mt-2 flex items-center gap-2">
           <span className="text-[11px] text-neutral-400">Topic</span>
-          <select
+          <SelectField
             defaultValue={groupId ?? ""}
             disabled={savingGroup}
             onChange={async (e) => {
@@ -148,7 +149,8 @@ export function TagRow({
               if (result?.error) setError(result.error);
               setSavingGroup(false);
             }}
-            className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700"
+            wrapperClassName="min-w-0 flex-1"
+            className="!rounded !py-0.5 !pl-2 !pr-6 !text-xs !text-neutral-700"
           >
             <option value="">Ungrouped</option>
             {groups.map((g) => (
@@ -156,7 +158,7 @@ export function TagRow({
                 {g.label}
               </option>
             ))}
-          </select>
+          </SelectField>
         </div>
       )}
       {error && <p className="mt-1.5 text-xs text-duty-red">{error}</p>}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { renameDecisionMaker } from "@/app/admin/actions";
 import { DeleteDecisionMakerButton } from "@/components/delete-decision-maker-button";
 import { splitDecisionMakerLabel } from "@/lib/decision-maker-label";
+import { SelectField } from "@/components/select-field";
 
 const KIND_OPTIONS = [
   { value: "elected_official", label: "Elected official" },
@@ -61,18 +62,19 @@ export function DecisionMakerRow({
             autoFocus
             className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
           />
-          <select
+          <SelectField
             name="kind"
             value={kindValue}
             onChange={(e) => setKindValue(e.target.value)}
-            className="rounded border border-neutral-300 px-2 py-1 text-xs"
+            fullWidth={false}
+            className="!rounded !py-1 !pl-2 !pr-6 !text-xs"
           >
             {KIND_OPTIONS.map((k) => (
               <option key={k.value} value={k.value}>
                 {k.label}
               </option>
             ))}
-          </select>
+          </SelectField>
           <button className="shrink-0 rounded-full bg-duty-purple px-3 py-1 text-xs font-medium text-white">
             Save
           </button>

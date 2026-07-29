@@ -317,10 +317,28 @@ export async function renameDecisionMaker(formData: FormData): Promise<{ error?:
 // friendly message instead of a crash.
 export async function deleteDecisionMaker(
   formData: FormData
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; inUseCount?: number }> {
   const { supabase } = await requireAdmin();
 
   const decisionMakerId = String(formData.get("decision_maker_id"));
+
+  // Checked up front rather than just letting the foreign key reject the
+  // delete, so the "in use" case can carry back a real count (used for
+  // the "force delete anyway" follow-up below) instead of just a bare
+  // error message.
+  const { count } = await supabase
+    .from("proposal_power_tree_nodes")
+    .select("id", { count: "exact", head: true })
+    .eq("decision_maker_id", decisionMakerId);
+
+  if (count && count > 0) {
+    return {
+      error: `Can't delete — it's currently used in ${count} proposal${
+        count === 1 ? "" : "s"
+      }' decision chains.`,
+      inUseCount: count,
+    };
+  }
 
   const { error } = await supabase
     .from("decision_makers")
@@ -328,11 +346,43 @@ export async function deleteDecisionMaker(
     .eq("id", decisionMakerId);
 
   if (error) {
-    return {
-      error: /foreign key|violates/i.test(error.message)
-        ? "Can't delete — it's currently used in at least one proposal's decision chain. Remove it from those first."
-        : "Something went wrong deleting that entry.",
-    };
+    return { error: "Something went wrong deleting that entry." };
+  }
+
+  revalidatePath("/admin/decision-makers");
+  return {};
+}
+
+// Escape hatch for the case above: normally a decision-maker that's in
+// use anywhere is protected from deletion (so nobody accidentally blows
+// up a proposal's chain by deleting the wrong entry), but that same
+// protection also blocks removing something that never should have been
+// added in the first place — an abusive or inappropriate name someone
+// snuck into the shared registry. This is only reachable through an
+// explicit second confirmation in the UI (typing "delete" again), since
+// it really does remove the entry from every chain it's part of, not
+// just the registry — there's no undo.
+export async function forceDeleteDecisionMaker(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const decisionMakerId = String(formData.get("decision_maker_id"));
+
+  const { error: nodesError } = await supabase
+    .from("proposal_power_tree_nodes")
+    .delete()
+    .eq("decision_maker_id", decisionMakerId);
+  if (nodesError) {
+    return { error: "Couldn't remove it from proposals' chains. Try again." };
+  }
+
+  const { error } = await supabase
+    .from("decision_makers")
+    .delete()
+    .eq("id", decisionMakerId);
+  if (error) {
+    return { error: "Something went wrong deleting that entry." };
   }
 
   revalidatePath("/admin/decision-makers");

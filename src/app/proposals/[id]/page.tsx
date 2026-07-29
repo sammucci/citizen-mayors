@@ -17,6 +17,8 @@ import { CoverImageControl } from "@/components/cover-image-control";
 import { EditProposalForm } from "@/components/edit-proposal-form";
 import { PublishToggleButton } from "@/components/publish-toggle-button";
 import { PowerTreeChain } from "@/components/power-tree-chain";
+import { FundingNeededToggle } from "@/components/funding-needed-toggle";
+import { FundingLeadsSection } from "@/components/funding-leads-section";
 import { RepositionableImage } from "@/components/repositionable-image";
 import { ReplyToggle } from "@/components/reply-toggle";
 import { ResolveCommentForm } from "@/components/resolve-comment-form";
@@ -171,6 +173,34 @@ export default async function ProposalPage({
     )
     .eq("proposal_id", proposal.id)
     .order("sort_order");
+
+  // "Funding leads" (see funding-leads-section.tsx) only ever queried/
+  // rendered when the flag's actually on — most proposals don't need
+  // funding at all, so there's no reason to fetch this otherwise.
+  const { data: allGrants } = proposal.funding_needed
+    ? await supabase.from("grants").select("id, name, funder").order("name")
+    : { data: [] as any[] };
+  const { data: proposalGrantsRaw } = proposal.funding_needed
+    ? await supabase
+        .from("proposal_grants")
+        .select(
+          "id, note, submitted_by, grants ( id, name, funder, url, description ), profiles ( display_name )"
+        )
+        .eq("proposal_id", proposal.id)
+        .order("created_at")
+    : { data: [] as any[] };
+  const proposalGrants = (proposalGrantsRaw ?? []).map((pg: any) => ({
+    id: pg.id,
+    note: pg.note,
+    submittedByName: pg.profiles?.display_name ?? "a resident",
+    grant: {
+      id: pg.grants?.id,
+      name: pg.grants?.name ?? "A grant",
+      funder: pg.grants?.funder ?? null,
+      url: pg.grants?.url ?? null,
+      description: pg.grants?.description ?? null,
+    },
+  }));
 
   const { data: allTags } = await supabase.from("tags").select("id, label").order("label");
   const appliedTagIds = new Set(
@@ -771,11 +801,24 @@ export default async function ProposalPage({
               {proposal.categories?.label} • {proposal.type}
             </div>
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
-            <h2 className="text-base font-semibold">Decision chain</h2>
+            {/* Renamed from "Decision chain" — this section covers more
+                than just who has to sign off now (funding leads live
+                here too, see below), so the name needed to cover both:
+                who this moves through, AND what it actually takes to
+                make it real. */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold">Getting it done</h2>
+              {isOwner && (
+                <FundingNeededToggle
+                  proposalId={proposal.id}
+                  fundingNeeded={proposal.funding_needed}
+                />
+              )}
+            </div>
             <p className="mt-1 text-xs text-neutral-500">
-              Who this proposal would move through, in order — climbing from
-              "We the people" at the bottom up to the final decision-maker on
-              top.
+              Who this proposal would move through and what it takes to get it
+              done — climbing from "We the people" at the bottom up to the
+              final decision-maker on top.
             </p>
 
             <PowerTreeChain
@@ -815,6 +858,18 @@ export default async function ProposalPage({
                 };
               })}
             />
+
+            {proposal.funding_needed && (
+              <FundingLeadsSection
+                proposalId={proposal.id}
+                grants={proposalGrants}
+                allGrants={allGrants ?? []}
+                isOwner={isOwner}
+                isAdmin={isAdmin}
+                canContribute={Boolean(user)}
+                categoryColor={categoryColor}
+              />
+            )}
           </div>
           </div>
 

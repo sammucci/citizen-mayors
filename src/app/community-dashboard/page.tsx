@@ -1,25 +1,24 @@
 import Link from "next/link";
-import { Poppins } from "next/font/google";
+import { Fredoka } from "next/font/google";
 import { createClient } from "@/lib/supabase/server";
 import { CENSUS_DISTRICT_DEMOGRAPHICS, citywideCensusStats } from "@/lib/census-district-demographics";
 import { InfoHeading } from "@/components/info-heading";
 import { StatIcon, type StatIconName } from "@/components/stat-icons";
-import { FlippableStatTile } from "@/components/flippable-stat-tile";
+import { StatTileGrid, type StatTileData } from "@/components/stat-tile-grid";
 
 export const dynamic = "force-dynamic";
 
 // Sofia Pro (what Samantha asked for by name) is a commercial font sold
 // through Mostardesign/Adobe Fonts, not something freely licensable to
-// bundle here — using it would mean either linking a font CDN that
-// doesn't actually have the rights to serve it, or shipping the actual
-// font file without a license, neither of which this app can do.
-// Poppins is the closest free, self-hostable stand-in: same geometric,
-// rounded-bold letterforms people usually reach for Sofia Pro to get.
-// Scoped to just the stat numbers below (not swapped in site-wide) so
-// this is a low-risk, easily-reversible change. If Samantha has an
-// actual Sofia Pro license and can drop the .woff2 files in
-// public/fonts, swapping this for a real @font-face is a quick follow-up.
-const statNumberFont = Poppins({ subsets: ["latin"], weight: ["800"], display: "swap" });
+// bundle here. Poppins was the first free stand-in tried, but bold
+// Poppins numerals on plain white read as harsh/clinical rather than
+// friendly — Fredoka is a genuinely rounded, soft-terminal display font
+// (also free, also self-hostable via next/font/google) that's a closer
+// match to the warm, approachable feel Sofia Pro has. Scoped to just the
+// stat numbers, not swapped in site-wide. If Samantha gets an actual
+// Sofia Pro license and drops the .woff2 files in public/fonts, swapping
+// this for a real @font-face is a quick follow-up.
+const statNumberFont = Fredoka({ subsets: ["latin"], weight: ["700"], display: "swap" });
 
 const STAT_COLORS = {
   proposals: "#6C3FD1",
@@ -34,72 +33,22 @@ const STAT_COLORS = {
   members: "#475569",
 };
 
-// What each card's back face explains when it's tapped — Samantha's
-// ask was for the stat cards to "turn around" and explain what's being
-// measured instead of just sitting there as a bare number. Kept as its
-// own lookup (rather than a prop typed out at each call site below) so
-// the actual grid of <Tile> calls further down stays easy to scan.
+// What each card's back face explains when it's tapped — just the "why
+// this matters" sentence now, not a definition of the stat too (the
+// label on the back already says what it is). The first pass had a
+// full paragraph per card and it got clipped at the bottom of the fixed-
+// height card — one short sentence is what actually fits.
 const TILE_DESCRIPTIONS: Record<string, string> = {
-  proposalsMade:
-    "Every civic idea someone's posted — policy or project, citywide or hyperlocal. Democracy works better when more people bring ideas forward instead of waiting for someone else to.",
-  contributedToOthers:
-    "Suggested edits members have offered on a proposal they don't own. Good ideas get sharper with more eyes on them — this is what shared ownership of an idea looks like in practice.",
-  commentsMade:
-    "Every comment left on a proposal, across the whole community. Working through the details and disagreements in the open is how an idea gets pressure-tested before it becomes policy.",
-  decisionMakersEngaged:
-    "Distinct officials, agencies, or bodies mapped into a proposal's decision chain where someone's added a real note. Knowing exactly who holds the power to act is the first step to actually moving something.",
-  lettersWritten:
-    "Letters written to local newspapers or outlets. They put an issue in front of people who aren't already paying attention, build public credibility, and apply pressure through local media — a different kind of leverage than contacting an official directly.",
-  contactedOfficials:
-    "Calls, emails, letters, or in-person meetings with an elected official's office. Direct contact is one of the most reliable ways an ordinary resident's voice reaches the person who can actually act.",
-  meetingsAttended:
-    "Neighborhood, civic association, or town hall meetings members have shown up to. Local democracy runs on people actually being in the room.",
-  volunteerHours:
-    "Hours spent on hands-on community work, logged by category. Civic life isn't only policy — showing up to do the work is part of the same fabric.",
-  testimonyGiven:
-    "Formal public comment delivered at a hearing or public meeting. Testimony puts a resident's voice on the permanent public record — part of how public bodies are required to listen.",
+  proposalsMade: "More people bringing ideas forward, instead of waiting for someone else to.",
+  contributedToOthers: "Good ideas get sharper with more eyes on them.",
+  commentsMade: "Working through the details in the open is how an idea gets pressure-tested.",
+  decisionMakersEngaged: "Knowing exactly who holds the power to act is the first step to moving something.",
+  lettersWritten: "Puts an issue in front of people who aren't already paying attention, and builds pressure through local media.",
+  contactedOfficials: "Direct contact is one of the most reliable ways a resident's voice reaches the person who can act.",
+  meetingsAttended: "Local democracy runs on people actually being in the room.",
+  volunteerHours: "Showing up to do the work is part of the same civic fabric as policy.",
+  testimonyGiven: "Puts a resident's voice on the permanent public record.",
 };
-
-// Redesigned again per Samantha's reference mockup: a solid color "cap"
-// across the top of the card (not just a thin border), number and icon
-// side by side instead of stacked, and a bold black label instead of a
-// muted grey one. Icons are now real flat vector glyphs (see
-// stat-icons.tsx — Heroicons 24px solid set, MIT licensed) instead of
-// emoji: direct .svg fetches from every CDN tried (jsDelivr, unpkg,
-// raw GitHub) came back empty in this environment, but the same icons'
-// .js module builds fetched fine and contain the identical path data,
-// so that's what got pulled and inlined instead. No new npm dependency —
-// the paths are hardcoded JSX, not an @heroicons/react import.
-// Now a flip card (see flippable-stat-tile.tsx) — tapping it turns the
-// card over to show what the stat actually measures, instead of just
-// being a static number.
-function Tile({
-  statKey,
-  label,
-  value,
-  sublabel,
-  color,
-  icon,
-}: {
-  statKey: keyof typeof TILE_DESCRIPTIONS;
-  label: string;
-  value: number | string;
-  sublabel?: string;
-  color: string;
-  icon: StatIconName;
-}) {
-  return (
-    <FlippableStatTile
-      label={label}
-      value={value}
-      sublabel={sublabel}
-      color={color}
-      icon={icon}
-      description={TILE_DESCRIPTIONS[statKey]}
-      font={statNumberFont.className}
-    />
-  );
-}
 
 // The "about your community" strip — members/zip codes/districts used
 // to be three more tiles in the same grid as the civic-action stats,
@@ -552,42 +501,84 @@ export default async function CommunityDashboardPage({
       <h2 className="mt-7 text-xs font-bold uppercase tracking-wider text-neutral-400">
         Civic actions, together
       </h2>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile statKey="proposalsMade" icon="megaphone" label="Proposals made" value={proposalsMade ?? 0} color={STAT_COLORS.proposals} />
-        <Tile
-          statKey="contributedToOthers"
-          icon="handThumbUp"
-          label="Contributions to others"
-          value={contributedToOthers}
-          color={STAT_COLORS.contributed}
-        />
-        <Tile statKey="commentsMade" icon="chatBubbleLeftRight" label="Comments made" value={commentsMade ?? 0} color={STAT_COLORS.comments} />
-        <Tile
-          statKey="decisionMakersEngaged"
-          icon="buildingLibrary"
-          label="Decision-makers engaged"
-          value={decisionMakersEngaged}
-          color={STAT_COLORS.decisionMakers}
-        />
-        <Tile
-          statKey="lettersWritten"
-          icon="newspaper"
-          label="Letters written to the editor"
-          value={lettersWritten}
-          sublabel={lettersPublished > 0 ? `${lettersPublished} published` : undefined}
-          color={STAT_COLORS.letters}
-        />
-        <Tile
-          statKey="contactedOfficials"
-          icon="phone"
-          label="Contacted an elected official"
-          value={contactedOfficials}
-          color={STAT_COLORS.contactedOfficials}
-        />
-        <Tile statKey="meetingsAttended" icon="calendar" label="Community meetings attended" value={meetingsAttended} color={STAT_COLORS.meetings} />
-        <Tile statKey="volunteerHours" icon="handRaised" label="Hours volunteered" value={volunteerHours} color={STAT_COLORS.volunteerHours} />
-        <Tile statKey="testimonyGiven" icon="microphone" label="Testimony given" value={testimonyGiven} color={STAT_COLORS.testimony} />
-      </div>
+      <StatTileGrid
+        font={statNumberFont.className}
+        items={[
+          {
+            key: "proposalsMade",
+            icon: "megaphone",
+            label: "Proposals made",
+            value: proposalsMade ?? 0,
+            color: STAT_COLORS.proposals,
+            description: TILE_DESCRIPTIONS.proposalsMade,
+          },
+          {
+            key: "contributedToOthers",
+            icon: "handThumbUp",
+            label: "Contributions to others",
+            value: contributedToOthers,
+            color: STAT_COLORS.contributed,
+            description: TILE_DESCRIPTIONS.contributedToOthers,
+          },
+          {
+            key: "commentsMade",
+            icon: "chatBubbleLeftRight",
+            label: "Comments made",
+            value: commentsMade ?? 0,
+            color: STAT_COLORS.comments,
+            description: TILE_DESCRIPTIONS.commentsMade,
+          },
+          {
+            key: "decisionMakersEngaged",
+            icon: "buildingLibrary",
+            label: "Decision-makers engaged",
+            value: decisionMakersEngaged,
+            color: STAT_COLORS.decisionMakers,
+            description: TILE_DESCRIPTIONS.decisionMakersEngaged,
+          },
+          {
+            key: "lettersWritten",
+            icon: "newspaper",
+            label: "Letters written to the editor",
+            value: lettersWritten,
+            sublabel: lettersPublished > 0 ? `${lettersPublished} published` : undefined,
+            color: STAT_COLORS.letters,
+            description: TILE_DESCRIPTIONS.lettersWritten,
+          },
+          {
+            key: "contactedOfficials",
+            icon: "phone",
+            label: "Contacted an elected official",
+            value: contactedOfficials,
+            color: STAT_COLORS.contactedOfficials,
+            description: TILE_DESCRIPTIONS.contactedOfficials,
+          },
+          {
+            key: "meetingsAttended",
+            icon: "calendar",
+            label: "Community meetings attended",
+            value: meetingsAttended,
+            color: STAT_COLORS.meetings,
+            description: TILE_DESCRIPTIONS.meetingsAttended,
+          },
+          {
+            key: "volunteerHours",
+            icon: "handRaised",
+            label: "Hours volunteered",
+            value: volunteerHours,
+            color: STAT_COLORS.volunteerHours,
+            description: TILE_DESCRIPTIONS.volunteerHours,
+          },
+          {
+            key: "testimonyGiven",
+            icon: "microphone",
+            label: "Testimony given",
+            value: testimonyGiven,
+            color: STAT_COLORS.testimony,
+            description: TILE_DESCRIPTIONS.testimonyGiven,
+          },
+        ]}
+      />
 
       <div className="mt-8">
         <div className="flex flex-wrap items-center justify-between gap-2">

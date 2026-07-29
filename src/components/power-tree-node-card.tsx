@@ -245,6 +245,26 @@ export function PowerTreeNodeCard({
                       }`
                     : ""}
                 </span>
+                {/* The actual point of this whole card — what this
+                    decision-maker's role is in getting the proposal done
+                    (e.g. "administer a permit") — used to only be
+                    visible after clicking into the modal. That defeated
+                    the purpose of a high-level chain view: someone
+                    scanning the collapsed cards couldn't tell "apply for
+                    permit" from "administer permit" from "bring to
+                    council" without opening every single one. */}
+                {node.note && (
+                  <span
+                    className="mt-0.5 block truncate text-xs italic"
+                    style={
+                      isFinal && !isPending
+                        ? { color: finalTextColor, opacity: 0.75 }
+                        : { color: "#525252" }
+                    }
+                  >
+                    {node.note}
+                  </span>
+                )}
               </button>
             </>
           ) : (
@@ -275,6 +295,11 @@ export function PowerTreeNodeCard({
                         }`
                       : ""}
                   </span>
+                  {node.note && (
+                    <span className="mt-0.5 block truncate text-xs italic text-neutral-600">
+                      {node.note}
+                    </span>
+                  )}
                 </button>
               </div>
               {isOwner && (

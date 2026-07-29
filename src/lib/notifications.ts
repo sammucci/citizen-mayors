@@ -54,6 +54,7 @@ export async function getNotifications(
     { data: newLinksOnMyProposals },
     { data: myApprovedLinks },
     { data: openSuggestionsOnMyProposals },
+    { data: pendingLinksOnMyProposals },
   ] = await Promise.all([
     myProposalIds.length > 0
       ? supabase
@@ -97,6 +98,22 @@ export async function getNotifications(
           .eq("is_suggested_edit", true)
           .eq("status", "open")
           .neq("author_id", userId)
+      : Promise.resolve({ data: [] as any[] }),
+    // Persistent, not time-gated — same fix as the suggested-edits case
+    // right above, for the same underlying bug report: a decision-maker
+    // someone else suggested for your proposal (which lands "pending"
+    // until you approve it — see addPowerTreeNode) used to only ever
+    // surface once, as the time-gated "was added to the decision chain"
+    // item below. The moment the bell got opened, it vanished — even
+    // though the suggestion itself was still sitting there, unapproved,
+    // with no other place on the site that showed it.
+    myProposalIds.length > 0
+      ? supabase
+          .from("proposal_power_tree_nodes")
+          .select("id, proposal_id, decision_makers ( name ), proposals ( title )")
+          .in("proposal_id", myProposalIds)
+          .eq("status", "pending")
+          .neq("submitted_by", userId)
       : Promise.resolve({ data: [] as any[] }),
   ]);
 
@@ -159,6 +176,31 @@ export async function getNotifications(
         v.count === 1
           ? `1 suggested edit still awaiting your review on "${v.title}"`
           : `${v.count} suggested edits still awaiting your review on "${v.title}"`,
+      href: `/proposals/${proposalId}`,
+    });
+  }
+
+  const pendingLinksByProposal = new Map<string, { title: string; names: string[] }>();
+  for (const n of (pendingLinksOnMyProposals ?? []) as any[]) {
+    const existing = pendingLinksByProposal.get(n.proposal_id);
+    const name = n.decision_makers?.name ?? "Someone";
+    if (existing) {
+      existing.names.push(name);
+    } else {
+      pendingLinksByProposal.set(n.proposal_id, {
+        title: n.proposals?.title ?? "A proposal",
+        names: [name],
+      });
+    }
+  }
+  for (const [proposalId, v] of pendingLinksByProposal.entries()) {
+    pendingItems.push({
+      id: `pending-link-${proposalId}`,
+      icon: "pending",
+      text:
+        v.names.length === 1
+          ? `${v.names[0]} was suggested for the decision chain on "${v.title}" — still awaiting your approval`
+          : `${v.names.length} decision-maker suggestions still awaiting your approval on "${v.title}"`,
       href: `/proposals/${proposalId}`,
     });
   }

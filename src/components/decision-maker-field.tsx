@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { SelectField } from "@/components/select-field";
 
 type DecisionMaker = { id: string; name: string; kind: string };
 
@@ -132,11 +133,11 @@ export function DecisionMakerField({
           <label className="block text-xs text-neutral-500">
             New person/office — what kind is this?
           </label>
-          <select
+          <SelectField
             name="kind"
             value={kind}
             onChange={(e) => setKind(e.target.value)}
-            className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+            className="!rounded !py-1 !pl-2 !text-sm"
           >
             <option value="" disabled>
               Select a kind...
@@ -145,7 +146,7 @@ export function DecisionMakerField({
             <option value="department">City department</option>
             <option value="board_commission">Board / commission</option>
             <option value="other">Other</option>
-          </select>
+          </SelectField>
         </div>
       )}
 

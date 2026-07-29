@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { updateProfile } from "@/app/actions";
 import { AvatarUploadControl } from "@/components/avatar-upload-control";
+import { SelectField } from "@/components/select-field";
 
 type Profile = {
   id: string;
@@ -187,10 +188,9 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
           <span className="mb-1 block text-sm font-medium text-neutral-700">
             Your council district (optional)
           </span>
-          <select
+          <SelectField
             name="council_district"
             defaultValue={profile?.council_district ?? ""}
-            className="input"
           >
             <option value="">Prefer not to say / not sure</option>
             {districts.map((d) => (
@@ -198,7 +198,7 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
                 District {d}
               </option>
             ))}
-          </select>
+          </SelectField>
         </label>
 
         <div className="rounded-md border border-duty-purple/30 bg-duty-purple/10 p-3">
@@ -215,7 +215,7 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
           <span className="mb-1 block text-sm font-medium text-neutral-700">
             Age range (optional)
           </span>
-          <select name="age_range" defaultValue={profile?.age_range ?? ""} className="input">
+          <SelectField name="age_range" defaultValue={profile?.age_range ?? ""}>
             <option value="">Prefer not to say</option>
             <option value="18-24">18–24</option>
             <option value="25-34">25–34</option>
@@ -223,17 +223,16 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             <option value="45-54">45–54</option>
             <option value="55-64">55–64</option>
             <option value="65+">65+</option>
-          </select>
+          </SelectField>
         </label>
 
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-neutral-700">
             Race / ethnicity (optional)
           </span>
-          <select
+          <SelectField
             name="race_ethnicity"
             defaultValue={profile?.race_ethnicity ?? ""}
-            className="input"
           >
             <option value="">Prefer not to say</option>
             <option value="Black or African American">Black or African American</option>
@@ -248,36 +247,35 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             </option>
             <option value="Two or more races">Two or more races</option>
             <option value="Other">Other</option>
-          </select>
+          </SelectField>
         </label>
 
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-neutral-700">
             Gender (optional)
           </span>
-          <select name="gender" defaultValue={profile?.gender ?? ""} className="input">
+          <SelectField name="gender" defaultValue={profile?.gender ?? ""}>
             <option value="">Prefer not to say</option>
             <option value="Woman">Woman</option>
             <option value="Man">Man</option>
             <option value="Non-binary">Non-binary</option>
             <option value="Other">Other</option>
-          </select>
+          </SelectField>
         </label>
 
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-neutral-700">
             Housing status (optional)
           </span>
-          <select
+          <SelectField
             name="housing_status"
             defaultValue={profile?.housing_status ?? ""}
-            className="input"
           >
             <option value="">Prefer not to say</option>
             <option value="Homeowner">Homeowner</option>
             <option value="Renter">Renter</option>
             <option value="Unhoused">Unhoused</option>
-          </select>
+          </SelectField>
         </label>
 
         <button className="rounded-md bg-duty-purple px-4 py-2 text-sm font-medium text-white">

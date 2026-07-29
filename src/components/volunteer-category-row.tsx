@@ -6,6 +6,7 @@ import {
   renameVolunteerCategory,
   setVolunteerCategoryGroup,
 } from "@/app/admin/actions";
+import { SelectField } from "@/components/select-field";
 
 // Inline rename (click the label to edit it in place) plus the same
 // two-step "are you sure" delete confirm used for decision-makers.
@@ -124,7 +125,7 @@ export function VolunteerCategoryRow({
       {!editing && (
         <div className="mt-2 flex items-center gap-2">
           <span className="text-[11px] text-neutral-400">Group</span>
-          <select
+          <SelectField
             defaultValue={groupId ?? ""}
             disabled={savingGroup}
             onChange={async (e) => {
@@ -137,7 +138,8 @@ export function VolunteerCategoryRow({
               if (result?.error) setError(result.error);
               setSavingGroup(false);
             }}
-            className="rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700"
+            fullWidth={false}
+            className="!rounded !py-0.5 !pl-2 !pr-6 !text-xs !text-neutral-700"
           >
             <option value="">Ungrouped</option>
             {groups.map((g) => (
@@ -145,7 +147,7 @@ export function VolunteerCategoryRow({
                 {g.label}
               </option>
             ))}
-          </select>
+          </SelectField>
         </div>
       )}
       {error && <p className="mt-1.5 text-xs text-duty-red">{error}</p>}
