@@ -60,10 +60,25 @@ create table public.categories (
   color text -- hex color for the category's visual accent bar
 );
 
+-- Curated, admin-managed grouping layer above tags (e.g. "Pedestrian &
+-- Bike Safety" containing "bike lanes", "bike safety", "pedestrians", ...)
+-- — same idea as volunteer_category_groups below, for the same reason:
+-- lets the community dashboard roll engagement up to a handful of
+-- readable topics instead of listing out however many individual tags
+-- exist. A small, deliberate list Samantha curates herself; tags don't
+-- require a group (a brand-new tag starts ungrouped until she assigns
+-- it one on the admin page).
+create table public.tag_groups (
+  id serial primary key,
+  label text unique not null,
+  created_at timestamptz not null default now()
+);
+
 create table public.tags (
   id serial primary key,
   slug text unique not null,
-  label text not null
+  label text not null,
+  group_id int references public.tag_groups(id) on delete set null
 );
 
 -- Canonical, shared registry of decision-makers (elected officials, city
@@ -362,6 +377,7 @@ alter table public.profiles enable row level security;
 alter table public.zip_council_districts enable row level security;
 alter table public.categories enable row level security;
 alter table public.tags enable row level security;
+alter table public.tag_groups enable row level security;
 alter table public.decision_makers enable row level security;
 alter table public.volunteer_categories enable row level security;
 alter table public.volunteer_category_groups enable row level security;
@@ -476,6 +492,14 @@ create policy "admin inserts tags" on public.tags for insert
 create policy "admin updates tags" on public.tags for update
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 create policy "admin deletes tags" on public.tags for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+create policy "public read tag groups" on public.tag_groups for select using (true);
+create policy "admin add tag groups" on public.tag_groups for insert
+  with check (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin updates tag groups" on public.tag_groups for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin deletes tag groups" on public.tag_groups for delete
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
 -- Anyone signed in can add a missing decision-maker to the shared registry

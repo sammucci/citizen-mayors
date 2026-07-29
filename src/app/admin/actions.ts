@@ -180,6 +180,117 @@ export async function deleteTag(formData: FormData): Promise<{ error?: string }>
   return {};
 }
 
+// Lets an admin seed a project tag directly, instead of the only path
+// in being someone suggesting it while writing a proposal and an admin
+// later approving it. Same slug rule and duplicate-avoidance (case-
+// insensitive label match) as approveTagSuggestion above, so a tag
+// added here and one that arrives later via a suggestion can't end up
+// as two rows for the same name.
+export async function addTagAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Give it a name first." };
+
+  const { data: existing } = await supabase.from("tags").select("id").ilike("label", label).maybeSingle();
+  if (existing) return { error: "That tag already exists." };
+
+  const slug = label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  const { error } = await supabase.from("tags").insert({ slug, label });
+  if (error) {
+    return {
+      error: /duplicate|unique/i.test(error.message)
+        ? "That name (or its slug) is already used by another tag."
+        : "Something went wrong adding that tag.",
+    };
+  }
+
+  revalidatePath("/admin/tags");
+  return {};
+}
+
+// Groups (Pedestrian & Bike Safety, Housing, ...) are a small, curated
+// list Samantha manages herself — unlike tags, this list never grows on
+// its own from what people type. Assigning a tag to a group happens
+// separately (setTagGroup below) so a brand-new tag can land ungrouped
+// without blocking a suggestion approval or the admin "add tag" form.
+export async function addTagGroup(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Give it a name first." };
+
+  const { error } = await supabase.from("tag_groups").insert({ label });
+  if (error) {
+    return {
+      error: /duplicate|unique/i.test(error.message)
+        ? "That group already exists."
+        : "Something went wrong adding that group.",
+    };
+  }
+
+  revalidatePath("/admin/tags");
+  return {};
+}
+
+export async function renameTagGroup(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Group name can't be empty." };
+
+  const { error } = await supabase.from("tag_groups").update({ label }).eq("id", id);
+  if (error) {
+    return {
+      error: /duplicate|unique/i.test(error.message)
+        ? "That name's already used by another group."
+        : "Something went wrong renaming that group.",
+    };
+  }
+
+  revalidatePath("/admin/tags");
+  return {};
+}
+
+// Deleting a group never deletes the tags underneath it — they just
+// fall back to ungrouped (the foreign key is `on delete set null`),
+// same reversible spirit as everything else in this admin panel.
+export async function deleteTagGroup(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const { error } = await supabase.from("tag_groups").delete().eq("id", id);
+  if (error) return { error: "Something went wrong deleting that group." };
+
+  revalidatePath("/admin/tags");
+  return {};
+}
+
+// Assigns (or clears, if group_id is empty) which group a single tag
+// belongs to — the other half of "tags grow on their own, groups
+// don't": this is how a tag actually gets sorted into one of Samantha's
+// topics, whether it arrived via suggestion-approval or the admin "add
+// tag" form.
+export async function setTagGroup(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const groupIdRaw = String(formData.get("group_id") ?? "").trim();
+  const groupId = groupIdRaw ? Number(groupIdRaw) : null;
+
+  const { error } = await supabase.from("tags").update({ group_id: groupId }).eq("id", id);
+  if (error) return { error: "Something went wrong updating that tag's group." };
+
+  revalidatePath("/admin/tags");
+  return {};
+}
+
 // Same normalization as the "add new" flow in the decision-maker
 // combobox (proposals/actions.ts) — kept as its own small copy here
 // rather than a shared import, matching how the other small per-file

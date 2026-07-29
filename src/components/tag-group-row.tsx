@@ -1,34 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { deleteTag, renameTag, setTagGroup } from "@/app/admin/actions";
+import { deleteTagGroup, renameTagGroup } from "@/app/admin/actions";
 
-// Same inline-rename-plus-confirm-delete pattern as VolunteerCategoryRow
-// and DecisionMakerRow — the tags table previously had no admin edit
-// path at all (only the suggestion-approval queue, which only ever
-// creates new ones). The group dropdown is the other half of the
-// tag-groups feature: tags grow on their own (suggested + approved, or
-// added directly here), but which curated topic (if any) a tag belongs
-// to is something only an admin sets, here — same split as
-// VolunteerCategoryRow's group picker.
-export function TagRow({
+// Same inline-rename / two-step-delete pattern as VolunteerCategoryGroupRow.
+// Deleting a group never deletes or hides the tags inside it — they
+// fall back to ungrouped (the DB column is `on delete set null`), so
+// this is a safe, reversible action, not a destructive one.
+export function TagGroupRow({
   id,
   label,
-  usageCount,
-  groupId,
-  groups,
+  tagCount,
 }: {
   id: string;
   label: string;
-  usageCount: number;
-  groupId: string | null;
-  groups: { id: string; label: string }[];
+  tagCount: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(label);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savingGroup, setSavingGroup] = useState(false);
 
   return (
     <li className="rounded-lg border border-neutral-200 bg-white p-3">
@@ -37,7 +28,7 @@ export function TagRow({
           <form
             action={async (formData) => {
               setError(null);
-              const result = await renameTag(formData);
+              const result = await renameTagGroup(formData);
               if (result?.error) {
                 setError(result.error);
                 return;
@@ -74,12 +65,12 @@ export function TagRow({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="min-w-0 truncate text-left text-sm font-medium text-neutral-800 hover:underline"
+              className="text-sm font-medium text-neutral-800 hover:underline"
               title="Rename"
             >
-              #{label}
-              <span className="ml-1.5 font-normal text-neutral-400">
-                {usageCount} proposal{usageCount === 1 ? "" : "s"}
+              {label}{" "}
+              <span className="font-normal text-neutral-400">
+                ({tagCount} tag{tagCount === 1 ? "" : "s"})
               </span>
             </button>
             {!confirmingDelete ? (
@@ -93,7 +84,7 @@ export function TagRow({
             ) : (
               <div className="flex shrink-0 items-center gap-2">
                 <span className="text-xs text-neutral-500">
-                  Delete "{label}"{usageCount > 0 ? ` (used on ${usageCount})` : ""}?
+                  Delete "{label}"? Its tags become ungrouped, not deleted.
                 </span>
                 <button
                   type="button"
@@ -101,7 +92,7 @@ export function TagRow({
                     setError(null);
                     const fd = new FormData();
                     fd.set("id", id);
-                    const result = await deleteTag(fd);
+                    const result = await deleteTagGroup(fd);
                     if (result?.error) {
                       setError(result.error);
                       return;
@@ -124,33 +115,6 @@ export function TagRow({
           </>
         )}
       </div>
-      {!editing && (
-        <div className="mt-2 flex items-center gap-2">
-          <span className="text-[11px] text-neutral-400">Topic</span>
-          <select
-            defaultValue={groupId ?? ""}
-            disabled={savingGroup}
-            onChange={async (e) => {
-              setSavingGroup(true);
-              setError(null);
-              const fd = new FormData();
-              fd.set("id", id);
-              fd.set("group_id", e.target.value);
-              const result = await setTagGroup(fd);
-              if (result?.error) setError(result.error);
-              setSavingGroup(false);
-            }}
-            className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700"
-          >
-            <option value="">Ungrouped</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
       {error && <p className="mt-1.5 text-xs text-duty-red">{error}</p>}
     </li>
   );

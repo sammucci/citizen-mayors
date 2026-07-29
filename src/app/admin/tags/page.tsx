@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { TagRow } from "@/components/tag-row";
+import { AddTagForm } from "@/components/add-tag-form";
+import { AddTagGroupForm } from "@/components/add-tag-group-form";
+import { TagGroupRow } from "@/components/tag-group-row";
 import { AddVolunteerCategoryForm } from "@/components/add-volunteer-category-form";
 import { AddVolunteerCategoryGroupForm } from "@/components/add-volunteer-category-group-form";
 import { VolunteerCategoryRow } from "@/components/volunteer-category-row";
@@ -51,12 +54,14 @@ export default async function TagsAdminPage() {
 
   const [
     { data: tags },
+    { data: tagGroups },
     { data: suggestions },
     { data: volunteerCategories },
     { data: volunteerGroups },
     { data: logCategoryRows },
   ] = await Promise.all([
-    supabase.from("tags").select("id, label, proposal_tags ( proposal_id )").order("label"),
+    supabase.from("tags").select("id, label, group_id, proposal_tags ( proposal_id )").order("label"),
+    supabase.from("tag_groups").select("id, label").order("label"),
     supabase
       .from("tag_suggestions")
       .select(
@@ -70,6 +75,19 @@ export default async function TagsAdminPage() {
   ]);
 
   const groupOptions = (volunteerGroups ?? []).map((g: any) => ({ id: String(g.id), label: g.label }));
+
+  // Tag topics — same rollup idea as the volunteer category groups
+  // below, but for project tags: a small curated list (Pedestrian &
+  // Bike Safety, Housing, ...) that the community dashboard's "proposals
+  // by topic" section sums up to, instead of listing out every one of
+  // however many individual tags exist.
+  const tagGroupOptions = (tagGroups ?? []).map((g: any) => ({ id: String(g.id), label: g.label }));
+  const tagCountByGroup = new Map<string, number>();
+  for (const t of tags ?? []) {
+    if (t.group_id == null) continue;
+    const key = String(t.group_id);
+    tagCountByGroup.set(key, (tagCountByGroup.get(key) ?? 0) + 1);
+  }
 
   const tagsByGroup = new Map<string, any[]>();
   const ungroupedTags: any[] = [];
@@ -169,16 +187,61 @@ export default async function TagsAdminPage() {
         </h2>
         <p className="mt-0.5 text-xs text-neutral-500">
           Click one to rename it — deleting removes it from every proposal it's
-          attached to (there's no undo).
+          attached to (there's no undo). Each tag's "Topic" dropdown assigns it to
+          one of the curated topics below — that's what rolls up into the community
+          dashboard's "proposals by topic" chart, so hundreds of individual tags
+          don't need to show up there one by one.
         </p>
-        <ul className="mt-3 space-y-2">
+        <div className="mt-3">
+          <AddTagForm />
+        </div>
+        {/* Grid instead of one-per-row now that this list can get long —
+            3-4 tags per row on wider screens instead of each one taking
+            the full card width, so the admin page doesn't turn into an
+            endless scroll once there are more than a handful of tags. */}
+        <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {tags?.map((t: any) => (
-            <TagRow key={t.id} id={String(t.id)} label={t.label} usageCount={t.proposal_tags?.length ?? 0} />
+            <TagRow
+              key={t.id}
+              id={String(t.id)}
+              label={t.label}
+              usageCount={t.proposal_tags?.length ?? 0}
+              groupId={t.group_id != null ? String(t.group_id) : null}
+              groups={tagGroupOptions}
+            />
           ))}
           {(!tags || tags.length === 0) && (
             <p className="text-sm text-neutral-500">No tags yet.</p>
           )}
         </ul>
+
+        {/* Topics — the curated rollup layer, kept deliberately separate
+            from the flat tag grid above rather than nesting tags inside
+            each topic (which would mean either showing every tag twice,
+            once flat and once grouped, or hiding the flat list behind a
+            click). Assigning happens from each tag's own dropdown above;
+            this box is just for creating/renaming/deleting the topics
+            themselves. */}
+        <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50/50 p-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
+            Topics ({tagGroupOptions.length})
+          </h3>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            e.g. "Pedestrian & Bike Safety" grouping "bike lanes," "bike safety,"
+            "pedestrians," ...
+          </p>
+          <div className="mt-3">
+            <AddTagGroupForm />
+          </div>
+          <ul className="mt-3 space-y-2">
+            {tagGroupOptions.map((g) => (
+              <TagGroupRow key={g.id} id={g.id} label={g.label} tagCount={tagCountByGroup.get(g.id) ?? 0} />
+            ))}
+            {tagGroupOptions.length === 0 && (
+              <p className="text-xs text-neutral-400">No topics yet — add one above.</p>
+            )}
+          </ul>
+        </div>
       </div>
 
       {/* ------------------------------------------------------------ */}

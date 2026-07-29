@@ -17,14 +17,78 @@ const STAT_COLORS = {
   members: "#475569",
 };
 
-function Tile({ label, value, sublabel, color }: { label: string; value: number | string; sublabel?: string; color: string }) {
+// Redesigned for more hierarchy/excitement (Samantha's ask): each tile
+// now carries an emoji icon in a color-tinted chip, a bigger number, and
+// a colored top edge instead of the old flat tinted-background square —
+// meant to read as a little celebration of what the community's done,
+// not just a data table. No new icon library added (the app has none
+// installed) — plain emoji, same trick already used for the homepage's
+// 🎉 button, so this needs zero new dependencies.
+function Tile({
+  label,
+  value,
+  sublabel,
+  color,
+  icon,
+}: {
+  label: string;
+  value: number | string;
+  sublabel?: string;
+  color: string;
+  icon: string;
+}) {
   return (
-    <div className="rounded-lg p-3" style={{ backgroundColor: `${color}1a` }}>
-      <p className="text-2xl font-bold" style={{ color }}>
+    <div
+      className="rounded-xl border border-t-[3px] border-neutral-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      style={{ borderTopColor: color }}
+    >
+      <div
+        className="flex h-9 w-9 items-center justify-center rounded-full text-base"
+        style={{ backgroundColor: `${color}1a` }}
+        aria-hidden="true"
+      >
+        {icon}
+      </div>
+      <p className="mt-3 text-3xl font-extrabold leading-none tracking-tight" style={{ color }}>
         {value}
       </p>
-      <p className="mt-0.5 text-xs font-medium text-neutral-600">{label}</p>
-      {sublabel && <p className="text-[11px] text-neutral-500">{sublabel}</p>}
+      <p className="mt-1.5 text-xs font-semibold text-neutral-600">{label}</p>
+      {sublabel && <p className="mt-0.5 text-[11px] text-neutral-400">{sublabel}</p>}
+    </div>
+  );
+}
+
+// The compact "about your community" strip — members/zip codes/districts
+// used to be three more tiles in the same grid as the civic-action
+// stats, which flattened everything into one undifferentiated wall of
+// boxes. Pulling these three out into a single quiet pill line creates
+// actual hierarchy: this is context ("who's here"), the grid below is
+// the celebration ("what everyone's done").
+function CommunityStrip({
+  members,
+  zipCodes,
+  districts,
+}: {
+  members: number;
+  zipCodes: number;
+  districts: number;
+}) {
+  return (
+    <div className="mt-3 inline-flex flex-wrap items-center gap-x-4 gap-y-1 rounded-full bg-neutral-100 px-4 py-2 text-xs font-medium text-neutral-600">
+      <span>
+        <span aria-hidden="true">👥</span>{" "}
+        <strong className="text-neutral-800">{members}</strong> registered member{members === 1 ? "" : "s"}
+      </span>
+      <span className="text-neutral-300">·</span>
+      <span>
+        <span aria-hidden="true">📍</span>{" "}
+        <strong className="text-neutral-800">{zipCodes}</strong> zip code{zipCodes === 1 ? "" : "s"}
+      </span>
+      <span className="text-neutral-300">·</span>
+      <span>
+        <span aria-hidden="true">🏛️</span>{" "}
+        <strong className="text-neutral-800">{districts}/10</strong> districts represented
+      </span>
     </div>
   );
 }
@@ -88,6 +152,42 @@ function HoursByCategory({
             />
           </span>
           <span className="w-16 shrink-0 text-right text-neutral-500">{hours} hrs</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Proposals grouped into curated tag topics (Pedestrian & Bike Safety,
+// Housing, ...) — same bar-list shape as HoursByCategory above, one
+// row per topic Samantha's actually created on /admin/tags. Individual
+// tags never show up here on their own; only tags she's assigned to a
+// topic count toward anything, by design (see the proposalsByTopic
+// computation above for why).
+function ProposalsByTopic({ items }: { items: { label: string; count: number }[] }) {
+  if (items.length === 0) {
+    return (
+      <p className="mt-1 text-xs text-neutral-400">
+        No proposals tagged into a topic yet — assign tags to a topic on the admin
+        tags page to see them here.
+      </p>
+    );
+  }
+  const max = items[0].count;
+  return (
+    <ul className="mt-1.5 space-y-1">
+      {items.map(({ label, count }) => (
+        <li key={label} className="flex items-center gap-2 text-xs">
+          <span className="w-28 shrink-0 truncate text-neutral-600">{label}</span>
+          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
+            <span
+              className="block h-full rounded-full"
+              style={{ width: `${max > 0 ? (count / max) * 100 : 0}%`, backgroundColor: STAT_COLORS.proposals }}
+            />
+          </span>
+          <span className="w-20 shrink-0 text-right text-neutral-500">
+            {count} proposal{count === 1 ? "" : "s"}
+          </span>
         </li>
       ))}
     </ul>
@@ -283,6 +383,7 @@ export default async function CommunityDashboardPage({
     civicTotals,
     { data: allProfiles },
     { data: volunteerCategoryRows },
+    { data: proposalTagRows },
   ] = await Promise.all([
     supabase.from("proposals").select("id", { count: "exact", head: true }),
     supabase.from("comments").select("id", { count: "exact", head: true }),
@@ -305,6 +406,17 @@ export default async function CommunityDashboardPage({
     supabase
       .from("volunteer_categories")
       .select("label, volunteer_category_groups ( label )"),
+    // Same rollup idea as volunteer hours by category, for project tags:
+    // proposals!inner + the published filter (rather than a plain
+    // embed) is what actually excludes drafts here — Postgrest treats a
+    // plain embedded table as an optional left join, so without !inner
+    // the filter would just null out `proposals` on non-matching rows
+    // instead of dropping them (same gotcha documented on the homepage
+    // query in src/app/page.tsx).
+    supabase
+      .from("proposal_tags")
+      .select("proposal_id, tags ( group_id, tag_groups ( label ) ), proposals!inner ( published )")
+      .eq("proposals.published", true),
   ]);
 
   const categoryToGroup = new Map<string, string>(
@@ -312,6 +424,24 @@ export default async function CommunityDashboardPage({
       .filter((c: any) => c.volunteer_category_groups?.label)
       .map((c: any) => [c.label, c.volunteer_category_groups.label])
   );
+
+  // Distinct proposals per topic, not a sum of per-tag counts — a
+  // proposal with two tags in the same topic ("bike lanes" AND
+  // "pedestrians", say, both under "Pedestrian & Bike Safety") should
+  // only count once, not twice. Tags with no topic assigned are simply
+  // not represented here (by design, per Samantha's ask) — hundreds of
+  // individual tags would swamp the chart, so only curated topics roll
+  // up onto the dashboard.
+  const proposalIdsByTopic = new Map<string, Set<string>>();
+  for (const row of proposalTagRows ?? []) {
+    const topicLabel = (row as any).tags?.tag_groups?.label;
+    if (!topicLabel) continue;
+    if (!proposalIdsByTopic.has(topicLabel)) proposalIdsByTopic.set(topicLabel, new Set());
+    proposalIdsByTopic.get(topicLabel)!.add((row as any).proposal_id);
+  }
+  const proposalsByTopic = [...proposalIdsByTopic.entries()]
+    .map(([label, ids]) => ({ label, count: ids.size }))
+    .sort((a, b) => b.count - a.count);
 
   const contributedToOthers = (suggestedEdits ?? []).filter(
     (c: any) => c.proposals?.owner_id && c.proposals.owner_id !== c.author_id
@@ -360,31 +490,36 @@ export default async function CommunityDashboardPage({
         conversation, and logged action, from everyone.
       </p>
 
-      <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <Tile label="Proposals made" value={proposalsMade ?? 0} color={STAT_COLORS.proposals} />
+      <CommunityStrip members={totalMembers} zipCodes={zipCodesRepresented} districts={districtsRepresented} />
+
+      <h2 className="mt-7 text-xs font-bold uppercase tracking-wider text-neutral-400">
+        Civic actions, together
+      </h2>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Tile icon="📣" label="Proposals made" value={proposalsMade ?? 0} color={STAT_COLORS.proposals} />
         <Tile
+          icon="🤝"
           label="Contributions to others"
           value={contributedToOthers}
           color={STAT_COLORS.contributed}
         />
-        <Tile label="Comments made" value={commentsMade ?? 0} color={STAT_COLORS.comments} />
+        <Tile icon="💬" label="Comments made" value={commentsMade ?? 0} color={STAT_COLORS.comments} />
         <Tile
+          icon="🏛️"
           label="Decision-makers engaged"
           value={decisionMakersEngaged}
           color={STAT_COLORS.decisionMakers}
         />
         <Tile
+          icon="✉️"
           label="Letters written"
           value={lettersWritten}
           sublabel={lettersPublished > 0 ? `${lettersPublished} published` : undefined}
           color={STAT_COLORS.letters}
         />
-        <Tile label="Meetings attended" value={meetingsAttended} color={STAT_COLORS.meetings} />
-        <Tile label="Volunteer hours" value={volunteerHours} color={STAT_COLORS.volunteerHours} />
-        <Tile label="Testimony given" value={testimonyGiven} color={STAT_COLORS.testimony} />
-        <Tile label="Registered members" value={totalMembers} color={STAT_COLORS.members} />
-        <Tile label="Zip codes represented" value={zipCodesRepresented} color={STAT_COLORS.members} />
-        <Tile label="Council districts represented" value={`${districtsRepresented} / 10`} color={STAT_COLORS.members} />
+        <Tile icon="📅" label="Community meetings attended" value={meetingsAttended} color={STAT_COLORS.meetings} />
+        <Tile icon="🙌" label="Hours volunteered" value={volunteerHours} color={STAT_COLORS.volunteerHours} />
+        <Tile icon="🎤" label="Testimony given" value={testimonyGiven} color={STAT_COLORS.testimony} />
       </div>
 
       <div className="mt-8">
@@ -464,6 +599,16 @@ export default async function CommunityDashboardPage({
             rows={logs.filter((l: any) => l.log_type === "volunteer_hours")}
             categoryToGroup={categoryToGroup}
           />
+        </div>
+
+        <div className="mt-5">
+          <InfoHeading
+            className="text-xs font-semibold text-neutral-700"
+            tooltip="Citywide, not affected by the district filter above. Only published proposals count, and only tags that have been assigned to a topic on the admin page — an individual tag with no topic doesn't show up here on its own."
+          >
+            Proposals by topic
+          </InfoHeading>
+          <ProposalsByTopic items={proposalsByTopic} />
         </div>
 
         {/* Real comparison now, not a placeholder: Philadelphia's actual
