@@ -166,6 +166,7 @@ export default async function ProfilePage() {
     published: l.published,
     publishedLink: l.published_link,
     organization: l.organization,
+    contactMethod: l.contact_method,
     hours: l.hours,
     category: l.category,
     note: l.note,
@@ -182,6 +183,7 @@ export default async function ProfilePage() {
     lettersWritten: publishedLogs.filter((l) => l.logType === "letter_to_editor").length,
     lettersPublished: publishedLogs.filter((l) => l.logType === "letter_to_editor" && l.published)
       .length,
+    contactedOfficials: publishedLogs.filter((l) => l.logType === "contacted_official").length,
     meetingsAttended: publishedLogs.filter((l) => l.logType === "community_meeting").length,
     volunteerHours: publishedLogs
       .filter((l) => l.logType === "volunteer_hours")

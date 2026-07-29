@@ -184,16 +184,26 @@ create table public.proposal_tags (
   primary key (proposal_id, tag_id)
 );
 
--- Anyone signed in can propose a new tag on a proposal; it sits pending
--- until an admin approves it (creating the real row in `tags` and
--- attaching it to this proposal) or rejects it. Same review-queue shape
--- as the "suggested edit" flow on comments, just for tags.
+-- Anyone signed in can propose a tag on a proposal they don't own — the
+-- review path depends on whether it's a tag that already exists or a
+-- brand-new one (tag_id set vs. null, resolved server-side by matching
+-- the typed label against the real tags table):
+--   existing tag  (tag_id set):  pending -> approved (owner OR admin) | rejected
+--   brand-new tag (tag_id null): pending -> owner_approved (owner only,
+--                                 doesn't attach anything yet) -> approved
+--                                 (admin only, creates the real tags row
+--                                 and attaches it) | rejected (either)
+-- The point of the two-step path for brand-new tags: an admin approving
+-- one can never populate a proposal's tags on its own — the owner has
+-- to have already said yes first. An existing tag needs only the
+-- owner's say-so, since nothing new is being created, just attached.
 create table public.tag_suggestions (
   id uuid primary key default gen_random_uuid(),
   proposal_id uuid not null references public.proposals(id) on delete cascade,
   suggested_by uuid not null references public.profiles(id) on delete cascade,
   label text not null,
-  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  tag_id int references public.tags(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'owner_approved', 'approved', 'rejected')),
   created_at timestamptz not null default now()
 );
 
@@ -479,8 +489,24 @@ create policy "authenticated create flags" on public.proposal_flags for insert
 
 create policy "authenticated create tag_suggestions" on public.tag_suggestions for insert
   with check (auth.uid() = suggested_by);
+-- Admin can move a suggestion to any status at any stage (final say,
+-- same as before this feature existed).
 create policy "admin updates tag_suggestions" on public.tag_suggestions for update
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+-- The proposal's own owner can also respond, but the WITH CHECK below
+-- caps what they're allowed to move a suggestion TO: rejecting is
+-- always fine (never creates anything), approving outright is only
+-- allowed for an existing tag (tag_id set — nothing new gets created),
+-- and for a brand-new tag (tag_id null) the owner can only advance it to
+-- 'owner_approved', never straight to 'approved' — that final step is
+-- admin-only, since it's the one that actually creates the shared tag.
+create policy "owner responds to own proposal tag_suggestions" on public.tag_suggestions for update
+  using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()))
+  with check (
+    status = 'rejected'
+    or (status = 'approved' and tag_id is not null)
+    or (status = 'owner_approved' and tag_id is null)
+  );
 
 -- Approving a suggestion inserts a brand-new row into the shared tags
 -- table — previously nothing but the initial seed data could do that.
@@ -549,22 +575,31 @@ create policy "authenticated add power_tree_node_updates" on public.power_tree_n
 
 -- Civic report card / "add a log" — self-reported off-platform civic
 -- actions (letters to the editor, community meetings, volunteer hours,
--- testimony). One flexible table for all four types, rather than four
--- separate tables, so a person's whole log is one feed instead of a
--- merge of four queries every time.
+-- testimony, contacting an elected official). One flexible table for
+-- all five types, rather than five separate tables, so a person's whole
+-- log is one feed instead of a merge of five queries every time.
+-- Letters to the editor and contacting an elected are deliberately kept
+-- as two separate log types rather than folded together — a letter to
+-- the editor reaches a public audience through local media and builds
+-- outside pressure/visibility, while contacting an official is direct
+-- and private; conflating them would lose the ability to see either
+-- one clearly on its own.
 create table public.civic_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
-  log_type text not null check (log_type in ('letter_to_editor', 'community_meeting', 'volunteer_hours', 'testimony')),
+  log_type text not null check (log_type in ('letter_to_editor', 'community_meeting', 'volunteer_hours', 'testimony', 'contacted_official')),
   occurred_on date not null default current_date,
   -- letter_to_editor only:
   title text,
   published boolean not null default false,
   published_link text,
-  -- community_meeting only — free text for now; a future iteration
-  -- links this to a real organization profile (see
-  -- platform-future-iterations notes).
+  -- community_meeting: free text for now; a future iteration links this
+  -- to a real organization profile (see platform-future-iterations
+  -- notes). contacted_official: reused for who/which office was
+  -- contacted (e.g. "Councilmember Jones' office"), same free-text idea.
   organization text,
+  -- contacted_official only — how the contact happened:
+  contact_method text check (contact_method is null or contact_method in ('phone', 'email', 'letter', 'in_person')),
   -- volunteer_hours only:
   hours numeric,
   category text,

@@ -82,7 +82,7 @@ export function TagRow({
                 {usageCount} proposal{usageCount === 1 ? "" : "s"}
               </span>
             </button>
-            {!confirmingDelete ? (
+            {!confirmingDelete && (
               <button
                 type="button"
                 onClick={() => setConfirmingDelete(true)}
@@ -90,40 +90,48 @@ export function TagRow({
               >
                 Delete
               </button>
-            ) : (
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-xs text-neutral-500">
-                  Delete "{label}"{usageCount > 0 ? ` (used on ${usageCount})` : ""}?
-                </span>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setError(null);
-                    const fd = new FormData();
-                    fd.set("id", id);
-                    const result = await deleteTag(fd);
-                    if (result?.error) {
-                      setError(result.error);
-                      return;
-                    }
-                    setConfirmingDelete(false);
-                  }}
-                  className="shrink-0 rounded-full bg-duty-red px-3 py-1 text-xs font-medium text-white"
-                >
-                  Confirm
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(false)}
-                  className="shrink-0 rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
-                >
-                  Cancel
-                </button>
-              </div>
             )}
           </>
         )}
       </div>
+      {/* Its own full-width block below the row, not squeezed onto the
+          same line as the label — this card can be as narrow as one of
+          3-4 in a grid row now, and "Delete "label" (used on N)? Confirm
+          Cancel" all on one line doesn't fit at that width (the confirm
+          and cancel buttons were getting pushed out of view entirely). */}
+      {!editing && confirmingDelete && (
+        <div className="mt-2 flex flex-col gap-1.5 rounded-md bg-neutral-50 p-2">
+          <span className="text-xs text-neutral-500">
+            Delete "{label}"{usageCount > 0 ? ` (used on ${usageCount})` : ""}?
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                setError(null);
+                const fd = new FormData();
+                fd.set("id", id);
+                const result = await deleteTag(fd);
+                if (result?.error) {
+                  setError(result.error);
+                  return;
+                }
+                setConfirmingDelete(false);
+              }}
+              className="shrink-0 rounded-full bg-duty-red px-3 py-1 text-xs font-medium text-white"
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              className="shrink-0 rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {!editing && (
         <div className="mt-2 flex items-center gap-2">
           <span className="text-[11px] text-neutral-400">Topic</span>

@@ -8,11 +8,8 @@ import { AddVolunteerCategoryForm } from "@/components/add-volunteer-category-fo
 import { AddVolunteerCategoryGroupForm } from "@/components/add-volunteer-category-group-form";
 import { VolunteerCategoryRow } from "@/components/volunteer-category-row";
 import { VolunteerCategoryGroupRow } from "@/components/volunteer-category-group-row";
-import {
-  approveTagSuggestion,
-  rejectTagSuggestion,
-  resolveOrphanedVolunteerCategory,
-} from "@/app/admin/actions";
+import { resolveOrphanedVolunteerCategory } from "@/app/admin/actions";
+import { approveTagSuggestion, rejectTagSuggestion } from "@/app/proposals/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -62,12 +59,17 @@ export default async function TagsAdminPage() {
   ] = await Promise.all([
     supabase.from("tags").select("id, label, group_id, proposal_tags ( proposal_id )").order("label"),
     supabase.from("tag_groups").select("id, label").order("label"),
+    // owner_approved rows are the ones actually in an admin's court —
+    // pending rows are shown too, but read-only, so it's visible what's
+    // still waiting on the proposal owner instead of just disappearing
+    // from view (see the tag_suggestions comment in schema.sql for the
+    // full owner-then-admin state machine on brand-new tags).
     supabase
       .from("tag_suggestions")
       .select(
-        "id, label, status, created_at, proposal_id, suggested_by, proposals ( title ), profiles:suggested_by ( display_name )"
+        "id, label, status, tag_id, created_at, proposal_id, suggested_by, proposals ( title ), profiles:suggested_by ( display_name )"
       )
-      .eq("status", "pending")
+      .in("status", ["pending", "owner_approved"])
       .order("created_at", { ascending: true }),
     supabase.from("volunteer_categories").select("id, label, group_id").order("label"),
     supabase.from("volunteer_category_groups").select("id, label").order("label"),
@@ -82,11 +84,21 @@ export default async function TagsAdminPage() {
   // by topic" section sums up to, instead of listing out every one of
   // however many individual tags exist.
   const tagGroupOptions = (tagGroups ?? []).map((g: any) => ({ id: String(g.id), label: g.label }));
-  const tagCountByGroup = new Map<string, number>();
+
+  // Same shape as the volunteer categories split below: tags fall
+  // underneath whichever topic they're assigned to (so it's visible at
+  // a glance what's grouped and what isn't), with a separate "Ungrouped
+  // project tags" bucket for anything not yet sorted.
+  const tagsByTagGroup = new Map<string, any[]>();
+  const ungroupedProjectTags: any[] = [];
   for (const t of tags ?? []) {
-    if (t.group_id == null) continue;
+    if (t.group_id == null) {
+      ungroupedProjectTags.push(t);
+      continue;
+    }
     const key = String(t.group_id);
-    tagCountByGroup.set(key, (tagCountByGroup.get(key) ?? 0) + 1);
+    if (!tagsByTagGroup.has(key)) tagsByTagGroup.set(key, []);
+    tagsByTagGroup.get(key)!.push(t);
   }
 
   const tagsByGroup = new Map<string, any[]>();
@@ -133,47 +145,66 @@ export default async function TagsAdminPage() {
           Pending tag suggestions ({suggestions?.length ?? 0})
         </h2>
         <p className="mt-0.5 text-xs text-neutral-500">
-          Approving creates the tag for real and attaches it to the proposal it
-          was suggested on. Rejecting just dismisses it.
+          Existing-tag suggestions only need the proposal owner's sign-off — they
+          show up here for visibility, not action. A brand-new tag needs the owner
+          to approve it first, then you finalize it here, which is what actually
+          creates the tag and attaches it. Rejecting works at either stage.
         </p>
         <ul className="mt-3 space-y-3">
-          {suggestions?.map((s: any) => (
-            <li
-              key={s.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-white p-4"
-            >
-              <div>
-                <span className="text-base font-semibold">{s.label}</span>
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  Suggested by{" "}
-                  <Link href={`/u/${s.suggested_by}`} className="underline">
-                    {s.profiles?.display_name ?? "a resident"}
-                  </Link>{" "}
-                  on{" "}
-                  <Link href={`/proposals/${s.proposal_id}`} className="underline">
-                    {s.proposals?.title ?? "a proposal"}
-                  </Link>
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <form action={approveTagSuggestion}>
-                  <input type="hidden" name="suggestion_id" value={s.id} />
-                  <input type="hidden" name="proposal_id" value={s.proposal_id} />
-                  <input type="hidden" name="label" value={s.label} />
-                  <button className="rounded-full bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700">
-                    Approve
-                  </button>
-                </form>
-                <form action={rejectTagSuggestion}>
-                  <input type="hidden" name="suggestion_id" value={s.id} />
-                  <input type="hidden" name="proposal_id" value={s.proposal_id} />
-                  <button className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-duty-red hover:text-duty-red">
-                    Reject
-                  </button>
-                </form>
-              </div>
-            </li>
-          ))}
+          {suggestions?.map((s: any) => {
+            const isExisting = s.tag_id != null;
+            const readyForAdmin = !isExisting && s.status === "owner_approved";
+            return (
+              <li
+                key={s.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-white p-4"
+              >
+                <div>
+                  <span className="text-base font-semibold">{s.label}</span>
+                  <span
+                    className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      isExisting ? "bg-neutral-100 text-neutral-500" : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {isExisting ? "existing tag" : "new tag"}
+                  </span>
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    Suggested by{" "}
+                    <Link href={`/u/${s.suggested_by}`} className="underline">
+                      {s.profiles?.display_name ?? "a resident"}
+                    </Link>{" "}
+                    on{" "}
+                    <Link href={`/proposals/${s.proposal_id}`} className="underline">
+                      {s.proposals?.title ?? "a proposal"}
+                    </Link>
+                    {isExisting && " — waiting on the proposal owner, not you"}
+                    {!isExisting && !readyForAdmin && " — waiting on the proposal owner to approve first"}
+                    {readyForAdmin && " — owner approved, ready for you to finalize"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {(isExisting || readyForAdmin) && (
+                    <form action={approveTagSuggestion}>
+                      <input type="hidden" name="suggestion_id" value={s.id} />
+                      <input type="hidden" name="proposal_id" value={s.proposal_id} />
+                      <input type="hidden" name="label" value={s.label} />
+                      {isExisting && <input type="hidden" name="tag_id" value={s.tag_id} />}
+                      <button className="rounded-full bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700">
+                        Approve
+                      </button>
+                    </form>
+                  )}
+                  <form action={rejectTagSuggestion}>
+                    <input type="hidden" name="suggestion_id" value={s.id} />
+                    <input type="hidden" name="proposal_id" value={s.proposal_id} />
+                    <button className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-duty-red hover:text-duty-red">
+                      Reject
+                    </button>
+                  </form>
+                </div>
+              </li>
+            );
+          })}
           {(!suggestions || suggestions.length === 0) && (
             <p className="text-sm text-neutral-500">Nothing pending right now.</p>
           )}
@@ -187,60 +218,80 @@ export default async function TagsAdminPage() {
         </h2>
         <p className="mt-0.5 text-xs text-neutral-500">
           Click one to rename it — deleting removes it from every proposal it's
-          attached to (there's no undo). Each tag's "Topic" dropdown assigns it to
-          one of the curated topics below — that's what rolls up into the community
-          dashboard's "proposals by topic" chart, so hundreds of individual tags
-          don't need to show up there one by one.
+          attached to (there's no undo). Topics (below) are curated rollups — e.g.
+          "Pedestrian & Bike Safety" grouping "bike lanes," "bike safety,"
+          "pedestrians" — that the community dashboard's "proposals by topic" chart
+          sums up to, so hundreds of individual tags don't need to show up there one
+          by one. Once a tag's assigned to a topic, it moves out of "Ungrouped" and
+          shows up nested underneath that topic instead, same as volunteer
+          categories below.
         </p>
         <div className="mt-3">
           <AddTagForm />
         </div>
-        {/* Grid instead of one-per-row now that this list can get long —
-            3-4 tags per row on wider screens instead of each one taking
-            the full card width, so the admin page doesn't turn into an
-            endless scroll once there are more than a handful of tags. */}
-        <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {tags?.map((t: any) => (
-            <TagRow
-              key={t.id}
-              id={String(t.id)}
-              label={t.label}
-              usageCount={t.proposal_tags?.length ?? 0}
-              groupId={t.group_id != null ? String(t.group_id) : null}
-              groups={tagGroupOptions}
-            />
-          ))}
-          {(!tags || tags.length === 0) && (
-            <p className="text-sm text-neutral-500">No tags yet.</p>
+        <div className="mt-3">
+          <AddTagGroupForm />
+        </div>
+
+        <ul className="mt-6 space-y-3">
+          {tagGroupOptions.map((g) => {
+            const groupTags = tagsByTagGroup.get(g.id) ?? [];
+            return (
+              <li key={g.id}>
+                <TagGroupRow id={g.id} label={g.label} tagCount={groupTags.length} />
+                <details className="ml-3 mt-1 rounded-lg border border-neutral-100 bg-neutral-50/50">
+                  <summary className="cursor-pointer list-none px-3 py-2 text-xs text-neutral-500 marker:content-none">
+                    {groupTags.length} tag{groupTags.length === 1 ? "" : "s"} — click to{" "}
+                    {groupTags.length > 0 ? "show" : "expand"}
+                  </summary>
+                  {/* Same compact grid as the flat list used to be — 2-3
+                      per row instead of one-per-row, so a well-populated
+                      topic doesn't turn into a long scroll of its own. */}
+                  <ul className="grid grid-cols-1 gap-2 p-3 pt-0 sm:grid-cols-2 lg:grid-cols-3">
+                    {groupTags.map((t: any) => (
+                      <TagRow
+                        key={t.id}
+                        id={String(t.id)}
+                        label={t.label}
+                        usageCount={t.proposal_tags?.length ?? 0}
+                        groupId={String(g.id)}
+                        groups={tagGroupOptions}
+                      />
+                    ))}
+                    {groupTags.length === 0 && (
+                      <p className="text-xs text-neutral-400">No tags assigned to this topic yet.</p>
+                    )}
+                  </ul>
+                </details>
+              </li>
+            );
+          })}
+          {tagGroupOptions.length === 0 && (
+            <p className="text-sm text-neutral-500">No topics yet — add one above.</p>
           )}
         </ul>
 
-        {/* Topics — the curated rollup layer, kept deliberately separate
-            from the flat tag grid above rather than nesting tags inside
-            each topic (which would mean either showing every tag twice,
-            once flat and once grouped, or hiding the flat list behind a
-            click). Assigning happens from each tag's own dropdown above;
-            this box is just for creating/renaming/deleting the topics
-            themselves. */}
-        <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50/50 p-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
-            Topics ({tagGroupOptions.length})
-          </h3>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            e.g. "Pedestrian & Bike Safety" grouping "bike lanes," "bike safety,"
-            "pedestrians," ...
-          </p>
-          <div className="mt-3">
-            <AddTagGroupForm />
-          </div>
-          <ul className="mt-3 space-y-2">
-            {tagGroupOptions.map((g) => (
-              <TagGroupRow key={g.id} id={g.id} label={g.label} tagCount={tagCountByGroup.get(g.id) ?? 0} />
-            ))}
-            {tagGroupOptions.length === 0 && (
-              <p className="text-xs text-neutral-400">No topics yet — add one above.</p>
-            )}
-          </ul>
+        <div className="mt-6">
+          <details className="rounded-lg border border-neutral-200 bg-neutral-50/50" open>
+            <summary className="cursor-pointer list-none px-3 py-2 text-sm font-semibold text-neutral-700 marker:content-none">
+              Ungrouped project tags ({ungroupedProjectTags.length})
+            </summary>
+            <ul className="grid grid-cols-1 gap-2 p-3 pt-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {ungroupedProjectTags.map((t: any) => (
+                <TagRow
+                  key={t.id}
+                  id={String(t.id)}
+                  label={t.label}
+                  usageCount={t.proposal_tags?.length ?? 0}
+                  groupId={null}
+                  groups={tagGroupOptions}
+                />
+              ))}
+              {ungroupedProjectTags.length === 0 && (
+                <p className="text-xs text-neutral-400">Nothing ungrouped — everything's sorted.</p>
+              )}
+            </ul>
+          </details>
         </div>
       </div>
 

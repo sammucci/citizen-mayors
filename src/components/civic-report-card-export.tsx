@@ -176,11 +176,12 @@ export function CivicReportCardExport({
                 <ExportTile label="People talked with" value={stats.peopleConversedWith} color="#F86767" />
                 <ExportTile label="Decision-makers engaged" value={stats.decisionMakersEngaged} color="#2E8B57" />
                 <ExportTile
-                  label="Letters written"
+                  label="Letters written to the editor"
                   value={stats.lettersWritten}
                   sublabel={stats.lettersPublished > 0 ? `${stats.lettersPublished} published` : undefined}
                   color="#D97706"
                 />
+                <ExportTile label="Contacted an elected" value={stats.contactedOfficials} color="#DB2777" />
                 <ExportTile label="Meetings attended" value={stats.meetingsAttended} color="#0EA5A5" />
                 <ExportTile label="Volunteer hours" value={stats.volunteerHours} color="#C2410C" />
                 <ExportTile label="Testimony given" value={stats.testimonyGiven} color="#7C3AED" />

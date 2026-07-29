@@ -124,21 +124,10 @@ export default async function HomePage({
             an array shape even though it's actually a single object at
             runtime for this to-one relationship — same mismatch handled
             with `any` elsewhere in this codebase. */}
-        <PhillyMap proposals={onMap as any} />
-        {/* Was a thin grey caption line, easy to miss — this is the
-            actual thing worth knowing at a glance: how much of what's
-            below is actually on the map. */}
-        <div className="mt-2 flex items-start gap-2 rounded-md border border-neutral-200 bg-cream/60 px-3 py-2 text-xs text-neutral-700">
-          <span aria-hidden="true">📍</span>
-          <p>
-            Showing {onMap.length} of {filteredProposals.length} proposal
-            {filteredProposals.length === 1 ? "" : "s"} on the map. Pins sit
-            at the middle of each council district for now, not an exact
-            address — the rest ({filteredProposals.length - onMap.length}{" "}
-            located by neighborhood, zip, address, or citywide) don&apos;t
-            have map coordinates yet and only show up in the list below.
-          </p>
-        </div>
+        {/* Caption now lives overlaid on the map itself (bottom-left
+            corner, semi-transparent) instead of as a separate line of
+            text underneath — see philly-map.tsx. */}
+        <PhillyMap proposals={onMap as any} totalCount={filteredProposals.length} />
       </div>
 
       <ul className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

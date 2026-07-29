@@ -26,70 +26,12 @@ async function requireAdmin() {
   return { supabase, user };
 }
 
-// Turns a pending suggestion into a real tag: creates the row in the
-// shared `tags` table (reusing it if a tag with that exact label
-// already exists — someone may have suggested a near-duplicate before
-// this one got reviewed), attaches it to the proposal that prompted the
-// suggestion, and marks the suggestion approved.
-export async function approveTagSuggestion(formData: FormData) {
-  const { supabase } = await requireAdmin();
-
-  const suggestionId = String(formData.get("suggestion_id"));
-  const proposalId = String(formData.get("proposal_id"));
-  const label = String(formData.get("label"));
-  const slug = label
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_|_$/g, "");
-
-  const { data: existingTag } = await supabase
-    .from("tags")
-    .select("id")
-    .ilike("label", label)
-    .maybeSingle();
-
-  let tagId = existingTag?.id;
-  if (!tagId) {
-    const { data: newTag, error } = await supabase
-      .from("tags")
-      .insert({ slug, label })
-      .select("id")
-      .single();
-    if (error) throw error;
-    tagId = newTag.id;
-  }
-
-  await supabase
-    .from("proposal_tags")
-    .upsert(
-      { proposal_id: proposalId, tag_id: tagId },
-      { onConflict: "proposal_id,tag_id", ignoreDuplicates: true }
-    );
-
-  await supabase
-    .from("tag_suggestions")
-    .update({ status: "approved" })
-    .eq("id", suggestionId);
-
-  revalidatePath("/admin/tags");
-  revalidatePath(`/proposals/${proposalId}`);
-}
-
-export async function rejectTagSuggestion(formData: FormData) {
-  const { supabase } = await requireAdmin();
-
-  const suggestionId = String(formData.get("suggestion_id"));
-  const proposalId = String(formData.get("proposal_id"));
-
-  await supabase
-    .from("tag_suggestions")
-    .update({ status: "rejected" })
-    .eq("id", suggestionId);
-
-  revalidatePath("/admin/tags");
-  revalidatePath(`/proposals/${proposalId}`);
-}
+// approveTagSuggestion and rejectTagSuggestion moved to
+// proposals/actions.ts (v62) — import them from there now. Approving or
+// rejecting a tag suggestion depends on whether the proposal's OWNER or
+// an admin is doing it (and, for brand-new tags, a two-step
+// owner-then-admin path), which needs the same proposal_id-scoped
+// ownership check that already lives over there for approvePowerTreeNode.
 
 // Edits one of the 7 founding budget categories in place — label,
 // description, accent color, whether it requires a direct budget line,

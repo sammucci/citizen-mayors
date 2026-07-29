@@ -4,8 +4,10 @@ import {
   addComment,
   addProposalTags,
   advanceVersion,
+  approveTagSuggestion,
   flagUnresolved,
   react,
+  rejectTagSuggestion,
   removeProposalTag,
   suggestTag,
 } from "@/app/proposals/actions";
@@ -23,8 +25,10 @@ import { ThreadCollapser } from "@/components/thread-collapser";
 import { ResettableForm } from "@/components/resettable-form";
 import { VersionCarousel } from "@/components/version-carousel";
 import { readableTextColor } from "@/lib/readable-text-color";
+import { StatIcon } from "@/components/stat-icons";
 import { splitDecisionMakerLabel } from "@/lib/decision-maker-label";
 import { statusColorClasses } from "@/lib/status-colors";
+import { relativeTime } from "@/lib/relative-time";
 
 export const dynamic = "force-dynamic";
 
@@ -74,10 +78,11 @@ export default async function ProposalPage({
   const { data: myProfile } = user
     ? await supabase
         .from("profiles")
-        .select("display_name, avatar_url")
+        .select("display_name, avatar_url, is_admin")
         .eq("id", user.id)
         .maybeSingle()
     : { data: null };
+  const isAdmin = myProfile?.is_admin ?? false;
 
   const location =
     proposal.geography_scope === "citywide"
@@ -173,13 +178,17 @@ export default async function ProposalPage({
   );
   const availableTags = (allTags ?? []).filter((t) => !appliedTagIds.has(t.id));
 
-  // Shown as muted "pending review" chips so people can see a tag's
-  // already been requested instead of suggesting the same one twice.
+  // Shown as chips so people can see a tag's already been requested
+  // instead of suggesting the same one twice — now also carries enough
+  // to know which review stage each suggestion is at (tag_id set means
+  // it matched an existing tag, so only the owner's approval is needed;
+  // tag_id null + owner_approved means it's a brand-new tag the owner
+  // already signed off on, waiting on an admin to finalize it).
   const { data: pendingTagSuggestions } = await supabase
     .from("tag_suggestions")
-    .select("id, label")
+    .select("id, label, tag_id, status, suggested_by")
     .eq("proposal_id", proposal.id)
-    .eq("status", "pending")
+    .in("status", ["pending", "owner_approved"])
     .order("created_at");
 
   const { data: allCategories } = await supabase
@@ -223,6 +232,16 @@ export default async function ProposalPage({
             <Link href={`/u/${c.author_id}`} className="hover:underline">
               {c.profiles?.display_name ?? "A resident"}
             </Link>
+            {/* Small, muted, and tucked right after the name — hover
+                shows the exact date/time via the native title tooltip,
+                so nobody has to do math on "3d ago" if they want the
+                real date, but the default view stays quiet. */}
+            <span className="text-neutral-300" aria-hidden="true">
+              ·
+            </span>
+            <time dateTime={c.created_at} title={new Date(c.created_at).toLocaleString()} className="text-neutral-400">
+              {relativeTime(c.created_at)}
+            </time>
           </span>
           <div className="flex items-center gap-2">
             {c.is_suggested_edit && (
@@ -237,16 +256,16 @@ export default async function ProposalPage({
                 <input type="hidden" name="value" value="1" />
                 <button
                   aria-label="Upvote comment"
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
+                  className={`flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
                     myVoteOnComment === 1 ? "bg-green-600" : "bg-[#bee1ca] hover:bg-[#abcbb6]"
                   }`}
                 >
-                  <span
-                    className="inline-block leading-none"
-                    style={{ filter: "brightness(0) invert(1)" }}
-                  >
-                    👍
-                  </span>
+                  {/* Real SVG icon instead of the 👍 emoji — the emoji
+                      glyph's own bounding box isn't visually centered on
+                      itself, so no amount of centering the button ever
+                      centered the icon inside it. An SVG's viewBox is
+                      centered on the actual shape, so this just works. */}
+                  <StatIcon name="handThumbUp" className="h-2.5 w-2.5 text-white" />
                 </button>
               </form>
               <form action={react}>
@@ -255,16 +274,11 @@ export default async function ProposalPage({
                 <input type="hidden" name="value" value="-1" />
                 <button
                   aria-label="Downvote comment"
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-colors ${
+                  className={`flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
                     myVoteOnComment === -1 ? "bg-duty-red" : "bg-red-300 hover:bg-red-400"
                   }`}
                 >
-                  <span
-                    className="inline-block leading-none"
-                    style={{ filter: "brightness(0) invert(1)" }}
-                  >
-                    👎
-                  </span>
+                  <StatIcon name="handThumbDown" className="h-2.5 w-2.5 text-white" />
                 </button>
               </form>
               <span className="text-xs text-neutral-500">
@@ -441,26 +455,20 @@ export default async function ProposalPage({
                         <input type="hidden" name="value" value="1" />
                         <button
                           aria-label="Upvote"
-                          className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
                             myVote === 1
                               ? "bg-green-600"
                               : "bg-[#bee1ca] hover:bg-[#abcbb6]"
                           }`}
                         >
-                          {/* CSS trick: emoji render with their own
-                              built-in color (thumbs-up is yellow by
-                              default) — this forces it to solid white
-                              always, in both the voted and unvoted
-                              state, so no yellow ever shows up. The
-                              colored circle (green/red) is what signals
-                              voted vs. not, so the icon itself stays one
-                              consistent white regardless. */}
-                          <span
-                            className="inline-block leading-none"
-                            style={{ filter: "brightness(0) invert(1)" }}
-                          >
-                            👍
-                          </span>
+                          {/* Real SVG icon, not the 👍 emoji — swapped in
+                              because the emoji glyph's own bounding box
+                              isn't centered on itself, so no amount of
+                              centering the button ever centered the icon
+                              visually. Solid white always (the colored
+                              circle is what signals voted vs. not, so the
+                              icon itself stays one consistent color). */}
+                          <StatIcon name="handThumbUp" className="h-4 w-4 text-white" />
                         </button>
                       </form>
                       <form action={react}>
@@ -468,18 +476,13 @@ export default async function ProposalPage({
                         <input type="hidden" name="value" value="-1" />
                         <button
                           aria-label="Downvote"
-                          className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-colors ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
                             myVote === -1
                               ? "bg-duty-red"
                               : "bg-red-300 hover:bg-red-400"
                           }`}
                         >
-                          <span
-                            className="inline-block leading-none"
-                            style={{ filter: "brightness(0) invert(1)" }}
-                          >
-                            👎
-                          </span>
+                          <StatIcon name="handThumbDown" className="h-4 w-4 text-white" />
                         </button>
                       </form>
                     </div>
@@ -846,15 +849,66 @@ export default async function ProposalPage({
               {(!proposal.proposal_tags || proposal.proposal_tags.length === 0) && (
                 <p className="text-xs text-neutral-500">No tags on this one.</p>
               )}
-              {pendingTagSuggestions?.map((s) => (
-                <span
-                  key={s.id}
-                  className="rounded-full border border-dashed border-neutral-300 px-3 py-1 text-xs text-neutral-500"
-                  title="Suggested, waiting on review"
-                >
-                  {s.label} (pending review)
-                </span>
-              ))}
+              {pendingTagSuggestions?.map((s) => {
+                const isExisting = s.tag_id != null;
+                const readyForAdmin = !isExisting && s.status === "owner_approved";
+                // Who gets an actual Approve/Reject action here, versus
+                // just a read-only status chip, per the two-stage rule:
+                // existing tag -> owner (or admin, as a fallback) can act
+                // directly. Brand-new tag -> only the owner can act while
+                // it's still pending (that's what advances it to
+                // owner_approved); only an admin can act once it's
+                // owner_approved (that's what actually creates it).
+                const canAct = isExisting ? isOwner || isAdmin : readyForAdmin ? isAdmin : isOwner;
+                const statusText = isExisting
+                  ? "existing tag, pending your OK"
+                  : readyForAdmin
+                  ? isAdmin
+                    ? "new tag, ready to finalize"
+                    : "new tag, waiting on an admin"
+                  : "new tag, needs your OK first";
+
+                if (!canAct) {
+                  return (
+                    <span
+                      key={s.id}
+                      className="rounded-full border border-dashed border-neutral-300 px-3 py-1 text-xs text-neutral-500"
+                      title="Suggested, waiting on review"
+                    >
+                      {s.label} ({isOwner || isAdmin ? statusText : "pending review"})
+                    </span>
+                  );
+                }
+
+                return (
+                  <span
+                    key={s.id}
+                    className="flex items-center gap-1.5 rounded-full border border-dashed border-neutral-300 bg-neutral-50 py-1 pl-3 pr-1.5 text-xs text-neutral-600"
+                  >
+                    {s.label}
+                    <span className="text-[10px] text-neutral-400">({statusText})</span>
+                    <form action={approveTagSuggestion}>
+                      <input type="hidden" name="suggestion_id" value={s.id} />
+                      <input type="hidden" name="proposal_id" value={proposal.id} />
+                      <input type="hidden" name="label" value={s.label} />
+                      {isExisting && <input type="hidden" name="tag_id" value={s.tag_id} />}
+                      <button
+                        className="rounded-full bg-green-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-green-700"
+                        title={readyForAdmin ? "Create the tag and attach it" : isExisting ? "Attach this tag" : "Approve — sends it to an admin to finalize"}
+                      >
+                        Approve
+                      </button>
+                    </form>
+                    <form action={rejectTagSuggestion}>
+                      <input type="hidden" name="suggestion_id" value={s.id} />
+                      <input type="hidden" name="proposal_id" value={proposal.id} />
+                      <button className="rounded-full border border-neutral-300 px-2 py-0.5 text-[11px] text-neutral-500 hover:border-duty-red hover:text-duty-red">
+                        Reject
+                      </button>
+                    </form>
+                  </span>
+                );
+              })}
             </div>
 
             {isOwner && availableTags.length > 0 && (
@@ -878,11 +932,22 @@ export default async function ProposalPage({
             )}
 
             {/* Open to anyone signed in, not just the owner — unlike
-                "Add a tag" above, this doesn't touch the real tags list.
-                It just logs a request an admin reviews. */}
+                "Add a tag" above, this doesn't touch the real tags list,
+                it just logs a request. The datalist lets a non-owner see
+                and pick from tags that already exist instead of typing
+                blind, but they can just as easily type something brand
+                new — suggestTag itself sorts out which path it takes. */}
             {user && (
               <div className="mt-3 border-t border-neutral-100 pt-3">
-                <p className="text-xs text-neutral-500">Don't see the right tag?</p>
+                <p className="text-xs text-neutral-500">
+                  {isOwner ? "Don't see the right tag?" : "Select or suggest a tag"}
+                </p>
+                {!isOwner && (
+                  <p className="mt-0.5 text-[11px] text-neutral-400">
+                    Existing tags just need your OK from the proposal owner. A
+                    brand-new one needs the owner's OK first, then an admin's.
+                  </p>
+                )}
                 <ResettableForm
                   action={suggestTag}
                   className="mt-2 flex flex-wrap items-center gap-2"
@@ -891,9 +956,15 @@ export default async function ProposalPage({
                   <input
                     name="label"
                     required
-                    placeholder="Suggest a new tag..."
+                    list="tag-suggestion-options"
+                    placeholder={isOwner ? "Suggest a new tag..." : "Pick an existing tag or suggest a new one..."}
                     className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
                   />
+                  <datalist id="tag-suggestion-options">
+                    {availableTags.map((t) => (
+                      <option key={t.id} value={t.label} />
+                    ))}
+                  </datalist>
                   <button className="shrink-0 rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50">
                     Suggest
                   </button>

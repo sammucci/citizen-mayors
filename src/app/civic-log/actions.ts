@@ -46,6 +46,7 @@ function readFields(formData: FormData) {
     published: formData.get("published") === "on",
     publishedLink: String(formData.get("published_link") ?? "").trim(),
     organization: String(formData.get("organization") ?? "").trim(),
+    contactMethod: String(formData.get("contact_method") ?? "").trim(),
     hoursRaw: String(formData.get("hours") ?? "").trim(),
     category: String(formData.get("category") ?? "").trim(),
   };
@@ -58,7 +59,13 @@ function buildRow(f: ReturnType<typeof readFields>, status: "draft" | "published
     title: f.logType === "letter_to_editor" && f.title ? f.title : null,
     published: f.logType === "letter_to_editor" ? f.published : false,
     published_link: f.logType === "letter_to_editor" && f.publishedLink ? f.publishedLink : null,
-    organization: f.logType === "community_meeting" && f.organization ? f.organization : null,
+    // Reused for both community_meeting (hosted by) and
+    // contacted_official (who/which office was contacted).
+    organization:
+      (f.logType === "community_meeting" || f.logType === "contacted_official") && f.organization
+        ? f.organization
+        : null,
+    contact_method: f.logType === "contacted_official" && f.contactMethod ? f.contactMethod : null,
     hours: f.logType === "volunteer_hours" && f.hoursRaw ? Number(f.hoursRaw) : null,
     category: f.logType === "volunteer_hours" && f.category ? f.category : null,
     note: f.note || null,
@@ -66,7 +73,13 @@ function buildRow(f: ReturnType<typeof readFields>, status: "draft" | "published
   };
 }
 
-const LOG_TYPES = ["letter_to_editor", "community_meeting", "volunteer_hours", "testimony"];
+const LOG_TYPES = [
+  "letter_to_editor",
+  "community_meeting",
+  "volunteer_hours",
+  "testimony",
+  "contacted_official",
+];
 
 // Adds one finished, "published" log entry — this is the normal
 // deliberate submit path (as opposed to saveDraftCivicLog, which is

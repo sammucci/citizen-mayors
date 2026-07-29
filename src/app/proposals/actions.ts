@@ -627,12 +627,18 @@ export async function addProposalTags(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
-// Anyone signed in can suggest a brand-new tag that doesn't exist yet —
-// unlike addProposalTags (owner-only, picks from the existing list),
-// this is open to any user and doesn't touch the real tags table.
-// It just logs a pending request; an admin reviews it at
-// /admin/tags and either creates the real tag (which also
-// attaches it to this proposal) or rejects it.
+// Anyone signed in can suggest a tag on a proposal they don't own —
+// either an existing one (typed to match, or picked from the datalist
+// the form offers) or a brand-new one. Which review path it takes
+// depends entirely on whether the label matches a real tag, resolved
+// here server-side so it works the same whether the visitor picked from
+// the datalist or just happened to type the exact existing name:
+//   existing tag  -> tag_id set   -> only the proposal owner needs to
+//                                    approve it (see approveTagSuggestion)
+//   brand-new tag -> tag_id null  -> owner approves first, then an
+//                                    admin finalizes it
+// Doesn't touch the real tags/proposal_tags tables itself either way —
+// this only ever logs the pending request.
 export async function suggestTag(formData: FormData) {
   const { supabase, user } = await requireUser();
 
@@ -640,12 +646,132 @@ export async function suggestTag(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();
   if (!label) return;
 
+  const { data: existingTag } = await supabase
+    .from("tags")
+    .select("id")
+    .ilike("label", label)
+    .maybeSingle();
+
   await supabase.from("tag_suggestions").insert({
     proposal_id: proposalId,
     suggested_by: user.id,
     label,
+    tag_id: existingTag?.id ?? null,
   });
 
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Slugify used both here (creating a brand-new tag on final admin
+// approval) and in admin/actions.ts's renameTag/addTagAdmin — kept as
+// its own small copy in each file rather than a shared import, matching
+// how the other small per-file helpers are already handled in this
+// codebase.
+function slugifyTagLabel(label: string): string {
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+async function isAdminOrProposalOwner(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  proposalId: string
+): Promise<{ isOwner: boolean; isAdmin: boolean }> {
+  const [{ data: proposal }, { data: profile }] = await Promise.all([
+    supabase.from("proposals").select("owner_id").eq("id", proposalId).single(),
+    supabase.from("profiles").select("is_admin").eq("id", userId).maybeSingle(),
+  ]);
+  return {
+    isOwner: proposal?.owner_id === userId,
+    isAdmin: Boolean(profile?.is_admin),
+  };
+}
+
+// Advances a pending tag suggestion — what "approve" actually does
+// depends on who's calling it and what stage the suggestion is at (see
+// the tag_suggestions table comment in schema.sql for the full state
+// machine). The RLS policies enforce the same rules at the database
+// level too, so this app-layer check is what gives a clear error
+// message rather than a silent RLS-denied failure.
+export async function approveTagSuggestion(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const suggestionId = String(formData.get("suggestion_id"));
+  const proposalId = String(formData.get("proposal_id"));
+  const label = String(formData.get("label"));
+  const tagIdRaw = formData.get("tag_id");
+  const tagId = tagIdRaw ? Number(tagIdRaw) : null;
+
+  const { isOwner, isAdmin } = await isAdminOrProposalOwner(supabase, user.id, proposalId);
+  if (!isOwner && !isAdmin) {
+    throw new Error("Only the proposal owner or an admin can approve tag suggestions.");
+  }
+
+  if (tagId) {
+    // Existing tag — owner or admin can finalize it directly, since
+    // nothing new is being created, just attached.
+    await supabase
+      .from("proposal_tags")
+      .upsert({ proposal_id: proposalId, tag_id: tagId }, { onConflict: "proposal_id,tag_id", ignoreDuplicates: true });
+    await supabase.from("tag_suggestions").update({ status: "approved" }).eq("id", suggestionId);
+  } else if (isAdmin) {
+    // Brand-new tag, and an admin is finalizing it. This is the one
+    // step that actually creates a shared tags row and attaches it to
+    // someone's proposal, so it's only ever allowed once the OWNER has
+    // already moved this suggestion to owner_approved — an admin can't
+    // skip that and populate a proposal's tags on their own, no matter
+    // how this action gets called.
+    const { data: current } = await supabase
+      .from("tag_suggestions")
+      .select("status")
+      .eq("id", suggestionId)
+      .single();
+    if (current?.status !== "owner_approved") {
+      throw new Error("The proposal owner needs to approve this tag before it can be finalized.");
+    }
+    const { data: existingTag } = await supabase.from("tags").select("id").ilike("label", label).maybeSingle();
+    let newTagId = existingTag?.id;
+    if (!newTagId) {
+      const { data: created, error } = await supabase
+        .from("tags")
+        .insert({ slug: slugifyTagLabel(label), label })
+        .select("id")
+        .single();
+      if (error || !created) throw new Error(error?.message ?? "Could not create that tag.");
+      newTagId = created.id;
+    }
+    await supabase
+      .from("proposal_tags")
+      .upsert({ proposal_id: proposalId, tag_id: newTagId }, { onConflict: "proposal_id,tag_id", ignoreDuplicates: true });
+    await supabase.from("tag_suggestions").update({ status: "approved", tag_id: newTagId }).eq("id", suggestionId);
+  } else {
+    // Owner approving a brand-new tag only ever advances it one step —
+    // it doesn't attach anything yet, just signals "yes, I want this on
+    // my proposal if an admin also signs off."
+    await supabase.from("tag_suggestions").update({ status: "owner_approved" }).eq("id", suggestionId);
+  }
+
+  revalidatePath("/admin/tags");
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+export async function rejectTagSuggestion(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const suggestionId = String(formData.get("suggestion_id"));
+  const proposalId = String(formData.get("proposal_id"));
+
+  const { isOwner, isAdmin } = await isAdminOrProposalOwner(supabase, user.id, proposalId);
+  if (!isOwner && !isAdmin) {
+    throw new Error("Only the proposal owner or an admin can reject tag suggestions.");
+  }
+
+  await supabase.from("tag_suggestions").update({ status: "rejected" }).eq("id", suggestionId);
+
+  revalidatePath("/admin/tags");
   revalidatePath(`/proposals/${proposalId}`);
 }
 

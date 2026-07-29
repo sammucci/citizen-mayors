@@ -95,7 +95,7 @@ export function ProposalFilters({
         <option value="">All tags</option>
         {tags.map((t) => (
           <option key={t.slug} value={t.slug}>
-            #{t.label}
+            {t.label}
           </option>
         ))}
       </FilterSelect>

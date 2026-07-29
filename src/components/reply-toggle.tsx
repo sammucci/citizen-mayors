@@ -31,7 +31,7 @@ export function ReplyToggle({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-2 inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+        className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
       >
         ↩ Reply
       </button>

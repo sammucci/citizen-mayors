@@ -19,6 +19,7 @@ export type CivicStats = {
   decisionMakersEngaged: number;
   lettersWritten: number;
   lettersPublished: number;
+  contactedOfficials: number;
   meetingsAttended: number;
   volunteerHours: number;
   testimonyGiven: number;
@@ -33,14 +34,27 @@ export type CivicDetails = {
   decisionMakersEngaged: CivicDetailItem[];
 };
 
+const CONTACT_METHOD_LABEL: Record<string, string> = {
+  phone: "Phone call",
+  email: "Email",
+  letter: "Letter",
+  in_person: "In-person meeting",
+};
+
 export type CivicLog = {
   id: string;
-  logType: "letter_to_editor" | "community_meeting" | "volunteer_hours" | "testimony";
+  logType:
+    | "letter_to_editor"
+    | "community_meeting"
+    | "volunteer_hours"
+    | "testimony"
+    | "contacted_official";
   occurredOn: string;
   title: string | null;
   published: boolean;
   publishedLink: string | null;
   organization: string | null;
+  contactMethod: string | null;
   hours: number | null;
   category: string | null;
   note: string | null;
@@ -52,6 +66,7 @@ const LOG_TYPE_LABEL: Record<CivicLog["logType"], string> = {
   community_meeting: "Community meeting",
   volunteer_hours: "Volunteer hours",
   testimony: "Gave testimony",
+  contacted_official: "Contacted an elected official",
 };
 
 // Each log type's color matches its stat tile below, so the "+ Add a
@@ -62,6 +77,7 @@ const LOG_TYPE_COLOR: Record<CivicLog["logType"], string> = {
   community_meeting: "#0EA5A5",
   volunteer_hours: "#C2410C",
   testimony: "#7C3AED",
+  contacted_official: "#DB2777",
 };
 
 function formatDate(iso: string) {
@@ -171,11 +187,17 @@ export function CivicReportCard({
           onClick={() => setDetailKey("decisionMakersEngaged")}
         />
         <StatTile
-          label="Letters written"
+          label="Letters written to the editor"
           value={stats.lettersWritten}
           sublabel={stats.lettersPublished > 0 ? `${stats.lettersPublished} published` : undefined}
           color={LOG_TYPE_COLOR.letter_to_editor}
           onClick={() => setDetailKey("lettersWritten")}
+        />
+        <StatTile
+          label="Contacted an elected"
+          value={stats.contactedOfficials}
+          color={LOG_TYPE_COLOR.contacted_official}
+          onClick={() => setDetailKey("contactedOfficials")}
         />
         <StatTile
           label="Meetings attended"
@@ -278,7 +300,8 @@ export function CivicReportCard({
           onClose={() => setDetailKey(null)}
         >
           {detailKey === "lettersWritten" || detailKey === "meetingsAttended" ||
-          detailKey === "volunteerHours" || detailKey === "testimonyGiven" ? (
+          detailKey === "volunteerHours" || detailKey === "testimonyGiven" ||
+          detailKey === "contactedOfficials" ? (
             <LogTypeDetailList
               logs={published.filter((l) => l.logType === STAT_TO_LOG_TYPE[detailKey])}
               onLogNow={() => openNewLog(STAT_TO_LOG_TYPE[detailKey])}
@@ -300,7 +323,8 @@ const STAT_TITLES: Record<ClickableStatKey, string> = {
   commentsMade: "Comments you've made",
   peopleConversedWith: "People you've talked with",
   decisionMakersEngaged: "Decision-makers you've engaged with",
-  lettersWritten: "Letters to the editor",
+  lettersWritten: "Letters written to the editor",
+  contactedOfficials: "Elected officials you've contacted",
   meetingsAttended: "Community meetings",
   volunteerHours: "Volunteer hours",
   testimonyGiven: "Testimony given",
@@ -308,6 +332,7 @@ const STAT_TITLES: Record<ClickableStatKey, string> = {
 
 const STAT_TO_LOG_TYPE: Partial<Record<ClickableStatKey, CivicLog["logType"]>> = {
   lettersWritten: "letter_to_editor",
+  contactedOfficials: "contacted_official",
   meetingsAttended: "community_meeting",
   volunteerHours: "volunteer_hours",
   testimonyGiven: "testimony",
@@ -403,7 +428,11 @@ function LogTypeDetailList({ logs, onLogNow }: { logs: CivicLog[]; onLogNow: () 
           </p>
           <p className="text-xs text-neutral-500">
             {formatDate(log.occurredOn)}
-            {log.organization ? ` · Hosted by ${log.organization}` : ""}
+            {log.logType === "community_meeting" && log.organization ? ` · Hosted by ${log.organization}` : ""}
+            {log.logType === "contacted_official" && log.organization ? ` · ${log.organization}` : ""}
+            {log.logType === "contacted_official" && log.contactMethod
+              ? ` · ${CONTACT_METHOD_LABEL[log.contactMethod] ?? log.contactMethod}`
+              : ""}
             {log.logType === "letter_to_editor" && log.published ? " · Published" : ""}
           </p>
           {log.note && <p className="mt-1 text-neutral-600">{log.note}</p>}
@@ -440,8 +469,16 @@ function LogRow({ log, onEdit }: { log: CivicLog; onEdit: () => void }) {
             ? ` · ${log.hours} hrs${log.category ? ` (${log.category})` : ""}`
             : ""}
           {log.logType === "letter_to_editor" && log.published ? " · Published" : ""}
+          {log.logType === "contacted_official" && log.contactMethod
+            ? ` · ${CONTACT_METHOD_LABEL[log.contactMethod] ?? log.contactMethod}`
+            : ""}
         </p>
-        {log.organization && <p className="mt-0.5 text-neutral-500">Hosted by {log.organization}</p>}
+        {log.logType === "community_meeting" && log.organization && (
+          <p className="mt-0.5 text-neutral-500">Hosted by {log.organization}</p>
+        )}
+        {log.logType === "contacted_official" && log.organization && (
+          <p className="mt-0.5 text-neutral-500">{log.organization}</p>
+        )}
         {log.note && <p className="mt-0.5 text-neutral-500">{log.note}</p>}
         {log.publishedLink && (
           <a
@@ -719,6 +756,41 @@ function AddLogModal({
                 className="input"
               />
             </label>
+          )}
+
+          {logType === "contacted_official" && (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-xs text-neutral-500">
+                  Who did you contact? (optional) — e.g. Councilmember Jones' office
+                </span>
+                <input
+                  name="organization"
+                  defaultValue={existing?.organization ?? ""}
+                  className="input"
+                />
+              </label>
+              <div>
+                <span className="mb-1 block text-xs text-neutral-500">How</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(["phone", "email", "letter", "in_person"] as const).map((m) => (
+                    <label
+                      key={m}
+                      className="flex items-center gap-1.5 rounded border border-neutral-300 px-2 py-1.5 text-xs has-[:checked]:border-[#DB2777] has-[:checked]:bg-[#DB27771a]"
+                    >
+                      <input
+                        type="radio"
+                        name="contact_method"
+                        value={m}
+                        defaultChecked={existing?.contactMethod === m || (!existing && m === "phone")}
+                        className="h-3 w-3"
+                      />
+                      {CONTACT_METHOD_LABEL[m]}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           {logType === "volunteer_hours" && (

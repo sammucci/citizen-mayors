@@ -1,9 +1,25 @@
 import Link from "next/link";
+import { Poppins } from "next/font/google";
 import { createClient } from "@/lib/supabase/server";
 import { CENSUS_DISTRICT_DEMOGRAPHICS, citywideCensusStats } from "@/lib/census-district-demographics";
 import { InfoHeading } from "@/components/info-heading";
+import { StatIcon, type StatIconName } from "@/components/stat-icons";
+import { FlippableStatTile } from "@/components/flippable-stat-tile";
 
 export const dynamic = "force-dynamic";
+
+// Sofia Pro (what Samantha asked for by name) is a commercial font sold
+// through Mostardesign/Adobe Fonts, not something freely licensable to
+// bundle here — using it would mean either linking a font CDN that
+// doesn't actually have the rights to serve it, or shipping the actual
+// font file without a license, neither of which this app can do.
+// Poppins is the closest free, self-hostable stand-in: same geometric,
+// rounded-bold letterforms people usually reach for Sofia Pro to get.
+// Scoped to just the stat numbers below (not swapped in site-wide) so
+// this is a low-risk, easily-reversible change. If Samantha has an
+// actual Sofia Pro license and can drop the .woff2 files in
+// public/fonts, swapping this for a real @font-face is a quick follow-up.
+const statNumberFont = Poppins({ subsets: ["latin"], weight: ["800"], display: "swap" });
 
 const STAT_COLORS = {
   proposals: "#6C3FD1",
@@ -11,59 +27,91 @@ const STAT_COLORS = {
   comments: "#8358D3",
   decisionMakers: "#2E8B57",
   letters: "#D97706",
+  contactedOfficials: "#DB2777",
   meetings: "#0EA5A5",
   volunteerHours: "#C2410C",
   testimony: "#7C3AED",
   members: "#475569",
 };
 
-// Redesigned for more hierarchy/excitement (Samantha's ask): each tile
-// now carries an emoji icon in a color-tinted chip, a bigger number, and
-// a colored top edge instead of the old flat tinted-background square —
-// meant to read as a little celebration of what the community's done,
-// not just a data table. No new icon library added (the app has none
-// installed) — plain emoji, same trick already used for the homepage's
-// 🎉 button, so this needs zero new dependencies.
+// What each card's back face explains when it's tapped — Samantha's
+// ask was for the stat cards to "turn around" and explain what's being
+// measured instead of just sitting there as a bare number. Kept as its
+// own lookup (rather than a prop typed out at each call site below) so
+// the actual grid of <Tile> calls further down stays easy to scan.
+const TILE_DESCRIPTIONS: Record<string, string> = {
+  proposalsMade:
+    "Every civic idea someone's posted — policy or project, citywide or hyperlocal. Democracy works better when more people bring ideas forward instead of waiting for someone else to.",
+  contributedToOthers:
+    "Suggested edits members have offered on a proposal they don't own. Good ideas get sharper with more eyes on them — this is what shared ownership of an idea looks like in practice.",
+  commentsMade:
+    "Every comment left on a proposal, across the whole community. Working through the details and disagreements in the open is how an idea gets pressure-tested before it becomes policy.",
+  decisionMakersEngaged:
+    "Distinct officials, agencies, or bodies mapped into a proposal's decision chain where someone's added a real note. Knowing exactly who holds the power to act is the first step to actually moving something.",
+  lettersWritten:
+    "Letters written to local newspapers or outlets. They put an issue in front of people who aren't already paying attention, build public credibility, and apply pressure through local media — a different kind of leverage than contacting an official directly.",
+  contactedOfficials:
+    "Calls, emails, letters, or in-person meetings with an elected official's office. Direct contact is one of the most reliable ways an ordinary resident's voice reaches the person who can actually act.",
+  meetingsAttended:
+    "Neighborhood, civic association, or town hall meetings members have shown up to. Local democracy runs on people actually being in the room.",
+  volunteerHours:
+    "Hours spent on hands-on community work, logged by category. Civic life isn't only policy — showing up to do the work is part of the same fabric.",
+  testimonyGiven:
+    "Formal public comment delivered at a hearing or public meeting. Testimony puts a resident's voice on the permanent public record — part of how public bodies are required to listen.",
+};
+
+// Redesigned again per Samantha's reference mockup: a solid color "cap"
+// across the top of the card (not just a thin border), number and icon
+// side by side instead of stacked, and a bold black label instead of a
+// muted grey one. Icons are now real flat vector glyphs (see
+// stat-icons.tsx — Heroicons 24px solid set, MIT licensed) instead of
+// emoji: direct .svg fetches from every CDN tried (jsDelivr, unpkg,
+// raw GitHub) came back empty in this environment, but the same icons'
+// .js module builds fetched fine and contain the identical path data,
+// so that's what got pulled and inlined instead. No new npm dependency —
+// the paths are hardcoded JSX, not an @heroicons/react import.
+// Now a flip card (see flippable-stat-tile.tsx) — tapping it turns the
+// card over to show what the stat actually measures, instead of just
+// being a static number.
 function Tile({
+  statKey,
   label,
   value,
   sublabel,
   color,
   icon,
 }: {
+  statKey: keyof typeof TILE_DESCRIPTIONS;
   label: string;
   value: number | string;
   sublabel?: string;
   color: string;
-  icon: string;
+  icon: StatIconName;
 }) {
   return (
-    <div
-      className="rounded-xl border border-t-[3px] border-neutral-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-      style={{ borderTopColor: color }}
-    >
-      <div
-        className="flex h-9 w-9 items-center justify-center rounded-full text-base"
-        style={{ backgroundColor: `${color}1a` }}
-        aria-hidden="true"
-      >
-        {icon}
-      </div>
-      <p className="mt-3 text-3xl font-extrabold leading-none tracking-tight" style={{ color }}>
-        {value}
-      </p>
-      <p className="mt-1.5 text-xs font-semibold text-neutral-600">{label}</p>
-      {sublabel && <p className="mt-0.5 text-[11px] text-neutral-400">{sublabel}</p>}
-    </div>
+    <FlippableStatTile
+      label={label}
+      value={value}
+      sublabel={sublabel}
+      color={color}
+      icon={icon}
+      description={TILE_DESCRIPTIONS[statKey]}
+      font={statNumberFont.className}
+    />
   );
 }
 
-// The compact "about your community" strip — members/zip codes/districts
-// used to be three more tiles in the same grid as the civic-action
-// stats, which flattened everything into one undifferentiated wall of
-// boxes. Pulling these three out into a single quiet pill line creates
-// actual hierarchy: this is context ("who's here"), the grid below is
-// the celebration ("what everyone's done").
+// The "about your community" strip — members/zip codes/districts used
+// to be three more tiles in the same grid as the civic-action stats,
+// which flattened everything into one undifferentiated wall of boxes.
+// Pulling these three out keeps the hierarchy (this is quiet context —
+// "who's here" — the grid below is the celebration — "what everyone's
+// done"), but widened to the full card width and centered per
+// Samantha's ask, rather than the original tight left-aligned pill.
+// Same real-icon treatment as the stat tiles (see stat-icons.tsx) —
+// no emoji here either — just in muted grey chips instead of each
+// stat's own bright color, since this row is meant to read as calmer
+// background context, not another celebration.
 function CommunityStrip({
   members,
   zipCodes,
@@ -73,22 +121,23 @@ function CommunityStrip({
   zipCodes: number;
   districts: number;
 }) {
+  const items: { icon: StatIconName; value: string; label: string }[] = [
+    { icon: "users", value: String(members), label: `registered member${members === 1 ? "" : "s"}` },
+    { icon: "mapPin", value: String(zipCodes), label: `zip code${zipCodes === 1 ? "" : "s"}` },
+    { icon: "buildingLibrary", value: `${districts}/10`, label: "districts represented" },
+  ];
   return (
-    <div className="mt-3 inline-flex flex-wrap items-center gap-x-4 gap-y-1 rounded-full bg-neutral-100 px-4 py-2 text-xs font-medium text-neutral-600">
-      <span>
-        <span aria-hidden="true">👥</span>{" "}
-        <strong className="text-neutral-800">{members}</strong> registered member{members === 1 ? "" : "s"}
-      </span>
-      <span className="text-neutral-300">·</span>
-      <span>
-        <span aria-hidden="true">📍</span>{" "}
-        <strong className="text-neutral-800">{zipCodes}</strong> zip code{zipCodes === 1 ? "" : "s"}
-      </span>
-      <span className="text-neutral-300">·</span>
-      <span>
-        <span aria-hidden="true">🏛️</span>{" "}
-        <strong className="text-neutral-800">{districts}/10</strong> districts represented
-      </span>
+    <div className="mt-4 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 rounded-2xl bg-neutral-50 px-6 py-4">
+      {items.map((item) => (
+        <div key={item.label} className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-200/70 text-neutral-500">
+            <StatIcon name={item.icon} className="h-5 w-5" />
+          </div>
+          <p className="text-sm text-neutral-600">
+            <span className="text-base font-bold text-neutral-900">{item.value}</span> {item.label}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -456,6 +505,14 @@ export default async function CommunityDashboardPage({
   const logs = civicTotals.data ?? [];
   const lettersWritten = logs.filter((l: any) => l.log_type === "letter_to_editor").length;
   const lettersPublished = logs.filter((l: any) => l.log_type === "letter_to_editor" && l.published).length;
+  // Deliberately its own separate count, not folded into "Decision-makers
+  // engaged" below — that stat is about named officials/bodies mapped
+  // into a specific proposal's decision chain (a structural, per-proposal
+  // thing), while this is raw volume of direct contact logged off-
+  // platform, with no requirement it ties back to any one proposal. Two
+  // different things worth seeing on their own rather than merged into
+  // one number that would mean neither.
+  const contactedOfficials = logs.filter((l: any) => l.log_type === "contacted_official").length;
   const meetingsAttended = logs.filter((l: any) => l.log_type === "community_meeting").length;
   const testimonyGiven = logs.filter((l: any) => l.log_type === "testimony").length;
   const volunteerHours = logs
@@ -496,30 +553,40 @@ export default async function CommunityDashboardPage({
         Civic actions, together
       </h2>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile icon="📣" label="Proposals made" value={proposalsMade ?? 0} color={STAT_COLORS.proposals} />
+        <Tile statKey="proposalsMade" icon="megaphone" label="Proposals made" value={proposalsMade ?? 0} color={STAT_COLORS.proposals} />
         <Tile
-          icon="🤝"
+          statKey="contributedToOthers"
+          icon="handThumbUp"
           label="Contributions to others"
           value={contributedToOthers}
           color={STAT_COLORS.contributed}
         />
-        <Tile icon="💬" label="Comments made" value={commentsMade ?? 0} color={STAT_COLORS.comments} />
+        <Tile statKey="commentsMade" icon="chatBubbleLeftRight" label="Comments made" value={commentsMade ?? 0} color={STAT_COLORS.comments} />
         <Tile
-          icon="🏛️"
+          statKey="decisionMakersEngaged"
+          icon="buildingLibrary"
           label="Decision-makers engaged"
           value={decisionMakersEngaged}
           color={STAT_COLORS.decisionMakers}
         />
         <Tile
-          icon="✉️"
-          label="Letters written"
+          statKey="lettersWritten"
+          icon="newspaper"
+          label="Letters written to the editor"
           value={lettersWritten}
           sublabel={lettersPublished > 0 ? `${lettersPublished} published` : undefined}
           color={STAT_COLORS.letters}
         />
-        <Tile icon="📅" label="Community meetings attended" value={meetingsAttended} color={STAT_COLORS.meetings} />
-        <Tile icon="🙌" label="Hours volunteered" value={volunteerHours} color={STAT_COLORS.volunteerHours} />
-        <Tile icon="🎤" label="Testimony given" value={testimonyGiven} color={STAT_COLORS.testimony} />
+        <Tile
+          statKey="contactedOfficials"
+          icon="phone"
+          label="Contacted an elected official"
+          value={contactedOfficials}
+          color={STAT_COLORS.contactedOfficials}
+        />
+        <Tile statKey="meetingsAttended" icon="calendar" label="Community meetings attended" value={meetingsAttended} color={STAT_COLORS.meetings} />
+        <Tile statKey="volunteerHours" icon="handRaised" label="Hours volunteered" value={volunteerHours} color={STAT_COLORS.volunteerHours} />
+        <Tile statKey="testimonyGiven" icon="microphone" label="Testimony given" value={testimonyGiven} color={STAT_COLORS.testimony} />
       </div>
 
       <div className="mt-8">
