@@ -43,34 +43,44 @@ export function FlippableStatTile({
       type="button"
       onClick={onToggle}
       aria-label={`${label}: ${value}. Tap to ${flipped ? "see the number" : "learn why this matters"}.`}
-      className="block h-44 w-full text-left [perspective:1000px]"
+      className="block h-52 w-full text-left [perspective:1000px]"
     >
       <div
         className="relative h-full transition-transform duration-500 [transform-style:preserve-3d]"
         style={{ transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}
       >
-        {/* Front — tinted with the tile's own color (a soft wash across
-            the whole card, not just a thin top cap) so the big bold
-            number on a plain white background doesn't read as clinical.
-            Icon circle gets a stronger tint of the same color so it
-            still stands out against the now-tinted card. */}
-        <div
-          className="absolute inset-0 flex flex-col overflow-hidden rounded-2xl border shadow-sm transition hover:-translate-y-1 hover:shadow-lg [backface-visibility:hidden]"
-          style={{ backgroundColor: `${color}14`, borderColor: `${color}33` }}
-        >
-          <div className="flex flex-1 flex-col p-4">
-            <div className="flex items-start justify-between gap-2">
-              <p className={`${font} text-5xl leading-none tracking-tight`} style={{ color }}>
-                {value}
-              </p>
-              <div
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-2xl"
-                style={{ backgroundColor: `${color}33`, color }}
-              >
-                <StatIcon name={icon} className="h-7 w-7" />
-              </div>
+        {/* Front — solid color header bar (Samantha's mockup) plus a
+            tinted body underneath, rather than either extreme: a bare
+            white card (read as clinical) or the whole face in flat
+            color (too heavy for a number this size). The icon circle
+            gets its own room below the bar, not crowding the corner. */}
+        <div className="absolute inset-0 flex flex-col overflow-hidden rounded-2xl shadow-sm transition hover:-translate-y-1 hover:shadow-lg [backface-visibility:hidden]">
+          <div className="h-9 shrink-0" style={{ backgroundColor: color }} aria-hidden="true" />
+          <div
+            className="relative flex flex-1 flex-col p-5"
+            style={{ backgroundColor: `${color}14` }}
+          >
+            {/* Icon is its own absolutely-positioned badge, not sharing a
+                flex row with the number — a number sharing a row with a
+                fixed-width icon works fine at 4-5 digits, but a big
+                proposal/comment count (6-7 digits) would either get
+                squeezed by the icon or force it off the edge. Pulling
+                the icon out of that row means the number always has the
+                FULL card width to itself and can wrap onto a second line
+                if it ever needs to, instead of colliding with anything. */}
+            <div
+              className="absolute right-4 top-4 flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl"
+              style={{ backgroundColor: `${color}33`, color }}
+            >
+              <StatIcon name={icon} className="h-6 w-6" />
             </div>
-            <p className="mt-2 text-sm font-bold leading-snug text-neutral-900">{label}</p>
+            <p
+              className={`${font} pr-14 text-5xl leading-none tracking-tight`}
+              style={{ color }}
+            >
+              {value}
+            </p>
+            <p className="mt-3 text-sm font-bold leading-snug text-neutral-900">{label}</p>
             {sublabel && <p className="mt-0.5 text-[11px] text-neutral-500">{sublabel}</p>}
           </div>
         </div>
