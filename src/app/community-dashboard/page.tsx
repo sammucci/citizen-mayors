@@ -5,6 +5,7 @@ import { CENSUS_DISTRICT_DEMOGRAPHICS, citywideCensusStats } from "@/lib/census-
 import { InfoHeading } from "@/components/info-heading";
 import { StatIcon, type StatIconName } from "@/components/stat-icons";
 import { StatTileGrid, type StatTileData } from "@/components/stat-tile-grid";
+import { brightnessOf } from "@/components/flippable-stat-tile";
 
 export const dynamic = "force-dynamic";
 
@@ -20,17 +21,31 @@ export const dynamic = "force-dynamic";
 // this for a real @font-face is a quick follow-up.
 const statNumberFont = Fredoka({ subsets: ["latin"], weight: ["700"], display: "swap" });
 
+// Pulled directly from the real category palette (supabase/schema.sql's
+// `categories` seed — Public Safety, General Government, Benefits &
+// Pensions, Infrastructure & Sanitation, Culture & Leisure, Education &
+// Subsidies, Governance & Civic Process) instead of a separate made-up
+// set of colors — these are the same 7 colors already used for category
+// badges/accents everywhere else in the app, so the stat cards actually
+// match the rest of the site instead of introducing their own palette.
+// Only 7 real colors to cover 9 cards, so two repeat — positioned so the
+// repeats don't land in the same grid column/row as each other.
 const STAT_COLORS = {
-  proposals: "#6C3FD1",
-  contributed: "#4069D9",
-  comments: "#8358D3",
-  decisionMakers: "#2E8B57",
-  letters: "#D97706",
-  contactedOfficials: "#DB2777",
-  meetings: "#0EA5A5",
-  volunteerHours: "#C2410C",
-  testimony: "#7C3AED",
-  members: "#475569",
+  proposals: "#8358D3", // Public Safety
+  contributed: "#4069D9", // General Government Operations
+  comments: "#F86767", // Benefits and Pensions
+  decisionMakers: "#FF74A5", // Infrastructure and Sanitation
+  letters: "#6BAB68", // Culture and Leisure
+  contactedOfficials: "#FF881A", // Education and Subsidies
+  meetings: "#FBE968", // Governance and Civic Process (the yellow)
+  volunteerHours: "#8358D3", // repeats Public Safety's purple
+  testimony: "#4069D9", // repeats General Government's blue
+  // Was an unused "members" placeholder color — repurposed for the
+  // cross-partisan-usership card. Deliberately a neutral grey rather
+  // than one of the 7 category colors: this card's whole point is that
+  // the membership doesn't skew toward any one side, so it shouldn't
+  // visually read as "belonging" to any one category either.
+  crossPartisan: "#475569",
 };
 
 // What each card's back face explains when it's tapped — just the "why
@@ -48,6 +63,8 @@ const TILE_DESCRIPTIONS: Record<string, string> = {
   meetingsAttended: "Local democracy runs on people actually being in the room.",
   volunteerHours: "Showing up to do the work is part of the same civic fabric as policy.",
   testimonyGiven: "Puts a resident's voice on the permanent public record.",
+  crossPartisanUsership:
+    "Quality-of-life issues draw support across the political spectrum, not just one side.",
 };
 
 // The "about your community" strip — members/zip codes/districts used
@@ -95,23 +112,22 @@ function CommunityStrip({
   );
 }
 
-// Percent breakdown of a demographic field among profiles that actually
-// shared it — "prefer not to say" / never-answered rows are excluded
-// from the denominator so the percentages reflect real answers, not
-// silence.
-function breakdown(rows: { value: string | null }[]) {
-  const answered = rows.filter((r) => r.value && r.value.trim() !== "");
-  const counts = new Map<string, number>();
-  for (const r of answered) {
-    counts.set(r.value!, (counts.get(r.value!) ?? 0) + 1);
-  }
-  const total = answered.length;
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, count]) => ({
-      label,
-      count,
-      pct: total > 0 ? Math.round((count / total) * 100) : 0,
+// Turns the {value, count} pairs already aggregated by the
+// demographic_breakdown() Postgres function (see migration_harden_
+// private_demographics.sql) into the {label, count, pct} shape
+// BreakdownList expects. Unlike the old version of this helper, this one
+// never sees a raw per-person row — "prefer not to say" / unanswered
+// rows are already excluded server-side (the function's WHERE clause
+// skips null/empty), so every row here is a real, already-grouped answer.
+function breakdownFromCounts(rows: { value: string; count: number }[] | null) {
+  const safeRows = rows ?? [];
+  const total = safeRows.reduce((sum, r) => sum + Number(r.count), 0);
+  return [...safeRows]
+    .sort((a, b) => Number(b.count) - Number(a.count))
+    .map((r) => ({
+      label: r.value,
+      count: Number(r.count),
+      pct: total > 0 ? Math.round((Number(r.count) / total) * 100) : 0,
     }));
 }
 
@@ -386,6 +402,11 @@ export default async function CommunityDashboardPage({
     { data: allProfiles },
     { data: volunteerCategoryRows },
     { data: proposalTagRows },
+    { data: ageRows },
+    { data: raceRows },
+    { data: genderRows },
+    { data: housingRows },
+    { data: politicalRows },
   ] = await Promise.all([
     supabase.from("proposals").select("id", { count: "exact", head: true }),
     supabase.from("comments").select("id", { count: "exact", head: true }),
@@ -402,11 +423,13 @@ export default async function CommunityDashboardPage({
       .from("civic_logs")
       .select("log_type, published, hours, category")
       .eq("status", "published"),
-    supabase
-      .from("profiles")
-      .select(
-        "age_range, race_ethnicity, gender, housing_status, political_affiliation, zip_code, council_district"
-      ),
+    // Just the two non-sensitive location fields — the five private
+    // demographic columns (age/race/gender/housing/political) are no
+    // longer directly selectable at all (see
+    // migration_harden_private_demographics.sql), from ANY query,
+    // including this one. They're only reachable through the
+    // aggregate-only demographic_breakdown() calls below.
+    supabase.from("profiles").select("zip_code, council_district"),
     supabase
       .from("volunteer_categories")
       .select("label, volunteer_category_groups ( label )"),
@@ -421,6 +444,14 @@ export default async function CommunityDashboardPage({
       .from("proposal_tags")
       .select("proposal_id, tags ( group_id, tag_groups ( label ) ), proposals!inner ( published )")
       .eq("proposals.published", true),
+    // Each of these does its group-by/count inside Postgres and hands
+    // back only {value, count} pairs — never a raw per-person row. Same
+    // district filter as everything else on this page.
+    supabase.rpc("demographic_breakdown", { field: "age_range", filter_district: selectedDistrict }),
+    supabase.rpc("demographic_breakdown", { field: "race_ethnicity", filter_district: selectedDistrict }),
+    supabase.rpc("demographic_breakdown", { field: "gender", filter_district: selectedDistrict }),
+    supabase.rpc("demographic_breakdown", { field: "housing_status", filter_district: selectedDistrict }),
+    supabase.rpc("demographic_breakdown", { field: "political_affiliation", filter_district: selectedDistrict }),
   ]);
 
   const categoryToGroup = new Map<string, string>(
@@ -487,16 +518,53 @@ export default async function CommunityDashboardPage({
     ? (allProfiles ?? []).filter((p: any) => p.council_district === selectedDistrict)
     : allProfiles ?? [];
 
-  const ageBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.age_range })));
-  const raceBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.race_ethnicity })));
-  const genderBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.gender })));
-  const housingBreakdown = breakdown(districtProfiles.map((p: any) => ({ value: p.housing_status })));
+  const ageBreakdown = breakdownFromCounts(ageRows);
+  const raceBreakdown = breakdownFromCounts(raceRows);
+  const genderBreakdown = breakdownFromCounts(genderRows);
+  const housingBreakdown = breakdownFromCounts(housingRows);
   // No Census comparison for this one (obviously — ACS doesn't ask
   // political affiliation) — just the self-reported member breakdown, same
-  // as everything else here: aggregate counts only, computed server-side,
-  // never a raw per-person value sent to the client.
-  const politicalBreakdown = breakdown(
-    districtProfiles.map((p: any) => ({ value: p.political_affiliation }))
+  // as everything else here: aggregate counts only, computed IN the
+  // database by demographic_breakdown() (see migration_harden_private_
+  // demographics.sql) — this page never sees a raw per-person answer.
+  const politicalBreakdown = breakdownFromCounts(politicalRows);
+  const politicalRespondents = politicalBreakdown.reduce((sum, r) => sum + r.count, 0);
+
+  // Same brightness check flippable-stat-tile.tsx uses internally, run
+  // here too since this card's back content is pre-built JSX handed in
+  // from the server side — it has to pick its own readable bar/text
+  // color rather than relying on the tile component to do it.
+  const crossPartisanTextColor =
+    brightnessOf(STAT_COLORS.crossPartisan) > 180 ? "#3a3200" : "#ffffff";
+  const crossPartisanBackContent = (
+    <ul className="space-y-1">
+      {politicalBreakdown.length === 0 ? (
+        <li style={{ color: crossPartisanTextColor, opacity: 0.85 }}>No answers shared yet.</li>
+      ) : (
+        politicalBreakdown.map((row) => (
+          <li key={row.label} className="flex items-center gap-1.5">
+            <span
+              className="w-[4.5rem] shrink-0 truncate"
+              style={{ color: crossPartisanTextColor }}
+            >
+              {row.label}
+            </span>
+            <span
+              className="h-1.5 flex-1 overflow-hidden rounded-full"
+              style={{ backgroundColor: `${crossPartisanTextColor}33` }}
+            >
+              <span
+                className="block h-full rounded-full"
+                style={{ width: `${row.pct}%`, backgroundColor: crossPartisanTextColor }}
+              />
+            </span>
+            <span className="w-8 shrink-0 text-right" style={{ color: crossPartisanTextColor, opacity: 0.85 }}>
+              {row.pct}%
+            </span>
+          </li>
+        ))
+      )}
+    </ul>
   );
 
   const districts = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -589,6 +657,21 @@ export default async function CommunityDashboardPage({
             value: testimonyGiven,
             color: STAT_COLORS.testimony,
             description: TILE_DESCRIPTIONS.testimonyGiven,
+          },
+          {
+            key: "crossPartisanUsership",
+            icon: "registeredMembers",
+            label: "Cross-partisan usership",
+            value: politicalBreakdown.length,
+            sublabel:
+              politicalRespondents > 0
+                ? `affiliations represented, ${politicalRespondents} member${
+                    politicalRespondents === 1 ? "" : "s"
+                  } shared theirs`
+                : "affiliations represented",
+            color: STAT_COLORS.crossPartisan,
+            description: TILE_DESCRIPTIONS.crossPartisanUsership,
+            backContent: crossPartisanBackContent,
           },
         ]}
       />

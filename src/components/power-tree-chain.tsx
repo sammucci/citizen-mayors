@@ -40,10 +40,14 @@ type Node = {
 // between every pair of entries lets you insert a decision-maker at
 // that exact spot instead of only ever appending at the end.
 //
-// First pass — drag-and-drop here is plain HTML5 drag events, which
-// works well with a mouse but has patchy touch support on phones (most
-// notably iOS Safari). If reordering on mobile turns out to matter a
-// lot in practice, that's the piece most worth revisiting.
+// Drag-and-drop here is plain HTML5 drag events, which works well with
+// a mouse but has no real touch support on phones (iOS/Android don't
+// fire these events for a finger drag at all — it's not a bug to fix,
+// it's just not part of what this browser API covers). Rather than
+// replace it with a custom touch-drag implementation, every card also
+// gets a pair of ▲▼ move buttons, which reorder through the exact same
+// persistOrder() call a drag would — same result, just a tap instead
+// of a drag, so reordering works identically on a phone as on desktop.
 export function PowerTreeChain({
   proposalId,
   categoryColor,
@@ -123,6 +127,19 @@ export function PowerTreeChain({
     fd.set("proposal_id", proposalId);
     newAscending.forEach((n) => fd.append("node_id", n.id));
     reorderPowerTreeNodes(fd).then(() => router.refresh());
+  }
+
+  // Tap-to-move version of the same reorder, for touch devices (and
+  // anyone who just prefers tapping). i is a DISPLAY index (0 = top/
+  // final decision-maker), same indexing handleDropOnCard already uses
+  // below — swapping two adjacent display entries and re-reversing back
+  // to ascending order before persisting is all persistOrder needs.
+  function moveDisplayIndex(i: number, direction: -1 | 1) {
+    const target = i + direction;
+    if (target < 0 || target >= display.length) return;
+    const current = [...display];
+    [current[i], current[target]] = [current[target], current[i]];
+    persistOrder([...current].reverse());
   }
 
   // Dropping on a GAP is unambiguous — a gap already means "exactly
@@ -298,29 +315,62 @@ export function PowerTreeChain({
         // NEXT card got the real gap. Made the "+" look glued to the
         // card above it instead of centered between the two.
         <Fragment key={node.id}>
-          <div
-            draggable={isOwner}
-            onDragStart={() => setDragId(node.id)}
-            onDragEnd={() => setDragId(null)}
-            // The only real drop targets used to be the thin "+" gap
-            // strips between cards — dropping anywhere on a card itself
-            // (which is what you'd naturally try) did nothing, so
-            // dragging looked broken even though it was technically
-            // wired up. Dropping directly on a card now lands above or
-            // below it depending on which way you dragged (see
-            // handleDropOnCard) instead of always "above," which used to
-            // make a downward drag onto the next card do nothing.
-            onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
-            onDrop={isOwner ? () => handleDropOnCard(i) : undefined}
-          >
-            <PowerTreeNodeCard
-              proposalId={proposalId}
-              node={node}
-              isFinal={i === firstApprovedDisplayIndex}
-              isOwner={isOwner}
-              canContribute={canContribute}
-              categoryColor={categoryColor}
-            />
+          <div className="flex items-start gap-1.5">
+            {isOwner && (
+              // Same reorder as dragging, one tap at a time — the part
+              // that actually works on a phone. i === 0 is the topmost
+              // card (final decision-maker), so "move up" there and
+              // "move down" at the last real card (i === display.length
+              // - 1, right above We the people) are both no-ops and
+              // disabled rather than silently doing nothing on tap.
+              <div className="flex shrink-0 flex-col gap-0.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => moveDisplayIndex(i, -1)}
+                  disabled={i === 0}
+                  aria-label="Move up in the chain"
+                  title="Move up"
+                  className="flex h-6 w-6 items-center justify-center rounded border border-neutral-300 text-xs leading-none text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveDisplayIndex(i, 1)}
+                  disabled={i === display.length - 1}
+                  aria-label="Move down in the chain"
+                  title="Move down"
+                  className="flex h-6 w-6 items-center justify-center rounded border border-neutral-300 text-xs leading-none text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  ▼
+                </button>
+              </div>
+            )}
+            <div
+              draggable={isOwner}
+              onDragStart={() => setDragId(node.id)}
+              onDragEnd={() => setDragId(null)}
+              // The only real drop targets used to be the thin "+" gap
+              // strips between cards — dropping anywhere on a card itself
+              // (which is what you'd naturally try) did nothing, so
+              // dragging looked broken even though it was technically
+              // wired up. Dropping directly on a card now lands above or
+              // below it depending on which way you dragged (see
+              // handleDropOnCard) instead of always "above," which used to
+              // make a downward drag onto the next card do nothing.
+              onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
+              onDrop={isOwner ? () => handleDropOnCard(i) : undefined}
+              className="min-w-0 flex-1"
+            >
+              <PowerTreeNodeCard
+                proposalId={proposalId}
+                node={node}
+                isFinal={i === firstApprovedDisplayIndex}
+                isOwner={isOwner}
+                canContribute={canContribute}
+                categoryColor={categoryColor}
+              />
+            </div>
           </div>
           <GapInserter displayGapIndex={i + 1} />
         </Fragment>

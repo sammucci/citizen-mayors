@@ -17,6 +17,7 @@ import { CoverImageControl } from "@/components/cover-image-control";
 import { EditProposalForm } from "@/components/edit-proposal-form";
 import { PublishToggleButton } from "@/components/publish-toggle-button";
 import { PowerTreeChain } from "@/components/power-tree-chain";
+import { InfoHeading } from "@/components/info-heading";
 import { RepositionableImage } from "@/components/repositionable-image";
 import { ReplyToggle } from "@/components/reply-toggle";
 import { ResolveCommentForm } from "@/components/resolve-comment-form";
@@ -786,14 +787,23 @@ export default async function ProposalPage({
                 than just who has to sign off now (funding is one of the
                 link types in the chain itself, see below), so the name
                 needed to cover both: who this moves through, AND what it
-                actually takes to make it real. */}
-            <h2 className="text-base font-semibold">Getting it done</h2>
-            <p className="mt-1 text-xs text-neutral-500">
-              Who (and what funding) this proposal would move through and
-              what it takes to get it done — climbing from "We the people"
-              at the bottom up to the final decision-maker on top. Tap a
-              "+" to insert a decision-maker or a funding need at that
-              exact point in the chain.
+                actually takes to make it real. The explainer now lives
+                behind an (i) icon (InfoHeading) instead of as permanent
+                subtext, with the "this is collaborative, nothing lands
+                without your OK" note kept as its own separate line right
+                underneath — that reassurance is important enough to stay
+                visible, not tucked behind a hover. */}
+            <InfoHeading
+              as="h2"
+              className="text-base font-semibold"
+              tooltip={`This chain shows who your proposal would move through and what funding it would require (or might qualify for) to get it done. It climbs from "We the people" (you) at the bottom, to the final decision-maker at the top. So where's your idea going next?`}
+            >
+              The idea starts with you. Now, what's it take to get it done?
+            </InfoHeading>
+            <p className="mt-1 text-xs italic text-neutral-500">
+              Note: This is a collaborative chain. Your fellow citizens are
+              to help you figure it out – and nothing lands in the chain
+              until it has your approval.
             </p>
 
             <PowerTreeChain

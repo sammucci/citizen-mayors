@@ -558,6 +558,62 @@ create policy "public read tag_suggestions" on public.tag_suggestions for select
 -- columns entirely for anon/public reads) would be worth doing if this
 -- ever needs a harder guarantee than "the code is careful."
 create policy "public read profiles" on public.profiles for select using (true);
+
+-- Column-level hardening on top of the row-level policy above — see
+-- migration_harden_private_demographics.sql for the full rationale.
+-- Revokes direct SELECT on the five private demographic columns from
+-- both API roles; the only two ways to read them are the narrow
+-- functions below (self-only, and aggregate-only), regardless of what
+-- any query — present or future — tries to select.
+revoke select (age_range, race_ethnicity, gender, housing_status, political_affiliation)
+  on public.profiles from anon, authenticated;
+
+create or replace function public.get_my_demographics()
+returns table (
+  age_range text,
+  race_ethnicity text,
+  gender text,
+  housing_status text,
+  political_affiliation text
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select age_range, race_ethnicity, gender, housing_status, political_affiliation
+  from public.profiles
+  where id = auth.uid();
+$$;
+
+revoke all on function public.get_my_demographics() from public;
+grant execute on function public.get_my_demographics() to authenticated;
+
+create or replace function public.demographic_breakdown(field text, filter_district int default null)
+returns table (value text, count bigint)
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+begin
+  if field not in ('age_range', 'race_ethnicity', 'gender', 'housing_status', 'political_affiliation') then
+    raise exception 'demographic_breakdown: invalid field %', field;
+  end if;
+  return query execute format(
+    'select %1$I as value, count(*) as count
+     from public.profiles
+     where %1$I is not null and %1$I <> '''' %2$s
+     group by %1$I
+     order by count(*) desc',
+    field,
+    case when filter_district is not null then format('and council_district = %L', filter_district) else '' end
+  );
+end;
+$$;
+
+revoke all on function public.demographic_breakdown(text, int) from public;
+grant execute on function public.demographic_breakdown(text, int) to authenticated, anon;
 create policy "user manages own profile" on public.profiles for update using (auth.uid() = id);
 create policy "user creates own profile" on public.profiles for insert with check (auth.uid() = id);
 

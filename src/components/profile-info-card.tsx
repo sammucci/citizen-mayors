@@ -292,6 +292,7 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             <option value="Democrat">Democrat</option>
             <option value="Republican">Republican</option>
             <option value="Independent">Independent</option>
+            <option value="Social Democrat">Social Democrat</option>
             <option value="Other">Other</option>
           </SelectField>
           <span className="mt-1 block text-[11px] text-neutral-400">

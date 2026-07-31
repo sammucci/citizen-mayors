@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { FlippableStatTile } from "@/components/flippable-stat-tile";
 import type { StatIconName } from "@/components/stat-icons";
 
@@ -12,6 +12,10 @@ export type StatTileData = {
   color: string;
   icon: StatIconName;
   description: string;
+  // Optional pre-built back-face content (e.g. a mini bar chart) — see
+  // flippable-stat-tile.tsx. Only the cross-partisan-usership card uses
+  // this today; every other tile just passes `description` as before.
+  backContent?: ReactNode;
 };
 
 // Owns the "which one is flipped" state so it lives in exactly one
@@ -33,6 +37,7 @@ export function StatTileGrid({ items, font }: { items: StatTileData[]; font: str
           color={item.color}
           icon={item.icon}
           description={item.description}
+          backContent={item.backContent}
           font={font}
           flipped={flippedKey === item.key}
           onToggle={() => setFlippedKey((k) => (k === item.key ? null : item.key))}

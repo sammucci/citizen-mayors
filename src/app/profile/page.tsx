@@ -24,11 +24,24 @@ export default async function ProfilePage() {
     );
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  // age_range/race_ethnicity/gender/housing_status/political_affiliation
+  // are deliberately NOT selectable directly anymore (see
+  // migration_harden_private_demographics.sql) — even for the owner
+  // reading their own row, that's now enforced at the database level,
+  // not just by app-code discipline. get_my_demographics() is the one
+  // sanctioned way back to those five answers, scoped to auth.uid()
+  // inside the function itself.
+  const [{ data: profile }, { data: demographics }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "id, display_name, zip_code, council_district, bio, avatar_url, notifications_seen_at, is_admin, is_blocked, accepted_guidelines_at, created_at"
+      )
+      .eq("id", user.id)
+      .single(),
+    supabase.rpc("get_my_demographics").maybeSingle(),
+  ]);
+  const fullProfile = profile ? { ...profile, ...(demographics ?? {}) } : null;
 
   const { data: myProposals } = await supabase
     .from("proposals")
@@ -343,7 +356,7 @@ export default async function ProfilePage() {
         </div>
       )}
 
-      <ProfileInfoCard profile={profile} />
+      <ProfileInfoCard profile={fullProfile} />
 
       <CivicReportCard
         stats={civicStats}
