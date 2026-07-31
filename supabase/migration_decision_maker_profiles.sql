@@ -11,7 +11,7 @@ create table if not exists public.decision_maker_profiles (
   represents_scope text not null default 'n/a'
     check (represents_scope in ('district', 'citywide', 'n/a')),
   represents_district int,
-  committees text[] not null default '{}',
+  committees jsonb not null default '[]'::jsonb, -- [{"name": "...", "role": "chair"|"vice_chair"|"member"}]
   party_affiliation text,
   how_they_show_up text not null default '',
   what_they_care_about text not null default '',

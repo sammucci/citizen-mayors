@@ -142,7 +142,11 @@ create table public.decision_maker_profiles (
   represents_scope text not null default 'n/a'
     check (represents_scope in ('district', 'citywide', 'n/a')),
   represents_district int,
-  committees text[] not null default '{}',
+  -- Array of {"name": "...", "role": "chair" | "vice_chair" | "member"}
+  -- objects — a chair/vice-chair distinction matters (it's real, public
+  -- information about who actually runs a committee's agenda), so a flat
+  -- list of names alone wasn't enough.
+  committees jsonb not null default '[]'::jsonb,
   -- Same free-text idea as profiles.political_affiliation (not a fixed
   -- enum) — an elected official's actual party is a matter of public
   -- record, not self-reported, so this is just a plain text field

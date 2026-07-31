@@ -3,6 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { COUNCIL_COMMITTEES } from "@/lib/council-committees";
+
+type CommitteeAssignment = { name: string; role: "chair" | "vice_chair" | "member" };
+const COMMITTEE_ROLES = ["chair", "vice_chair", "member"] as const;
+const ROLE_LABEL: Record<CommitteeAssignment["role"], string> = { chair: "Chair", vice_chair: "Vice Chair", member: "Member" };
+
+function formatCommittees(committees: CommitteeAssignment[] | null | undefined): string | null {
+  if (!committees || committees.length === 0) return null;
+  return committees.map((c) => (c.role === "member" ? c.name : `${c.name} (${ROLE_LABEL[c.role]})`)).join(", ");
+}
 
 // Same pattern as proposals/actions.ts's requireUser — redirect() instead
 // of throw so a signed-out visitor lands on /login instead of Next's
@@ -68,16 +78,23 @@ export async function updateDecisionMakerStructuredFields(formData: FormData) {
   const representsDistrictRaw = formData.get("represents_district") as string | null;
   const representsDistrict =
     representsScope === "district" && representsDistrictRaw ? Number(representsDistrictRaw) : null;
-  // Checked committee-list boxes (formData.getAll, not a single
-  // comma-separated field — see decision-maker-profile-editor.tsx for
-  // why: several real committee names contain their own comma) plus
-  // whatever was typed into the "Other" freeform fallback.
-  const checkedCommittees = formData.getAll("committees").map((c) => String(c));
-  const otherCommittees = (formData.get("committees_other") as string | null)
+  // Each real committee gets its own indexed checkbox + role select (see
+  // decision-maker-profile-editor.tsx) — read them back by the same
+  // index the form rendered them at, so a checked box and its role stay
+  // paired correctly. Anything typed into the "Other" freeform fallback
+  // comes in as plain names and defaults to role "member".
+  const checkedCommittees: CommitteeAssignment[] = [];
+  COUNCIL_COMMITTEES.forEach((name, i) => {
+    if (formData.get(`committee_${i}_checked`) !== "on") return;
+    const roleRaw = formData.get(`committee_${i}_role`) as string | null;
+    const role = (COMMITTEE_ROLES as readonly string[]).includes(roleRaw ?? "") ? (roleRaw as CommitteeAssignment["role"]) : "member";
+    checkedCommittees.push({ name, role });
+  });
+  const otherCommittees: CommitteeAssignment[] = ((formData.get("committees_other") as string | null)
     ?.split(",")
     .map((c) => c.trim())
-    .filter(Boolean) ?? [];
-  const committees = [...new Set([...checkedCommittees, ...otherCommittees])];
+    .filter(Boolean) ?? []).map((name) => ({ name, role: "member" as const }));
+  const committees = [...checkedCommittees, ...otherCommittees];
 
   const { data: existing } = await supabase
     .from("decision_maker_profiles")
@@ -114,8 +131,8 @@ export async function updateDecisionMakerStructuredFields(formData: FormData) {
     ],
     [
       "committees",
-      existing?.committees ? existing.committees.join(", ") : null,
-      committees.length > 0 ? committees.join(", ") : null,
+      formatCommittees(existing?.committees as CommitteeAssignment[] | null | undefined),
+      formatCommittees(committees),
     ],
   ];
   for (const [field, oldVal, newVal] of fieldsToLog) {

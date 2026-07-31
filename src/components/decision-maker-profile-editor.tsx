@@ -10,6 +10,8 @@ import {
 } from "@/app/decision-makers/actions";
 import { COUNCIL_COMMITTEES } from "@/lib/council-committees";
 
+type CommitteeAssignment = { name: string; role: "chair" | "vice_chair" | "member" };
+
 type ProfileFields = {
   current_officeholder: string | null;
   office_title: string | null;
@@ -19,9 +21,15 @@ type ProfileFields = {
   next_election_date: string | null;
   represents_scope: "district" | "citywide" | "n/a";
   represents_district: number | null;
-  committees: string[];
+  committees: CommitteeAssignment[];
   how_they_show_up: string;
   what_they_care_about: string;
+};
+
+const ROLE_LABEL: Record<CommitteeAssignment["role"], string> = {
+  chair: "Chair",
+  vice_chair: "Vice Chair",
+  member: "Member",
 };
 
 type LegislationRow = {
@@ -120,7 +128,24 @@ export function DecisionMakerProfileEditor({
             </div>
             <div>
               <dt className="text-xs text-neutral-400">Committees</dt>
-              <dd>{profile.committees.length > 0 ? profile.committees.join(", ") : "Not added yet"}</dd>
+              <dd>
+                {profile.committees.length > 0 ? (
+                  <ul className="space-y-0.5">
+                    {profile.committees.map((c) => (
+                      <li key={c.name}>
+                        {c.name}
+                        {c.role !== "member" && (
+                          <span className="ml-1.5 inline-block rounded-full bg-duty-purple/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-duty-purple">
+                            {ROLE_LABEL[c.role]}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  "Not added yet"
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-neutral-400">Assumed office</dt>
@@ -188,27 +213,51 @@ export function DecisionMakerProfileEditor({
                   comma-separated text field — several official committee
                   names contain their own comma ("Parks, Recreation and
                   Cultural Affairs"), which made comma-splitting silently
-                  mangle entries into the wrong pieces. */}
+                  mangle entries into the wrong pieces. Each checked
+                  committee gets its own role picker right next to it —
+                  chair/vice-chair is real, public information about who
+                  actually runs a committee, not just who sits on it.
+                  Fields are indexed (committee_0_checked / _name / _role,
+                  etc.) rather than sharing one "committees" name, since a
+                  plain checkbox array can't carry a second value (the
+                  role) alongside it. */}
               <p className="text-xs text-neutral-600">Committees</p>
-              <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 rounded border border-neutral-200 p-2 sm:grid-cols-3">
-                {COUNCIL_COMMITTEES.map((c) => (
-                  <label key={c} className="flex items-start gap-1.5 text-xs text-neutral-700">
-                    <input
-                      type="checkbox"
-                      name="committees"
-                      value={c}
-                      defaultChecked={profile.committees.includes(c)}
-                      className="mt-0.5"
-                    />
-                    {c}
-                  </label>
-                ))}
+              <div className="mt-1 space-y-1 rounded border border-neutral-200 p-2">
+                {COUNCIL_COMMITTEES.map((c, i) => {
+                  const existing = profile.committees.find((pc) => pc.name === c);
+                  return (
+                    <div key={c} className="flex items-center gap-2 text-xs text-neutral-700">
+                      <input type="hidden" name={`committee_${i}_name`} value={c} />
+                      <label className="flex flex-1 items-start gap-1.5">
+                        <input
+                          type="checkbox"
+                          name={`committee_${i}_checked`}
+                          defaultChecked={Boolean(existing)}
+                          className="mt-0.5"
+                        />
+                        {c}
+                      </label>
+                      <select
+                        name={`committee_${i}_role`}
+                        defaultValue={existing?.role ?? "member"}
+                        className="input w-auto shrink-0 !py-0.5 !pl-1.5 !pr-5 text-xs"
+                      >
+                        <option value="member">Member</option>
+                        <option value="vice_chair">Vice Chair</option>
+                        <option value="chair">Chair</option>
+                      </select>
+                    </div>
+                  );
+                })}
               </div>
               <label className="mt-1.5 block text-xs text-neutral-600">
-                Other (not listed above, comma-separated)
+                Other (not listed above, comma-separated — added as Member)
                 <input
                   name="committees_other"
-                  defaultValue={profile.committees.filter((c) => !(COUNCIL_COMMITTEES as readonly string[]).includes(c)).join(", ")}
+                  defaultValue={profile.committees
+                    .filter((c) => !(COUNCIL_COMMITTEES as readonly string[]).includes(c.name))
+                    .map((c) => c.name)
+                    .join(", ")}
                   placeholder="e.g. a special or ad-hoc committee"
                   className="input mt-0.5 text-sm"
                 />
