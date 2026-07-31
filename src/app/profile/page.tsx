@@ -56,7 +56,24 @@ export default async function ProfilePage() {
     housing_status: string | null;
     political_affiliation: string | null;
   } | null;
-  const fullProfile = profile ? { ...profile, ...(demographics ?? {}) } : null;
+  // Not a plain `...(demographics ?? {})` spread — when the right side of
+  // a spread might be `{}` (the no-demographics-yet case), TypeScript
+  // marks every one of those keys OPTIONAL on the merged object (i.e.
+  // `string | null | undefined`), since as far as it knows they might not
+  // be there at all. ProfileInfoCard's Profile type requires exactly
+  // `string | null`, no `undefined` — that mismatch is what broke this
+  // build. Setting each field explicitly with `??` guarantees every key
+  // is always present with a real `string | null` value, never omitted.
+  const fullProfile = profile
+    ? {
+        ...profile,
+        age_range: demographics?.age_range ?? null,
+        race_ethnicity: demographics?.race_ethnicity ?? null,
+        gender: demographics?.gender ?? null,
+        housing_status: demographics?.housing_status ?? null,
+        political_affiliation: demographics?.political_affiliation ?? null,
+      }
+    : null;
 
   const { data: myProposals } = await supabase
     .from("proposals")
