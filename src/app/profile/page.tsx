@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CivicReportCard, type CivicLog, type CivicStats } from "@/components/civic-report-card";
 import { ProfileInfoCard } from "@/components/profile-info-card";
 import { ProposalMiniCardGrid } from "@/components/proposal-mini-card-grid";
+import { MyOrganizationsSection } from "@/components/my-organizations-section";
 import { statusColorClasses } from "@/lib/status-colors";
 import { HourglassIcon } from "@/components/icons";
 
@@ -319,6 +320,23 @@ export default async function ProfilePage() {
     commentsByProposal.get(key)!.comments.push(c);
   }
 
+  // "Your civic groups" — neighborhood groups/civic orgs attached to
+  // your own profile (see profile_organizations in schema.sql). Kept as
+  // two simple sequential queries rather than folded into the big
+  // Promise.all above — this section is independent of everything else
+  // on the page and not on the critical path for anything above it.
+  const [{ data: myOrgRows }, { data: allOrganizations }] = await Promise.all([
+    supabase
+      .from("profile_organizations")
+      .select("organization_id, organizations ( id, name )")
+      .eq("profile_id", user.id),
+    supabase.from("organizations").select("name").order("name"),
+  ]);
+  const myOrganizations = (myOrgRows ?? [])
+    .map((r: any) => r.organizations)
+    .filter(Boolean) as { id: string; name: string }[];
+  const allOrganizationNames = (allOrganizations ?? []).map((o: any) => o.name);
+
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
@@ -399,6 +417,8 @@ export default async function ProfilePage() {
         volunteerCategories={volunteerCategories}
         displayName={profile?.display_name || "A resident"}
       />
+
+      <MyOrganizationsSection myOrganizations={myOrganizations} allOrganizationNames={allOrganizationNames} />
 
       <div>
         <h2 className="text-lg font-semibold">Your proposals</h2>

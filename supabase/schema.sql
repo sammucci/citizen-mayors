@@ -181,6 +181,60 @@ create table public.decision_maker_revisions (
   edited_at timestamptz not null default now()
 );
 
+-- Civic organizations (neighborhood groups, civic associations) —
+-- same shared-registry shape as decision_makers: grows via "add new"
+-- when someone attaches one to their own profile that isn't in the
+-- list yet (see organization_profiles below / profile_organizations
+-- further down), rather than being pre-seeded.
+create table public.organizations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  added_by uuid references public.profiles(id),
+  created_at timestamptz not null default now()
+);
+create unique index organizations_name_idx on public.organizations (lower(name));
+
+-- Crowdsourced public profile for a civic organization — same wiki
+-- model and same reasoning as decision_maker_profiles above (anyone
+-- signed in can edit; decision_maker_revisions'/organization_revisions'
+-- accountability trail is what makes that safe, not a narrower update
+-- policy). One row per organization, created on first edit.
+create table public.organization_profiles (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  area_represented text,
+  topics text[] not null default '{}',
+  description text not null default '',
+  meets_when text,
+  meets_where text,
+  updated_at timestamptz not null default now()
+);
+
+create table public.organization_revisions (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  field_name text not null,
+  old_value text,
+  new_value text,
+  edited_by uuid references public.profiles(id),
+  edited_at timestamptz not null default now()
+);
+
+-- The "attached to my profile" join Samantha asked for — a member adds
+-- a neighborhood group or civic org to their own profile (creating the
+-- shared organizations registry row if it doesn't exist yet, same
+-- match-or-create pattern as grants/decision-makers), and that's what
+-- drives an organization profile's "Serves # Citizen Mayors" count.
+-- Deliberately does NOT expose WHICH members belong to an org anywhere
+-- public — same aggregate-only stance as the demographic-privacy work —
+-- only the count is ever shown, never a roster.
+create table public.profile_organizations (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (profile_id, organization_id)
+);
+
 -- Shared, crowdsourced registry of grants/funding programs — same shape
 -- and same trust model as decision_makers above (anyone signed in can
 -- add a new one, only an admin can rename or remove it from the shared
@@ -821,6 +875,50 @@ create policy "authenticated add decision maker revisions" on public.decision_ma
 -- be silently edited wouldn't be trustworthy as a history log.
 create policy "admin deletes decision maker revisions" on public.decision_maker_revisions
   for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+-- organizations: same shape as decision_makers — open insert (added_by
+-- must match the inserter), admin-only update/delete of the registry
+-- row itself.
+alter table public.organizations enable row level security;
+create policy "public read organizations" on public.organizations for select using (true);
+create policy "authenticated add organizations" on public.organizations for insert
+  with check (auth.uid() = added_by);
+create policy "admin updates organizations" on public.organizations for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin deletes organizations" on public.organizations for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+-- organization_profiles / organization_revisions: same wide-open wiki
+-- model as decision_maker_profiles above.
+alter table public.organization_profiles enable row level security;
+create policy "public read organization profiles" on public.organization_profiles
+  for select using (true);
+create policy "authenticated insert organization profiles" on public.organization_profiles
+  for insert to authenticated with check (true);
+create policy "authenticated update organization profiles" on public.organization_profiles
+  for update to authenticated using (true);
+create policy "admin deletes organization profiles" on public.organization_profiles
+  for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+alter table public.organization_revisions enable row level security;
+create policy "public read organization revisions" on public.organization_revisions
+  for select using (true);
+create policy "authenticated add organization revisions" on public.organization_revisions
+  for insert to authenticated with check (auth.uid() = edited_by);
+create policy "admin deletes organization revisions" on public.organization_revisions
+  for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+-- profile_organizations: you manage your OWN attachments only — public
+-- read is needed so an organization's profile page can count/derive
+-- "Serves # Citizen Mayors" and so your own profile page can list what
+-- you've attached, but never who else has.
+alter table public.profile_organizations enable row level security;
+create policy "public read profile organizations" on public.profile_organizations
+  for select using (true);
+create policy "members attach their own organizations" on public.profile_organizations
+  for insert to authenticated with check (auth.uid() = profile_id);
+create policy "members remove their own organizations" on public.profile_organizations
+  for delete to authenticated using (auth.uid() = profile_id);
 
 -- Same trust model as decision_makers: anyone signed in can add a grant
 -- to the shared registry, but only an admin can rename or remove the
