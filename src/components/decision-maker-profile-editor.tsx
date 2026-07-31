@@ -10,6 +10,10 @@ import {
 } from "@/app/decision-makers/actions";
 import { COUNCIL_COMMITTEES } from "@/lib/council-committees";
 
+// "vice_chair" stays a valid stored value (a couple of early v77 saves
+// may have used it) so it still displays correctly if it turns up, but
+// the picker itself only ever writes "member" or "chair" now — Samantha's
+// ask was specifically a two-option Member/Chair picker.
 type CommitteeAssignment = { name: string; role: "chair" | "vice_chair" | "member" };
 
 type ProfileFields = {
@@ -75,6 +79,23 @@ export function DecisionMakerProfileEditor({
   const [editingShowUp, setEditingShowUp] = useState(false);
   const [editingCareAbout, setEditingCareAbout] = useState(false);
   const [addingLegislation, setAddingLegislation] = useState(false);
+  // Committee rows are their own state (not plain form defaults) because
+  // rows are added/removed dynamically via the "+ Add committee" button —
+  // reset to whatever's actually saved every time the edit form opens, so
+  // a cancelled edit never leaves stale rows behind for next time.
+  const [committeeRows, setCommitteeRows] = useState<CommitteeAssignment[]>(profile.committees);
+
+  function addCommitteeRow() {
+    const used = new Set(committeeRows.map((r) => r.name));
+    const nextName = COUNCIL_COMMITTEES.find((c) => !used.has(c)) ?? COUNCIL_COMMITTEES[0];
+    setCommitteeRows([...committeeRows, { name: nextName, role: "member" }]);
+  }
+  function removeCommitteeRow(index: number) {
+    setCommitteeRows(committeeRows.filter((_, i) => i !== index));
+  }
+  function updateCommitteeRow(index: number, patch: Partial<CommitteeAssignment>) {
+    setCommitteeRows(committeeRows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
 
   const stanceLabel = { introduced: "Introduced", for: "Voted/fought for", against: "Voted/fought against" };
   const stanceColor = {
@@ -94,7 +115,10 @@ export function DecisionMakerProfileEditor({
           {canEdit && !editingFields && (
             <button
               type="button"
-              onClick={() => setEditingFields(true)}
+              onClick={() => {
+                setCommitteeRows(profile.committees);
+                setEditingFields(true);
+              }}
               className="text-xs text-duty-purple underline"
             >
               Edit
@@ -103,63 +127,71 @@ export function DecisionMakerProfileEditor({
         </div>
 
         {!editingFields ? (
-          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <div>
-              <dt className="text-xs text-neutral-400">Current officeholder</dt>
-              <dd>{profile.current_officeholder || "Not added yet"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-neutral-400">Office / title</dt>
-              <dd>{profile.office_title || "Not added yet"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-neutral-400">Party affiliation</dt>
-              <dd>{profile.party_affiliation || "Not added yet"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-neutral-400">Represents</dt>
-              <dd>
-                {profile.represents_scope === "citywide"
-                  ? "Citywide (all districts)"
-                  : profile.represents_scope === "district" && profile.represents_district
-                  ? `District ${profile.represents_district}`
-                  : "Not added yet"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-neutral-400">Committees</dt>
-              <dd>
-                {profile.committees.length > 0 ? (
-                  <ul className="space-y-0.5">
-                    {profile.committees.map((c) => (
-                      <li key={c.name}>
-                        {c.name}
-                        {c.role !== "member" && (
-                          <span className="ml-1.5 inline-block rounded-full bg-duty-purple/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-duty-purple">
-                            {ROLE_LABEL[c.role]}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  "Not added yet"
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-neutral-400">Assumed office</dt>
-              <dd>{formatDate(profile.elected_date) || "Not added yet"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-neutral-400">Term ends</dt>
-              <dd>{formatDate(profile.term_end_date) || "Not added yet"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-neutral-400">Next election</dt>
-              <dd>{formatDate(profile.next_election_date) || "Not added yet"}</dd>
-            </div>
-          </dl>
+          <div className="mt-2 grid grid-cols-2 gap-x-4 text-sm">
+            {/* Left column: who they are. Right column: committees + the
+                term-related dates — two separate stacked columns (not
+                the previous alternating-per-row layout) per Samantha's
+                explicit ask. */}
+            <dl className="space-y-2">
+              <div>
+                <dt className="text-xs text-neutral-400">Current officeholder</dt>
+                <dd>{profile.current_officeholder || "Not added yet"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-neutral-400">Office / title</dt>
+                <dd>{profile.office_title || "Not added yet"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-neutral-400">Party affiliation</dt>
+                <dd>{profile.party_affiliation || "Not added yet"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-neutral-400">Represents</dt>
+                <dd>
+                  {profile.represents_scope === "citywide"
+                    ? "Citywide (all districts)"
+                    : profile.represents_scope === "district" && profile.represents_district
+                    ? `District ${profile.represents_district}`
+                    : "Not added yet"}
+                </dd>
+              </div>
+            </dl>
+            <dl className="space-y-2">
+              <div>
+                <dt className="text-xs text-neutral-400">Committees</dt>
+                <dd>
+                  {profile.committees.length > 0 ? (
+                    <ul className="space-y-0.5">
+                      {profile.committees.map((c) => (
+                        <li key={c.name}>
+                          {c.name}
+                          {c.role !== "member" && (
+                            <span className="ml-1.5 inline-block rounded-full bg-duty-purple/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-duty-purple">
+                              {ROLE_LABEL[c.role]}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    "Not added yet"
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-neutral-400">Term began</dt>
+                <dd>{formatDate(profile.elected_date) || "Not added yet"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-neutral-400">Term ends</dt>
+                <dd>{formatDate(profile.term_end_date) || "Not added yet"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-neutral-400">Next election</dt>
+                <dd>{formatDate(profile.next_election_date) || "Not added yet"}</dd>
+              </div>
+            </dl>
+          </div>
         ) : (
           <form
             action={async (formData) => {
@@ -209,63 +241,71 @@ export function DecisionMakerProfileEditor({
               </select>
             </label>
             <div>
-              {/* Checkboxes against the real committee list, not a
-                  comma-separated text field — several official committee
-                  names contain their own comma ("Parks, Recreation and
-                  Cultural Affairs"), which made comma-splitting silently
-                  mangle entries into the wrong pieces. Each checked
-                  committee gets its own role picker right next to it —
-                  chair/vice-chair is real, public information about who
-                  actually runs a committee, not just who sits on it.
-                  Fields are indexed (committee_0_checked / _name / _role,
-                  etc.) rather than sharing one "committees" name, since a
-                  plain checkbox array can't carry a second value (the
-                  role) alongside it. */}
+              {/* One row per committee actually assigned, added on demand —
+                  not a wall of 24 checkboxes (that read as overwhelming
+                  and the longer committee names wrapped badly next to a
+                  role dropdown). Each row picks from the real committee
+                  list (so names — several of which have their own comma,
+                  like "Parks, Recreation and Cultural Affairs" — are
+                  never mistyped or mis-split) and a plain Member/Chair
+                  role. Rows are indexed by position in this list
+                  (committee_0_name/_role, committee_1_name/_role, ...),
+                  read back on the server by scanning for however many
+                  rows actually got submitted. */}
               <p className="text-xs text-neutral-600">Committees</p>
-              <div className="mt-1 space-y-1 rounded border border-neutral-200 p-2">
-                {COUNCIL_COMMITTEES.map((c, i) => {
-                  const existing = profile.committees.find((pc) => pc.name === c);
+              <div className="mt-1 space-y-1.5">
+                {committeeRows.map((row, i) => {
+                  const usedElsewhere = new Set(committeeRows.filter((_, j) => j !== i).map((r) => r.name));
+                  const options = (COUNCIL_COMMITTEES as readonly string[]).filter((c) => c === row.name || !usedElsewhere.has(c));
                   return (
-                    <div key={c} className="flex items-center gap-2 text-xs text-neutral-700">
-                      <input type="hidden" name={`committee_${i}_name`} value={c} />
-                      <label className="flex flex-1 items-start gap-1.5">
-                        <input
-                          type="checkbox"
-                          name={`committee_${i}_checked`}
-                          defaultChecked={Boolean(existing)}
-                          className="mt-0.5"
-                        />
-                        {c}
-                      </label>
+                    <div key={i} className="flex items-center gap-1.5">
+                      <select
+                        name={`committee_${i}_name`}
+                        value={row.name}
+                        onChange={(e) => updateCommitteeRow(i, { name: e.target.value })}
+                        className="input flex-1 !py-1 text-xs"
+                      >
+                        {options.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
                       <select
                         name={`committee_${i}_role`}
-                        defaultValue={existing?.role ?? "member"}
-                        className="input w-auto shrink-0 !py-0.5 !pl-1.5 !pr-5 text-xs"
+                        value={row.role === "vice_chair" ? "member" : row.role}
+                        onChange={(e) => updateCommitteeRow(i, { role: e.target.value as CommitteeAssignment["role"] })}
+                        className="input w-28 shrink-0 !py-1 text-xs"
                       >
                         <option value="member">Member</option>
-                        <option value="vice_chair">Vice Chair</option>
                         <option value="chair">Chair</option>
                       </select>
+                      <button
+                        type="button"
+                        onClick={() => removeCommitteeRow(i)}
+                        className="shrink-0 text-neutral-400 hover:text-duty-red"
+                        aria-label="Remove committee"
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
                     </div>
                   );
                 })}
+                {committeeRows.length === 0 && <p className="text-xs text-neutral-400">No committees added yet.</p>}
               </div>
-              <label className="mt-1.5 block text-xs text-neutral-600">
-                Other (not listed above, comma-separated — added as Member)
-                <input
-                  name="committees_other"
-                  defaultValue={profile.committees
-                    .filter((c) => !(COUNCIL_COMMITTEES as readonly string[]).includes(c.name))
-                    .map((c) => c.name)
-                    .join(", ")}
-                  placeholder="e.g. a special or ad-hoc committee"
-                  className="input mt-0.5 text-sm"
-                />
-              </label>
+              <button
+                type="button"
+                onClick={addCommitteeRow}
+                disabled={committeeRows.length >= COUNCIL_COMMITTEES.length}
+                className="mt-1.5 text-xs text-duty-purple underline disabled:cursor-not-allowed disabled:text-neutral-300 disabled:no-underline"
+              >
+                + Add committee
+              </button>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <label className="block text-xs text-neutral-600">
-                Assumed office
+                Term began
                 <input type="date" name="elected_date" defaultValue={profile.elected_date ?? ""} className="input mt-0.5 text-sm" />
               </label>
               <label className="block text-xs text-neutral-600">

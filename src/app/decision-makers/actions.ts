@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { COUNCIL_COMMITTEES } from "@/lib/council-committees";
 
+// "vice_chair" is still a valid stored value (kept for any rows saved
+// while that option briefly existed in the editor) even though the
+// current picker only ever writes "member" or "chair".
 type CommitteeAssignment = { name: string; role: "chair" | "vice_chair" | "member" };
-const COMMITTEE_ROLES = ["chair", "vice_chair", "member"] as const;
 const ROLE_LABEL: Record<CommitteeAssignment["role"], string> = { chair: "Chair", vice_chair: "Vice Chair", member: "Member" };
 
 function formatCommittees(committees: CommitteeAssignment[] | null | undefined): string | null {
@@ -78,23 +79,21 @@ export async function updateDecisionMakerStructuredFields(formData: FormData) {
   const representsDistrictRaw = formData.get("represents_district") as string | null;
   const representsDistrict =
     representsScope === "district" && representsDistrictRaw ? Number(representsDistrictRaw) : null;
-  // Each real committee gets its own indexed checkbox + role select (see
-  // decision-maker-profile-editor.tsx) — read them back by the same
-  // index the form rendered them at, so a checked box and its role stay
-  // paired correctly. Anything typed into the "Other" freeform fallback
-  // comes in as plain names and defaults to role "member".
-  const checkedCommittees: CommitteeAssignment[] = [];
-  COUNCIL_COMMITTEES.forEach((name, i) => {
-    if (formData.get(`committee_${i}_checked`) !== "on") return;
-    const roleRaw = formData.get(`committee_${i}_role`) as string | null;
-    const role = (COMMITTEE_ROLES as readonly string[]).includes(roleRaw ?? "") ? (roleRaw as CommitteeAssignment["role"]) : "member";
-    checkedCommittees.push({ name, role });
-  });
-  const otherCommittees: CommitteeAssignment[] = ((formData.get("committees_other") as string | null)
-    ?.split(",")
-    .map((c) => c.trim())
-    .filter(Boolean) ?? []).map((name) => ({ name, role: "member" as const }));
-  const committees = [...checkedCommittees, ...otherCommittees];
+  // Committee rows are added on demand in the editor (see
+  // decision-maker-profile-editor.tsx), so there's no fixed number of
+  // them to loop over — scan the submitted fields for however many rows
+  // (committee_0_name/_role, committee_1_name/_role, ...) actually came
+  // through instead of assuming a count.
+  const committees: CommitteeAssignment[] = [];
+  for (const key of formData.keys()) {
+    const match = key.match(/^committee_(\d+)_name$/);
+    if (!match) continue;
+    const name = (formData.get(key) as string | null)?.trim();
+    if (!name) continue;
+    const roleRaw = formData.get(`committee_${match[1]}_role`) as string | null;
+    const role: CommitteeAssignment["role"] = roleRaw === "chair" ? "chair" : "member";
+    committees.push({ name, role });
+  }
 
   const { data: existing } = await supabase
     .from("decision_maker_profiles")
