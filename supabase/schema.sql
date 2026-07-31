@@ -137,6 +137,13 @@ create table public.decision_maker_profiles (
     check (represents_scope in ('district', 'citywide', 'n/a')),
   represents_district int,
   committees text[] not null default '{}',
+  -- Same free-text idea as profiles.political_affiliation (not a fixed
+  -- enum) — an elected official's actual party is a matter of public
+  -- record, not self-reported, so this is just a plain text field
+  -- anyone can fill in from what they know (Democrat, Republican,
+  -- Independent, Working Families, etc.), not limited to the options on
+  -- a resident's own profile.
+  party_affiliation text,
   how_they_show_up text not null default '',
   what_they_care_about text not null default '',
   updated_at timestamptz not null default now()

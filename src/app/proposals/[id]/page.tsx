@@ -793,9 +793,10 @@ export default async function ProposalPage({
                 without your OK" note kept as its own separate line right
                 underneath — that reassurance is important enough to stay
                 visible, not tucked behind a hover. */}
+            <h2 className="text-base font-semibold">Getting it done</h2>
             <InfoHeading
-              as="h2"
-              className="text-base font-semibold"
+              as="p"
+              className="mt-1 text-sm text-neutral-600"
               tooltip={`This chain shows who your proposal would move through and what funding it would require (or might qualify for) to get it done. It climbs from "We the people" (you) at the bottom, to the final decision-maker at the top. So where's your idea going next?`}
             >
               The idea starts with you. Now, what's it take to get it done?

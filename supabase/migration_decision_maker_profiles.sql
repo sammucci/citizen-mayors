@@ -11,6 +11,7 @@ create table if not exists public.decision_maker_profiles (
     check (represents_scope in ('district', 'citywide', 'n/a')),
   represents_district int,
   committees text[] not null default '{}',
+  party_affiliation text,
   how_they_show_up text not null default '',
   what_they_care_about text not null default '',
   updated_at timestamptz not null default now()

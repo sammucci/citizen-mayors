@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DecisionMakerProfileEditor } from "@/components/decision-maker-profile-editor";
+import { ProposalMiniCardGrid } from "@/components/proposal-mini-card-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -90,20 +91,47 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
 
   // Every proposal this decision-maker shows up in — pending or approved,
   // both shown (a pending suggestion is still someone flagging this
-  // person as relevant, worth surfacing) but visually distinguished.
+  // person as relevant, worth surfacing) but visually distinguished. Same
+  // mini-card fields the profile page's "Your proposals" pulls, so this
+  // can render with the shared ProposalMiniCardGrid instead of a plain
+  // link list — Samantha's ask to streamline this look across the site.
   const { data: chainAppearances } = await supabase
     .from("proposal_power_tree_nodes")
-    .select("status, proposals ( id, title )")
+    .select(
+      "status, proposals ( id, title, type, image_url, image_position_x, image_position_y, categories ( label, color ) )"
+    )
     .eq("decision_maker_id", decisionMaker.id);
 
-  const proposalsSeen = new Map<string, { title: string; anyApproved: boolean }>();
+  const proposalsSeen = new Map<
+    string,
+    {
+      title: string;
+      type: string;
+      imageUrl: string | null;
+      imagePositionX: number | null;
+      imagePositionY: number | null;
+      categoryLabel: string | null;
+      categoryColor: string | null;
+      anyApproved: boolean;
+    }
+  >();
   for (const row of (chainAppearances ?? []) as any[]) {
-    if (!row.proposals) continue;
-    const existing = proposalsSeen.get(row.proposals.id);
+    const p = row.proposals;
+    if (!p) continue;
+    const existing = proposalsSeen.get(p.id);
     if (existing) {
       existing.anyApproved = existing.anyApproved || row.status === "approved";
     } else {
-      proposalsSeen.set(row.proposals.id, { title: row.proposals.title, anyApproved: row.status === "approved" });
+      proposalsSeen.set(p.id, {
+        title: p.title,
+        type: p.type,
+        imageUrl: p.image_url,
+        imagePositionX: p.image_position_x,
+        imagePositionY: p.image_position_y,
+        categoryLabel: p.categories?.label ?? null,
+        categoryColor: p.categories?.color ?? null,
+        anyApproved: row.status === "approved",
+      });
     }
   }
 
@@ -130,15 +158,30 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
             {decisionMaker.kind.replace(/_/g, " ")}
           </p>
         </div>
-        {representsCount !== null && (
+        {/* Shown even before this is filled in — Samantha couldn't find it
+            at first because it only rendered once "who they represent"
+            had already been set, with no hint that it existed at all.
+            Now it always shows, with a plain state pointing at where to
+            set it (Office details → Edit) when it hasn't been yet. */}
+        {isElectedOfficial && (
           <div className="shrink-0 rounded-lg bg-duty-purple/10 px-3 py-2 text-right">
-            <p className="text-lg font-bold text-duty-purple">
-              {profile?.represents_scope === "citywide" ? "100%" : representsCount}
-            </p>
-            <p className="text-[11px] text-neutral-500">
-              Represents{profile?.represents_scope === "citywide" ? "" : ` ${representsCount}`} Citizen Mayor
-              {representsCount === 1 ? "" : "s"}
-            </p>
+            {representsCount !== null ? (
+              <>
+                <p className="text-lg font-bold text-duty-purple">
+                  {profile?.represents_scope === "citywide" ? "100%" : representsCount}
+                </p>
+                <p className="text-[11px] text-neutral-500">
+                  Represents{profile?.represents_scope === "citywide" ? "" : ` ${representsCount}`} Citizen Mayor
+                  {representsCount === 1 ? "" : "s"}
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] text-neutral-500">
+                Who they represent
+                <br />
+                not set yet
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -161,6 +204,7 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
             currentUserId={user?.id ?? null}
             profile={{
               office_title: profile?.office_title ?? null,
+              party_affiliation: profile?.party_affiliation ?? null,
               elected_date: profile?.elected_date ?? null,
               term_end_date: profile?.term_end_date ?? null,
               next_election_date: profile?.next_election_date ?? null,
@@ -186,17 +230,22 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
         <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           Shows up in {proposalsSeen.size} proposal{proposalsSeen.size === 1 ? "" : "s"}
         </p>
-        <ul className="mt-1.5 space-y-1">
-          {[...proposalsSeen.entries()].map(([id, p]) => (
-            <li key={id}>
-              <Link href={`/proposals/${id}`} className="text-sm text-duty-purple underline">
-                {p.title}
-              </Link>
-              {!p.anyApproved && <span className="ml-1.5 text-[11px] text-neutral-400">(suggested, not yet approved)</span>}
-            </li>
-          ))}
-          {proposalsSeen.size === 0 && <li className="text-sm text-neutral-400">Not linked to any proposal yet.</li>}
-        </ul>
+        <div className="mt-1.5">
+          <ProposalMiniCardGrid
+            emptyText="Not linked to any proposal yet."
+            proposals={[...proposalsSeen.entries()].map(([id, p]) => ({
+              id,
+              title: p.title,
+              type: p.type,
+              imageUrl: p.imageUrl,
+              imagePositionX: p.imagePositionX,
+              imagePositionY: p.imagePositionY,
+              categoryLabel: p.categoryLabel,
+              categoryColor: p.categoryColor,
+              note: p.anyApproved ? undefined : "Suggested, not yet approved",
+            }))}
+          />
+        </div>
       </div>
 
       {isElectedOfficial && (

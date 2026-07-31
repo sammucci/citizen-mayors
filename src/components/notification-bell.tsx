@@ -51,6 +51,20 @@ export function NotificationBell({
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
+  // Real bug report: opening the bell marked `items` seen and called
+  // router.refresh() immediately — which re-fetches this layout with the
+  // now-updated notifications_seen_at, so the server's `items` prop came
+  // back EMPTY while the dropdown was still open. The list you just
+  // clicked to read would blank out from under you mid-read. Fix: freeze
+  // what's shown in an independent snapshot the moment the dropdown
+  // opens, and only let it track the live `items` prop while closed —
+  // so a background refresh can never yank content out of an open
+  // dropdown, only change what's ready for NEXT time you open it.
+  const [displayedItems, setDisplayedItems] = useState<NotificationItem[]>(items);
+  useEffect(() => {
+    if (!open) setDisplayedItems(items);
+  }, [items, open]);
+
   const newCount = seenLocally ? 0 : items.length;
   const count = newCount + pendingItems.length;
 
@@ -84,7 +98,7 @@ export function NotificationBell({
     }
   }
 
-  const hasAnything = pendingItems.length > 0 || items.length > 0;
+  const hasAnything = pendingItems.length > 0 || displayedItems.length > 0;
 
   return (
     <div ref={ref} className="relative">
@@ -125,7 +139,7 @@ export function NotificationBell({
                   </ul>
                 </div>
               )}
-              {items.length > 0 && (
+              {displayedItems.length > 0 && (
                 <div>
                   {pendingItems.length > 0 && (
                     <div className="bg-neutral-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
@@ -133,7 +147,7 @@ export function NotificationBell({
                     </div>
                   )}
                   <ul>
-                    {items.map((item) => (
+                    {displayedItems.map((item) => (
                       <li key={item.id} className="border-b border-neutral-50 last:border-0">
                         <NotificationRow item={item} onNavigate={() => setOpen(false)} />
                       </li>

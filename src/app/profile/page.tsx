@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CivicReportCard, type CivicLog, type CivicStats } from "@/components/civic-report-card";
 import { ProfileInfoCard } from "@/components/profile-info-card";
+import { ProposalMiniCardGrid } from "@/components/proposal-mini-card-grid";
 import { statusColorClasses } from "@/lib/status-colors";
 import { HourglassIcon } from "@/components/icons";
 
@@ -401,57 +402,25 @@ export default async function ProfilePage() {
 
       <div>
         <h2 className="text-lg font-semibold">Your proposals</h2>
-        {/* Two-column grid of small "mini cards", split vertically —
-            a square image on one side, title/category/type on the
-            other — each tinted with its category color so the colors
-            read at a glance again, not just on the thumbnail. */}
-        <ul className="mt-3 grid grid-cols-2 gap-2.5">
-          {myProposals?.map((p: any) => {
-            const color = p.categories?.color ?? "#e5e5e5";
-            return (
-              <li
-                key={p.id}
-                className="flex items-center overflow-hidden rounded-lg border"
-                style={{ backgroundColor: `${color}1a`, borderColor: `${color}66` }}
-              >
-                <div
-                  className="h-16 w-16 shrink-0 overflow-hidden"
-                  style={{ backgroundColor: color }}
-                >
-                  {p.image_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.image_url}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      style={{
-                        objectPosition: `${p.image_position_x ?? 50}% ${p.image_position_y ?? 50}%`,
-                      }}
-                    />
-                  )}
-                </div>
-                <div className="min-w-0 p-2">
-                  <Link
-                    href={`/proposals/${p.id}`}
-                    className="block truncate text-sm font-semibold hover:underline"
-                  >
-                    {p.title}
-                  </Link>
-                  <p className="mt-0.5 truncate text-[10px] uppercase tracking-wide text-neutral-500">
-                    {p.categories?.label}
-                    {p.categories?.label ? " · " : ""}
-                    {p.type}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-          {(!myProposals || myProposals.length === 0) && (
-            <p className="col-span-2 text-sm text-neutral-500">
-              You haven&apos;t posted a proposal yet.
-            </p>
-          )}
-        </ul>
+        {/* Shared mini-card grid (src/components/proposal-mini-card-grid.tsx)
+            — same treatment now used on the decision-maker profile's
+            "Shows up in N proposals" section, so this look is defined in
+            one place instead of copy-pasted per page. */}
+        <div className="mt-3">
+          <ProposalMiniCardGrid
+            emptyText="You haven't posted a proposal yet."
+            proposals={(myProposals ?? []).map((p: any) => ({
+              id: p.id,
+              title: p.title,
+              type: p.type,
+              imageUrl: p.image_url,
+              imagePositionX: p.image_position_x,
+              imagePositionY: p.image_position_y,
+              categoryLabel: p.categories?.label ?? null,
+              categoryColor: p.categories?.color ?? null,
+            }))}
+          />
+        </div>
       </div>
 
       <div>

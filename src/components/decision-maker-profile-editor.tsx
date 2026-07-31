@@ -11,6 +11,7 @@ import {
 
 type ProfileFields = {
   office_title: string | null;
+  party_affiliation: string | null;
   elected_date: string | null;
   term_end_date: string | null;
   next_election_date: string | null;
@@ -75,7 +76,7 @@ export function DecisionMakerProfileEditor({
   return (
     <div className="space-y-6">
       {/* Structured fields */}
-      <div className="rounded-lg border border-neutral-200 p-4">
+      <div className="rounded-lg border border-neutral-200 bg-white p-4">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
             Office details
@@ -96,6 +97,10 @@ export function DecisionMakerProfileEditor({
             <div>
               <dt className="text-xs text-neutral-400">Office / title</dt>
               <dd>{profile.office_title || "Not added yet"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-neutral-400">Party affiliation</dt>
+              <dd>{profile.party_affiliation || "Not added yet"}</dd>
             </div>
             <div>
               <dt className="text-xs text-neutral-400">Committees</dt>
@@ -130,6 +135,15 @@ export function DecisionMakerProfileEditor({
                 name="office_title"
                 defaultValue={profile.office_title ?? ""}
                 placeholder="e.g. Councilmember, 5th District"
+                className="input mt-0.5 text-sm"
+              />
+            </label>
+            <label className="block text-xs text-neutral-600">
+              Party affiliation
+              <input
+                name="party_affiliation"
+                defaultValue={profile.party_affiliation ?? ""}
+                placeholder="e.g. Democrat, Republican, Working Families"
                 className="input mt-0.5 text-sm"
               />
             </label>
@@ -222,7 +236,7 @@ export function DecisionMakerProfileEditor({
       />
 
       {/* Legislation */}
-      <div className="rounded-lg border border-neutral-200 p-4">
+      <div className="rounded-lg border border-neutral-200 bg-white p-4">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
             Legislation
@@ -331,7 +345,7 @@ function WikiTextBlock({
   router: ReturnType<typeof useRouter>;
 }) {
   return (
-    <div className="rounded-lg border border-neutral-200 p-4">
+    <div className="rounded-lg border border-neutral-200 bg-white p-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{title}</p>
