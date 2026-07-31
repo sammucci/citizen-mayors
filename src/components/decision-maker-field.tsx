@@ -147,6 +147,20 @@ export function DecisionMakerField({
             <option value="board_commission">Board / commission</option>
             <option value="other">Other</option>
           </SelectField>
+          {/* Elected officials specifically should be named by their seat
+              ("Councilmember, District 3"), not the person currently
+              holding it — the seat is the durable thing proposal chains
+              and the profile page attach to; the person's actual name
+              goes on that seat's profile page afterward. Typing a
+              person's name here (e.g. from a chain that only knows "Jamie
+              Gauthier") still works, it's just not ideal — someone can
+              always rename it later from the profile page or admin. */}
+          {kind === "elected_official" && (
+            <p className="mt-1 text-[11px] text-neutral-500">
+              Tip: name this by the office (e.g. &quot;Councilmember, District 3&quot;) rather than
+              the person — you&apos;ll add their name on the profile page next.
+            </p>
+          )}
         </div>
       )}
 

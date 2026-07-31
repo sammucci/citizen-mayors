@@ -29,10 +29,16 @@ export function AddDecisionMakerForm() {
       >
         <label className="flex-1 basis-48">
           <span className="mb-1 block text-xs text-neutral-500">Name</span>
+          {/* For elected officials specifically: name this by the office/
+              seat ("Councilmember, District 3"), not the current
+              person ("Jamie Gauthier") — the seat is what proposal
+              chains and the profile page attach to, and it stays put
+              across elections. The current officeholder's actual name
+              goes on the profile page itself once this entry exists. */}
           <input
             name="name"
             required
-            placeholder="e.g. Streets Department"
+            placeholder="e.g. Streets Department, or Councilmember, District 3"
             className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
             onChange={() => setError(null)}
           />

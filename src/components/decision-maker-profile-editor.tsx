@@ -8,6 +8,7 @@ import {
   addDecisionMakerLegislation,
   deleteDecisionMakerLegislation,
 } from "@/app/decision-makers/actions";
+import { COUNCIL_COMMITTEES } from "@/lib/council-committees";
 
 type ProfileFields = {
   current_officeholder: string | null;
@@ -182,15 +183,37 @@ export function DecisionMakerProfileEditor({
                 <option value="Other">Other</option>
               </select>
             </label>
-            <label className="block text-xs text-neutral-600">
-              Committees (comma-separated)
-              <input
-                name="committees"
-                defaultValue={profile.committees.join(", ")}
-                placeholder="e.g. Rules, Public Safety"
-                className="input mt-0.5 text-sm"
-              />
-            </label>
+            <div>
+              {/* Checkboxes against the real committee list, not a
+                  comma-separated text field — several official committee
+                  names contain their own comma ("Parks, Recreation and
+                  Cultural Affairs"), which made comma-splitting silently
+                  mangle entries into the wrong pieces. */}
+              <p className="text-xs text-neutral-600">Committees</p>
+              <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 rounded border border-neutral-200 p-2 sm:grid-cols-3">
+                {COUNCIL_COMMITTEES.map((c) => (
+                  <label key={c} className="flex items-start gap-1.5 text-xs text-neutral-700">
+                    <input
+                      type="checkbox"
+                      name="committees"
+                      value={c}
+                      defaultChecked={profile.committees.includes(c)}
+                      className="mt-0.5"
+                    />
+                    {c}
+                  </label>
+                ))}
+              </div>
+              <label className="mt-1.5 block text-xs text-neutral-600">
+                Other (not listed above, comma-separated)
+                <input
+                  name="committees_other"
+                  defaultValue={profile.committees.filter((c) => !(COUNCIL_COMMITTEES as readonly string[]).includes(c)).join(", ")}
+                  placeholder="e.g. a special or ad-hoc committee"
+                  className="input mt-0.5 text-sm"
+                />
+              </label>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               <label className="block text-xs text-neutral-600">
                 Assumed office

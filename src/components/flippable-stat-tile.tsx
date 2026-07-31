@@ -77,7 +77,7 @@ export function FlippableStatTile({
         <div className="absolute inset-0 flex flex-col overflow-hidden rounded-2xl shadow-sm transition hover:-translate-y-1 hover:shadow-lg [backface-visibility:hidden]">
           <div className="h-2 shrink-0" style={{ backgroundColor: color }} aria-hidden="true" />
           <div
-            className="relative flex flex-1 flex-col p-5"
+            className="relative flex flex-1 flex-col justify-center p-5"
             style={{ backgroundColor: `${color}14` }}
           >
             {/* Icon is its own absolutely-positioned badge, not sharing a

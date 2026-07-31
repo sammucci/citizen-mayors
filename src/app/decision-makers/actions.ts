@@ -68,10 +68,16 @@ export async function updateDecisionMakerStructuredFields(formData: FormData) {
   const representsDistrictRaw = formData.get("represents_district") as string | null;
   const representsDistrict =
     representsScope === "district" && representsDistrictRaw ? Number(representsDistrictRaw) : null;
-  const committees = (formData.get("committees") as string | null)
+  // Checked committee-list boxes (formData.getAll, not a single
+  // comma-separated field — see decision-maker-profile-editor.tsx for
+  // why: several real committee names contain their own comma) plus
+  // whatever was typed into the "Other" freeform fallback.
+  const checkedCommittees = formData.getAll("committees").map((c) => String(c));
+  const otherCommittees = (formData.get("committees_other") as string | null)
     ?.split(",")
     .map((c) => c.trim())
     .filter(Boolean) ?? [];
+  const committees = [...new Set([...checkedCommittees, ...otherCommittees])];
 
   const { data: existing } = await supabase
     .from("decision_maker_profiles")

@@ -157,8 +157,13 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
           {/* Some entries are an office, not a person — this is the actual
               current officeholder's name, shown right under the office
               name so it's the first thing on the card, not buried in the
-              editable details box below. */}
-          {profile?.current_officeholder && (
+              editable details box below. Guarded against showing when the
+              officeholder's name is already baked into the title itself
+              (older entries added before offices/people were split
+              apart, or anyone who free-types a person's name straight
+              into a new decision-maker's name field) — otherwise the same
+              name would print twice. */}
+          {profile?.current_officeholder && !decisionMaker.name.toLowerCase().includes(profile.current_officeholder.toLowerCase()) && (
             <p className="text-sm font-medium text-neutral-600">{profile.current_officeholder}</p>
           )}
           <p className="text-xs uppercase tracking-wide text-neutral-400">

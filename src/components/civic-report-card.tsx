@@ -10,6 +10,8 @@ import {
 } from "@/app/civic-log/actions";
 import { VolunteerCategoryField } from "@/components/volunteer-category-field";
 import { CivicReportCardExport } from "@/components/civic-report-card-export";
+import { StatIcon, type StatIconName } from "@/components/stat-icons";
+import { brightnessOf, darken } from "@/lib/color-brightness";
 
 export type CivicStats = {
   proposalsMade: number;
@@ -155,35 +157,46 @@ export function CivicReportCard({
         </div>
       </div>
 
+      {/* Same card look as the community dashboard's flip tiles (colored
+          bar, tinted body, icon badge) — Samantha's ask to streamline this
+          across the site. Click instead of flip, though: the useful thing
+          here is opening the actual detail list (your proposals, your
+          logs), not a static "why this matters" sentence, so this keeps
+          its modal instead of adopting the flip mechanic too. */}
       <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         <StatTile
           label="Proposals made"
           value={stats.proposalsMade}
           color="#6C3FD1"
+          icon="proposalsMade"
           onClick={() => setDetailKey("proposalsMade")}
         />
         <StatTile
           label="Contributions to others"
           value={stats.contributedToOthers}
           color="#4069D9"
+          icon="contributionToOthers"
           onClick={() => setDetailKey("contributedToOthers")}
         />
         <StatTile
           label="Comments made"
           value={stats.commentsMade}
           color="#8358D3"
+          icon="commentsMade"
           onClick={() => setDetailKey("commentsMade")}
         />
         <StatTile
           label="People you've talked with"
           value={stats.peopleConversedWith}
           color="#F86767"
+          icon="registeredMembers"
           onClick={() => setDetailKey("peopleConversedWith")}
         />
         <StatTile
           label="Decision-makers engaged"
           value={stats.decisionMakersEngaged}
           color="#2E8B57"
+          icon="decisionMakersEngaged"
           onClick={() => setDetailKey("decisionMakersEngaged")}
         />
         <StatTile
@@ -191,30 +204,35 @@ export function CivicReportCard({
           value={stats.lettersWritten}
           sublabel={stats.lettersPublished > 0 ? `${stats.lettersPublished} published` : undefined}
           color={LOG_TYPE_COLOR.letter_to_editor}
+          icon="lettersToTheEditor"
           onClick={() => setDetailKey("lettersWritten")}
         />
         <StatTile
           label="Contacted an elected"
           value={stats.contactedOfficials}
           color={LOG_TYPE_COLOR.contacted_official}
+          icon="contactedAnElected"
           onClick={() => setDetailKey("contactedOfficials")}
         />
         <StatTile
           label="Meetings attended"
           value={stats.meetingsAttended}
           color={LOG_TYPE_COLOR.community_meeting}
+          icon="communityMeetingsAttended"
           onClick={() => setDetailKey("meetingsAttended")}
         />
         <StatTile
           label="Volunteer hours"
           value={stats.volunteerHours}
           color={LOG_TYPE_COLOR.volunteer_hours}
+          icon="hoursVolunteered"
           onClick={() => setDetailKey("volunteerHours")}
         />
         <StatTile
           label="Testimony given"
           value={stats.testimonyGiven}
           color={LOG_TYPE_COLOR.testimony}
+          icon="testimonyGiven"
           onClick={() => setDetailKey("testimonyGiven")}
         />
       </div>
@@ -533,26 +551,43 @@ function StatTile({
   value,
   sublabel,
   color,
+  icon,
   onClick,
 }: {
   label: string;
   value: number;
   sublabel?: string;
   color: string;
+  icon: StatIconName;
   onClick: () => void;
 }) {
+  // Same readability fix as the dashboard cards: a pale color (there
+  // isn't one in this palette today, but a future log type could add
+  // one) gets a darkened number/icon color instead of becoming
+  // unreadable, without changing what color the card visually reads as.
+  const isLight = brightnessOf(color) > 180;
+  const accentColor = isLight ? darken(color, 0.55) : color;
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm"
-      style={{ backgroundColor: `${color}1a` }}
+      className="overflow-hidden rounded-2xl text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
-      <p className="text-2xl font-bold" style={{ color }}>
-        {value}
-      </p>
-      <p className="mt-0.5 text-xs font-medium text-neutral-600">{label}</p>
-      {sublabel && <p className="text-[11px] text-neutral-500">{sublabel}</p>}
+      <div className="h-2" style={{ backgroundColor: color }} aria-hidden="true" />
+      <div className="relative p-4" style={{ backgroundColor: `${color}14` }}>
+        <div
+          className="absolute right-3 top-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg"
+          style={{ backgroundColor: `${color}33`, color: accentColor }}
+        >
+          <StatIcon name={icon} className="h-4 w-4" />
+        </div>
+        <p className="pr-10 text-2xl font-bold leading-none" style={{ color: accentColor }}>
+          {value}
+        </p>
+        <p className="mt-2 text-xs font-semibold leading-snug text-neutral-900">{label}</p>
+        {sublabel && <p className="mt-0.5 text-[11px] text-neutral-500">{sublabel}</p>}
+      </div>
     </button>
   );
 }
