@@ -154,6 +154,13 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
       <div className="mt-2 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">{decisionMaker.name}</h1>
+          {/* Some entries are an office, not a person — this is the actual
+              current officeholder's name, shown right under the office
+              name so it's the first thing on the card, not buried in the
+              editable details box below. */}
+          {profile?.current_officeholder && (
+            <p className="text-sm font-medium text-neutral-600">{profile.current_officeholder}</p>
+          )}
           <p className="text-xs uppercase tracking-wide text-neutral-400">
             {decisionMaker.kind.replace(/_/g, " ")}
           </p>
@@ -203,6 +210,7 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
             isAdmin={isAdmin}
             currentUserId={user?.id ?? null}
             profile={{
+              current_officeholder: profile?.current_officeholder ?? null,
               office_title: profile?.office_title ?? null,
               party_affiliation: profile?.party_affiliation ?? null,
               elected_date: profile?.elected_date ?? null,
@@ -248,9 +256,14 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
         </div>
       </div>
 
+      {/* Collapsed by default — a well-edited profile's history will run
+          long fast, same reasoning as the "Add a tag" collapse on a
+          proposal page. */}
       {isElectedOfficial && (
-        <div className="mt-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">History</p>
+        <details className="mt-6">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            History ({revisions.length})
+          </summary>
           <ul className="mt-1.5 space-y-1 text-xs text-neutral-500">
             {revisions.map((r: any) => (
               <li key={r.id}>
@@ -260,7 +273,7 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
             ))}
             {revisions.length === 0 && <li className="text-neutral-400">No edits yet.</li>}
           </ul>
-        </div>
+        </details>
       )}
     </div>
   );

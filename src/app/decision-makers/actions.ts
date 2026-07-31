@@ -58,6 +58,7 @@ export async function updateDecisionMakerStructuredFields(formData: FormData) {
   const { supabase, user } = await requireUser();
   const decisionMakerId = String(formData.get("decision_maker_id"));
 
+  const currentOfficeholder = (formData.get("current_officeholder") as string | null)?.trim() || null;
   const officeTitle = (formData.get("office_title") as string | null)?.trim() || null;
   const partyAffiliation = (formData.get("party_affiliation") as string | null)?.trim() || null;
   const electedDate = (formData.get("elected_date") as string | null) || null;
@@ -74,12 +75,13 @@ export async function updateDecisionMakerStructuredFields(formData: FormData) {
 
   const { data: existing } = await supabase
     .from("decision_maker_profiles")
-    .select("office_title, party_affiliation, elected_date, term_end_date, next_election_date, represents_scope, represents_district, committees")
+    .select("current_officeholder, office_title, party_affiliation, elected_date, term_end_date, next_election_date, represents_scope, represents_district, committees")
     .eq("decision_maker_id", decisionMakerId)
     .maybeSingle();
 
   await supabase.from("decision_maker_profiles").upsert({
     decision_maker_id: decisionMakerId,
+    current_officeholder: currentOfficeholder,
     office_title: officeTitle,
     party_affiliation: partyAffiliation,
     elected_date: electedDate,
@@ -92,6 +94,7 @@ export async function updateDecisionMakerStructuredFields(formData: FormData) {
   });
 
   const fieldsToLog: [string, string | null, string | null][] = [
+    ["current_officeholder", existing?.current_officeholder ?? null, currentOfficeholder],
     ["office_title", existing?.office_title ?? null, officeTitle],
     ["party_affiliation", existing?.party_affiliation ?? null, partyAffiliation],
     ["elected_date", existing?.elected_date ?? null, electedDate],

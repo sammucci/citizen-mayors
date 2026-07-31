@@ -96,8 +96,10 @@ export default async function OrganizationProfilePage({ params }: { params: { id
         />
       </div>
 
-      <div className="mt-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">History</p>
+      <details className="mt-6">
+        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          History ({(revisions ?? []).length})
+        </summary>
         <ul className="mt-1.5 space-y-1 text-xs text-neutral-500">
           {(revisions ?? []).map((r: any) => (
             <li key={r.id}>
@@ -107,7 +109,7 @@ export default async function OrganizationProfilePage({ params }: { params: { id
           ))}
           {(!revisions || revisions.length === 0) && <li className="text-neutral-400">No edits yet.</li>}
         </ul>
-      </div>
+      </details>
     </div>
   );
 }

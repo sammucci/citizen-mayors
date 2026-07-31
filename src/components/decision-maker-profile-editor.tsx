@@ -10,6 +10,7 @@ import {
 } from "@/app/decision-makers/actions";
 
 type ProfileFields = {
+  current_officeholder: string | null;
   office_title: string | null;
   party_affiliation: string | null;
   elected_date: string | null;
@@ -95,6 +96,10 @@ export function DecisionMakerProfileEditor({
         {!editingFields ? (
           <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <div>
+              <dt className="text-xs text-neutral-400">Current officeholder</dt>
+              <dd>{profile.current_officeholder || "Not added yet"}</dd>
+            </div>
+            <div>
               <dt className="text-xs text-neutral-400">Office / title</dt>
               <dd>{profile.office_title || "Not added yet"}</dd>
             </div>
@@ -117,7 +122,7 @@ export function DecisionMakerProfileEditor({
               <dd>{profile.committees.length > 0 ? profile.committees.join(", ") : "Not added yet"}</dd>
             </div>
             <div>
-              <dt className="text-xs text-neutral-400">Elected</dt>
+              <dt className="text-xs text-neutral-400">Assumed office</dt>
               <dd>{formatDate(profile.elected_date) || "Not added yet"}</dd>
             </div>
             <div>
@@ -140,6 +145,18 @@ export function DecisionMakerProfileEditor({
           >
             <input type="hidden" name="decision_maker_id" value={decisionMakerId} />
             <label className="block text-xs text-neutral-600">
+              {/* Some entries are an office, not a person ("Mayor of
+                  Philadelphia") — this is where the actual current
+                  person's name goes, shown prominently on the card. */}
+              Current officeholder
+              <input
+                name="current_officeholder"
+                defaultValue={profile.current_officeholder ?? ""}
+                placeholder="e.g. Cherelle Parker"
+                className="input mt-0.5 text-sm"
+              />
+            </label>
+            <label className="block text-xs text-neutral-600">
               Office / title
               <input
                 name="office_title"
@@ -150,12 +167,20 @@ export function DecisionMakerProfileEditor({
             </label>
             <label className="block text-xs text-neutral-600">
               Party affiliation
-              <input
-                name="party_affiliation"
-                defaultValue={profile.party_affiliation ?? ""}
-                placeholder="e.g. Democrat, Republican, Working Families"
-                className="input mt-0.5 text-sm"
-              />
+              {/* Same fixed options as a resident's own political_affiliation
+                  (profile-info-card.tsx) — a selection, not free text, so
+                  the two are directly comparable (e.g. a future "does this
+                  official's party match their district's members" view)
+                  instead of "Democrat" vs "democrat" vs "Dem" all meaning
+                  the same thing but never matching. */}
+              <select name="party_affiliation" defaultValue={profile.party_affiliation ?? ""} className="input mt-0.5 text-sm">
+                <option value="">Not set</option>
+                <option value="Democrat">Democrat</option>
+                <option value="Republican">Republican</option>
+                <option value="Independent">Independent</option>
+                <option value="Social Democrat">Social Democrat</option>
+                <option value="Other">Other</option>
+              </select>
             </label>
             <label className="block text-xs text-neutral-600">
               Committees (comma-separated)
@@ -168,7 +193,7 @@ export function DecisionMakerProfileEditor({
             </label>
             <div className="grid grid-cols-3 gap-2">
               <label className="block text-xs text-neutral-600">
-                Elected
+                Assumed office
                 <input type="date" name="elected_date" defaultValue={profile.elected_date ?? ""} className="input mt-0.5 text-sm" />
               </label>
               <label className="block text-xs text-neutral-600">

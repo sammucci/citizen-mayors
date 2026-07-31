@@ -3,6 +3,7 @@
 
 create table if not exists public.decision_maker_profiles (
   decision_maker_id uuid primary key references public.decision_makers(id) on delete cascade,
+  current_officeholder text,
   office_title text,
   elected_date date,
   term_end_date date,

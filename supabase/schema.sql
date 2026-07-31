@@ -124,6 +124,12 @@ create unique index decision_makers_name_kind_idx
 -- if something's vandalized.
 create table public.decision_maker_profiles (
   decision_maker_id uuid primary key references public.decision_makers(id) on delete cascade,
+  -- Some decision_makers rows are an OFFICE, not a person ("Mayor of
+  -- Philadelphia," "City Council Committee of the Whole") — seeded that
+  -- way on purpose so the entity outlives any one term. This is where
+  -- the actual current officeholder's name goes, shown as a subtitle
+  -- right under the office name on the profile card.
+  current_officeholder text,
   office_title text,
   elected_date date,
   term_end_date date,
