@@ -11,7 +11,10 @@ create unique index if not exists organizations_name_idx on public.organizations
 
 create table if not exists public.organization_profiles (
   organization_id uuid primary key references public.organizations(id) on delete cascade,
-  area_represented text,
+  geography_scope text not null default 'citywide'
+    check (geography_scope in ('citywide', 'council_district', 'zip')),
+  council_district int,
+  geography_label text,
   topics text[] not null default '{}',
   description text not null default '',
   meets_when text,

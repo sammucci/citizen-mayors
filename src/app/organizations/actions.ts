@@ -109,7 +109,16 @@ export async function updateOrganizationStructuredFields(formData: FormData) {
   const { supabase, user } = await requireUser();
   const organizationId = String(formData.get("organization_id"));
 
-  const areaRepresented = (formData.get("area_represented") as string | null)?.trim() || null;
+  // Structured, not free text — a dropdown scope plus (depending on
+  // which) a real district number or a zip code, same shape proposals
+  // already use for geography. No more "South Philly" vs "south philly"
+  // vs "Dist. 2" all meaning slightly different things.
+  const geographyScope = (formData.get("geography_scope") as string | null) || "citywide";
+  const councilDistrictRaw = formData.get("council_district") as string | null;
+  const councilDistrict =
+    geographyScope === "council_district" && councilDistrictRaw ? Number(councilDistrictRaw) : null;
+  const geographyLabel =
+    geographyScope === "zip" ? (formData.get("geography_label") as string | null)?.trim() || null : null;
   const meetsWhen = (formData.get("meets_when") as string | null)?.trim() || null;
   const meetsWhere = (formData.get("meets_where") as string | null)?.trim() || null;
   const topics = (formData.get("topics") as string | null)
@@ -119,13 +128,15 @@ export async function updateOrganizationStructuredFields(formData: FormData) {
 
   const { data: existing } = await supabase
     .from("organization_profiles")
-    .select("area_represented, meets_when, meets_where, topics")
+    .select("geography_scope, council_district, geography_label, meets_when, meets_where, topics")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
   await supabase.from("organization_profiles").upsert({
     organization_id: organizationId,
-    area_represented: areaRepresented,
+    geography_scope: geographyScope,
+    council_district: councilDistrict,
+    geography_label: geographyLabel,
     meets_when: meetsWhen,
     meets_where: meetsWhere,
     topics,
@@ -133,7 +144,13 @@ export async function updateOrganizationStructuredFields(formData: FormData) {
   });
 
   const fieldsToLog: [string, string | null, string | null][] = [
-    ["area_represented", existing?.area_represented ?? null, areaRepresented],
+    ["geography_scope", existing?.geography_scope ?? null, geographyScope],
+    [
+      "council_district",
+      existing?.council_district != null ? String(existing.council_district) : null,
+      councilDistrict != null ? String(councilDistrict) : null,
+    ],
+    ["geography_label", existing?.geography_label ?? null, geographyLabel],
     ["meets_when", existing?.meets_when ?? null, meetsWhen],
     ["meets_where", existing?.meets_where ?? null, meetsWhere],
     [

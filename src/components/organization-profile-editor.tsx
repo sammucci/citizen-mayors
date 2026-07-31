@@ -8,12 +8,16 @@ import {
 } from "@/app/organizations/actions";
 
 type ProfileFields = {
-  area_represented: string | null;
+  geography_scope: "citywide" | "council_district" | "zip";
+  council_district: number | null;
+  geography_label: string | null;
   topics: string[];
   meets_when: string | null;
   meets_where: string | null;
   description: string;
 };
+
+const DISTRICTS = Array.from({ length: 10 }, (_, i) => i + 1);
 
 // Same wiki-editing model as decision-maker-profile-editor.tsx: any
 // signed-in user can edit any field, accountable via organization_
@@ -33,6 +37,10 @@ export function OrganizationProfileEditor({
   const router = useRouter();
   const [editingFields, setEditingFields] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
+  // Local state just for the scope radios, so the conditional
+  // district-select / zip-input can react as you click — same pattern
+  // new-proposal-form.tsx uses for its own geography_scope picker.
+  const [scope, setScope] = useState(profile.geography_scope);
 
   return (
     <div className="space-y-6">
@@ -55,8 +63,16 @@ export function OrganizationProfileEditor({
         {!editingFields ? (
           <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <div>
-              <dt className="text-xs text-neutral-400">Area represented</dt>
-              <dd>{profile.area_represented || "Not added yet"}</dd>
+              <dt className="text-xs text-neutral-400">Service area</dt>
+              <dd>
+                {profile.geography_scope === "citywide"
+                  ? "Citywide"
+                  : profile.geography_scope === "council_district" && profile.council_district
+                  ? `District ${profile.council_district}`
+                  : profile.geography_scope === "zip" && profile.geography_label
+                  ? `Zip ${profile.geography_label}`
+                  : "Not added yet"}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-neutral-400">Topics</dt>
@@ -81,15 +97,59 @@ export function OrganizationProfileEditor({
             className="mt-2 space-y-2"
           >
             <input type="hidden" name="organization_id" value={organizationId} />
-            <label className="block text-xs text-neutral-600">
-              Area represented
-              <input
-                name="area_represented"
-                defaultValue={profile.area_represented ?? ""}
-                placeholder="e.g. Point Breeze, or Council District 2"
-                className="input mt-0.5 text-sm"
-              />
-            </label>
+            <div>
+              <p className="text-xs text-neutral-600">Service area</p>
+              <div className="mt-1 flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-1 text-xs">
+                  <input
+                    type="radio"
+                    name="geography_scope"
+                    value="citywide"
+                    checked={scope === "citywide"}
+                    onChange={() => setScope("citywide")}
+                  />
+                  Citywide
+                </label>
+                <label className="flex items-center gap-1 text-xs">
+                  <input
+                    type="radio"
+                    name="geography_scope"
+                    value="council_district"
+                    checked={scope === "council_district"}
+                    onChange={() => setScope("council_district")}
+                  />
+                  A council district
+                </label>
+                <label className="flex items-center gap-1 text-xs">
+                  <input
+                    type="radio"
+                    name="geography_scope"
+                    value="zip"
+                    checked={scope === "zip"}
+                    onChange={() => setScope("zip")}
+                  />
+                  A zip code
+                </label>
+              </div>
+              {scope === "council_district" && (
+                <select name="council_district" defaultValue={profile.council_district ?? ""} className="input mt-1.5 w-auto text-xs">
+                  <option value="">Choose a district</option>
+                  {DISTRICTS.map((d) => (
+                    <option key={d} value={d}>
+                      District {d}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {scope === "zip" && (
+                <input
+                  name="geography_label"
+                  defaultValue={profile.geography_label ?? ""}
+                  placeholder="e.g. 19125"
+                  className="input mt-1.5 w-auto text-xs"
+                />
+              )}
+            </div>
             <label className="block text-xs text-neutral-600">
               Topics (comma-separated)
               <input

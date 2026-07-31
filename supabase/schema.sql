@@ -201,7 +201,17 @@ create unique index organizations_name_idx on public.organizations (lower(name))
 -- policy). One row per organization, created on first edit.
 create table public.organization_profiles (
   organization_id uuid primary key references public.organizations(id) on delete cascade,
-  area_represented text,
+  -- Structured, not free text — the first version let anyone type
+  -- anything ("South Philly," "point breeze," "Dist. 2"...), which
+  -- meant no two entries reliably matched and the data was useless to
+  -- aggregate. Reuses the exact same shape proposals already use for
+  -- geography (geography_scope/council_district/geography_label in the
+  -- proposals table) so an org's service area is a real, filterable
+  -- value — a dropdown, not a guess at spelling.
+  geography_scope text not null default 'citywide'
+    check (geography_scope in ('citywide', 'council_district', 'zip')),
+  council_district int,
+  geography_label text, -- holds the zip code when geography_scope = 'zip'
   topics text[] not null default '{}',
   description text not null default '',
   meets_when text,

@@ -103,6 +103,16 @@ export function DecisionMakerProfileEditor({
               <dd>{profile.party_affiliation || "Not added yet"}</dd>
             </div>
             <div>
+              <dt className="text-xs text-neutral-400">Represents</dt>
+              <dd>
+                {profile.represents_scope === "citywide"
+                  ? "Citywide (all districts)"
+                  : profile.represents_scope === "district" && profile.represents_district
+                  ? `District ${profile.represents_district}`
+                  : "Not added yet"}
+              </dd>
+            </div>
+            <div>
               <dt className="text-xs text-neutral-400">Committees</dt>
               <dd>{profile.committees.length > 0 ? profile.committees.join(", ") : "Not added yet"}</dd>
             </div>

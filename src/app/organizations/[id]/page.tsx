@@ -85,7 +85,9 @@ export default async function OrganizationProfilePage({ params }: { params: { id
           organizationId={organization.id}
           canEdit={Boolean(user)}
           profile={{
-            area_represented: profile?.area_represented ?? null,
+            geography_scope: profile?.geography_scope ?? "citywide",
+            council_district: profile?.council_district ?? null,
+            geography_label: profile?.geography_label ?? null,
             topics: profile?.topics ?? [],
             meets_when: profile?.meets_when ?? null,
             meets_where: profile?.meets_where ?? null,
