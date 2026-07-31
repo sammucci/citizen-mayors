@@ -31,7 +31,15 @@ export default async function ProfilePage() {
   // not just by app-code discipline. get_my_demographics() is the one
   // sanctioned way back to those five answers, scoped to auth.uid()
   // inside the function itself.
-  const [{ data: profile }, { data: demographics }] = await Promise.all([
+  // The Supabase client here isn't generated against a typed schema, so
+  // TypeScript has no way to know what get_my_demographics() returns and
+  // quietly infers it as having no fields at all — that's what broke the
+  // Vercel build (fullProfile "missing" the 5 demographic properties even
+  // though they're really there at runtime). This explicit type is the
+  // fix: it tells TypeScript what the function actually hands back, which
+  // is exactly the columns get_my_demographics() selects in
+  // migration_harden_private_demographics.sql.
+  const [{ data: profile }, { data: demographicsRaw }] = await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -41,6 +49,13 @@ export default async function ProfilePage() {
       .single(),
     supabase.rpc("get_my_demographics").maybeSingle(),
   ]);
+  const demographics = demographicsRaw as {
+    age_range: string | null;
+    race_ethnicity: string | null;
+    gender: string | null;
+    housing_status: string | null;
+    political_affiliation: string | null;
+  } | null;
   const fullProfile = profile ? { ...profile, ...(demographics ?? {}) } : null;
 
   const { data: myProposals } = await supabase
