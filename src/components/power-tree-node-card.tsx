@@ -70,6 +70,7 @@ export function PowerTreeNodeCard({
     submittedByName: string;
     submittedById: string | null;
     grantUrl: string | null;
+    decisionMakerId: string | null;
     updates: Update[];
   };
   isFinal: boolean;
@@ -512,6 +513,20 @@ export function PowerTreeNodeCard({
                   >
                     View funding program ↗
                   </a>
+                )}
+                {/* Only decision-maker nodes (not funding) have a real
+                    profile to link to, and only once the node's actually
+                    tied to a specific decision_makers row (a rare edge
+                    case, but the "We the people" anchor and old data
+                    could theoretically lack one). */}
+                {!isFunding && node.decisionMakerId && (
+                  <Link
+                    href={`/decision-makers/${node.decisionMakerId}`}
+                    className="block text-xs underline"
+                    style={isFinal && !isPending ? { color: finalTextColor } : { color: "#6C3FD1" }}
+                  >
+                    View full profile ↗
+                  </Link>
                 )}
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {isPending && isOwner && (

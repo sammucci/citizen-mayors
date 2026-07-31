@@ -28,6 +28,7 @@ type Node = {
   submittedByName: string;
   submittedById: string | null;
   grantUrl: string | null;
+  decisionMakerId: string | null;
   updates: Update[];
 };
 

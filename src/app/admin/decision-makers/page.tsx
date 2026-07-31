@@ -61,14 +61,23 @@ export default async function DecisionMakersAdminPage() {
 
       <ul className="mt-6 space-y-2">
         {decisionMakers?.map((dm: any) => (
-          <DecisionMakerRow
-            key={dm.id}
-            id={dm.id}
-            name={dm.name}
-            kind={dm.kind}
-            addedByName={dm.profiles?.display_name ?? null}
-            addedById={dm.added_by}
-          />
+          <div key={dm.id}>
+            <DecisionMakerRow
+              id={dm.id}
+              name={dm.name}
+              kind={dm.kind}
+              addedByName={dm.profiles?.display_name ?? null}
+              addedById={dm.added_by}
+            />
+            {dm.kind === "elected_official" && (
+              <Link
+                href={`/decision-makers/${dm.id}`}
+                className="ml-1 mt-0.5 inline-block text-xs text-duty-purple underline"
+              >
+                View / edit public profile →
+              </Link>
+            )}
+          </div>
         ))}
         {(!decisionMakers || decisionMakers.length === 0) && (
           <p className="text-sm text-neutral-500">Nothing in the registry yet.</p>
