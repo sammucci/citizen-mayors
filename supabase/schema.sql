@@ -109,6 +109,71 @@ create table public.decision_makers (
 create unique index decision_makers_name_kind_idx
   on public.decision_makers (lower(name), kind);
 
+-- Crowdsourced public profile for an elected official — v1 is scoped to
+-- kind = 'elected_official' only (a department or board doesn't have a
+-- term, an election, or committees, so this whole table just doesn't
+-- apply to those). One row per decision_maker, created on first edit
+-- (not seeded automatically), which is why every column here is
+-- nullable/has a safe default rather than being required at insert time.
+-- Deliberately NOT the same trust model as decision_makers/grants above
+-- (where only an admin can update an existing entry) — Samantha's ask
+-- was explicit: "these profiles are by the people," wiki-style, so any
+-- signed-in user can edit any field here. decision_maker_revisions right
+-- below is what keeps that accountable (every change is logged with who
+-- made it), and an admin can still overwrite or the row can be deleted
+-- if something's vandalized.
+create table public.decision_maker_profiles (
+  decision_maker_id uuid primary key references public.decision_makers(id) on delete cascade,
+  office_title text,
+  elected_date date,
+  term_end_date date,
+  next_election_date date,
+  -- Who they represent, kept deliberately simple (Samantha's call): one
+  -- of a specific council district, the whole city, or not applicable —
+  -- not a list of districts. A citywide official's profile just shows
+  -- "represents 100% of Citizen Mayors" rather than needing anything
+  -- more elaborate.
+  represents_scope text not null default 'n/a'
+    check (represents_scope in ('district', 'citywide', 'n/a')),
+  represents_district int,
+  committees text[] not null default '{}',
+  how_they_show_up text not null default '',
+  what_they_care_about text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+-- Structured, one-row-per-bill record of what an elected official has
+-- introduced or taken a position on — kept separate from the freeform
+-- wiki text above specifically so it's filterable/scannable (Samantha's
+-- explicit pick over a paragraph of prose) rather than buried in a
+-- paragraph you'd have to read start to finish.
+create table public.decision_maker_legislation (
+  id uuid primary key default gen_random_uuid(),
+  decision_maker_id uuid not null references public.decision_makers(id) on delete cascade,
+  title text not null,
+  stance text not null check (stance in ('introduced', 'for', 'against')),
+  note text,
+  occurred_on date,
+  added_by uuid references public.profiles(id),
+  created_at timestamptz not null default now()
+);
+
+-- The audit trail that makes wide-open wiki editing safe enough to ship:
+-- every edit to a profile field (or a new legislation entry) writes one
+-- row here, so the profile's "History" section can show what changed,
+-- when, and by whom — the same accountability Wikipedia's page-history
+-- tab provides, just field-level rather than a true text diff (a lot
+-- simpler to build, and enough to spot and undo vandalism).
+create table public.decision_maker_revisions (
+  id uuid primary key default gen_random_uuid(),
+  decision_maker_id uuid not null references public.decision_makers(id) on delete cascade,
+  field_name text not null,
+  old_value text,
+  new_value text,
+  edited_by uuid references public.profiles(id),
+  edited_at timestamptz not null default now()
+);
+
 -- Shared, crowdsourced registry of grants/funding programs — same shape
 -- and same trust model as decision_makers above (anyone signed in can
 -- add a new one, only an admin can rename or remove it from the shared
@@ -711,6 +776,44 @@ create policy "admin deletes decision makers" on public.decision_makers for dele
 -- in use in any proposal's decision chain.
 create policy "admin updates decision makers" on public.decision_makers for update
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+-- decision_maker_profiles / decision_maker_legislation / revisions: public
+-- read (these are public profiles, no login needed to view), any signed-in
+-- user can create or edit (the actual wiki-editing model Samantha asked
+-- for), admin keeps a delete override for cleanup. This is intentionally
+-- MORE open than decision_makers' own update policy above — see the
+-- comment on decision_maker_profiles in the table definition for why.
+alter table public.decision_maker_profiles enable row level security;
+create policy "public read decision maker profiles" on public.decision_maker_profiles
+  for select using (true);
+create policy "authenticated insert decision maker profiles" on public.decision_maker_profiles
+  for insert to authenticated with check (true);
+create policy "authenticated update decision maker profiles" on public.decision_maker_profiles
+  for update to authenticated using (true);
+create policy "admin deletes decision maker profiles" on public.decision_maker_profiles
+  for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+alter table public.decision_maker_legislation enable row level security;
+create policy "public read decision maker legislation" on public.decision_maker_legislation
+  for select using (true);
+create policy "authenticated add decision maker legislation" on public.decision_maker_legislation
+  for insert to authenticated with check (auth.uid() = added_by);
+-- Anyone can fix an entry (wiki model) — the revision log is what makes
+-- this safe, not a narrower update policy.
+create policy "authenticated update decision maker legislation" on public.decision_maker_legislation
+  for update to authenticated using (true);
+create policy "admin deletes decision maker legislation" on public.decision_maker_legislation
+  for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+alter table public.decision_maker_revisions enable row level security;
+create policy "public read decision maker revisions" on public.decision_maker_revisions
+  for select using (true);
+create policy "authenticated add decision maker revisions" on public.decision_maker_revisions
+  for insert to authenticated with check (auth.uid() = edited_by);
+-- No update policy at all, on purpose — a history log that could itself
+-- be silently edited wouldn't be trustworthy as a history log.
+create policy "admin deletes decision maker revisions" on public.decision_maker_revisions
+  for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
 -- Same trust model as decision_makers: anyone signed in can add a grant
 -- to the shared registry, but only an admin can rename or remove the

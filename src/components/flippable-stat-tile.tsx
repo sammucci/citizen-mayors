@@ -2,28 +2,7 @@
 
 import type { ReactNode } from "react";
 import { StatIcon, type StatIconName } from "@/components/stat-icons";
-
-// Most of the real site palette (supabase/schema.sql's category colors)
-// is dark/saturated enough to read fine as text on its own pale tint.
-// The one exception is the governance-yellow (#FBE968) — plenty bold as
-// a solid bar, unreadable as the color of a bold number or white text on
-// top of it. Rather than special-case yellow by name (fragile if the
-// palette ever changes), this measures perceived brightness and only
-// adjusts colors that are actually too light, so every other color's
-// bar/tint/number stays exactly the real site color, unchanged.
-export function brightnessOf(hex: string): number {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return (r * 299 + g * 587 + b * 114) / 1000;
-}
-function darken(hex: string, amount: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  const scale = (c: number) => Math.round(c * amount).toString(16).padStart(2, "0");
-  return `#${scale(r)}${scale(g)}${scale(b)}`;
-}
+import { brightnessOf, darken } from "@/lib/color-brightness";
 
 // Samantha's ask: clicking a community-dashboard stat card should "turn
 // around" and explain what's being measured, instead of just sitting

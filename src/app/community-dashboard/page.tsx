@@ -5,7 +5,7 @@ import { CENSUS_DISTRICT_DEMOGRAPHICS, citywideCensusStats } from "@/lib/census-
 import { InfoHeading } from "@/components/info-heading";
 import { StatIcon, type StatIconName } from "@/components/stat-icons";
 import { StatTileGrid, type StatTileData } from "@/components/stat-tile-grid";
-import { brightnessOf } from "@/components/flippable-stat-tile";
+import { brightnessOf } from "@/lib/color-brightness";
 
 export const dynamic = "force-dynamic";
 
