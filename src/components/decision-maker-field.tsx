@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SelectField } from "@/components/select-field";
 
-type DecisionMaker = { id: string; name: string; kind: string };
+type DecisionMaker = { id: string; name: string; kind: string; currentOfficeholder: string | null };
 
 // Council-roster entries are stored as "Name (Role, District X)" — split
 // that into a bold primary name and a smaller subtitle, so long entries
@@ -47,11 +47,22 @@ export function DecisionMakerField({
   }, []);
 
   const trimmed = query.trim().toLowerCase();
+  // Matches on the seat/office title (dm.name — e.g. "Councilmember,
+  // District 7") OR the actual person currently holding it
+  // (currentOfficeholder, from decision_maker_profiles). The seat-based
+  // name is deliberately what's stored/submitted (it's the stable thing
+  // that outlives any one term), but someone typing the officeholder's
+  // own name — e.g. "Rue" — should still find that seat, since that's
+  // how most people actually think of "who do I need to convince."
   const matches =
     trimmed.length === 0
       ? decisionMakers.slice(0, 8)
       : decisionMakers
-          .filter((dm) => dm.name.toLowerCase().includes(trimmed))
+          .filter(
+            (dm) =>
+              dm.name.toLowerCase().includes(trimmed) ||
+              (dm.currentOfficeholder ?? "").toLowerCase().includes(trimmed)
+          )
           .slice(0, 8);
 
   const exactMatch = decisionMakers.find(
@@ -116,6 +127,15 @@ export function DecisionMakerField({
                     {subtitle && (
                       <span className="block truncate text-xs text-neutral-500">
                         {subtitle}
+                      </span>
+                    )}
+                    {/* Shown so a match found via the officeholder's name
+                        (e.g. typing "Rue") doesn't look like it came out
+                        of nowhere — makes clear this seat is who you'd
+                        actually be adding, currently held by this person. */}
+                    {dm.currentOfficeholder && (
+                      <span className="block truncate text-xs text-neutral-400">
+                        Currently: {dm.currentOfficeholder}
                       </span>
                     )}
                   </button>

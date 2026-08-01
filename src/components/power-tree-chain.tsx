@@ -58,7 +58,7 @@ export function PowerTreeChain({
   proposalId: string;
   categoryColor: string;
   nodesAscending: Node[];
-  decisionMakers: { id: string; name: string; kind: string }[];
+  decisionMakers: { id: string; name: string; kind: string; currentOfficeholder: string | null }[];
   isOwner: boolean;
   canContribute: boolean;
   peopleActionNote?: string | null;

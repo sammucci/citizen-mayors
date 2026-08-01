@@ -148,7 +148,7 @@ export default async function HomePage({
           one short card (or none) next to it. Below lg, there's no row
           to share, so the map gets its own line at a fixed shorter
           height instead. */}
-      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3 lg:items-start">
         <div className="lg:col-span-2">
           {/* Supabase's loose typing for the embedded categories join infers
               an array shape even though it's actually a single object at

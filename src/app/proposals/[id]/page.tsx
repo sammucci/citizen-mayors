@@ -161,10 +161,23 @@ export default async function ProposalPage({
     ? reactions?.find((r) => r.user_id === user.id)?.value ?? null
     : null;
 
-  const { data: allDecisionMakers } = await supabase
+  // current_officeholder joined in so the decision-maker search field can
+  // match on the actual person's name too, not just the seat/office title
+  // stored in decision_makers.name — that title-only name is exactly
+  // right for keeping the entity stable across terms (see the council
+  // seat uniformity migration), but it means typing an officeholder's own
+  // name (e.g. "Rue" for whoever currently holds a given council seat)
+  // used to come up empty. See decision-maker-field.tsx for the matching.
+  const { data: allDecisionMakersRaw } = await supabase
     .from("decision_makers")
-    .select("id, name, kind")
+    .select("id, name, kind, decision_maker_profiles ( current_officeholder )")
     .order("name");
+  const allDecisionMakers = (allDecisionMakersRaw ?? []).map((dm: any) => ({
+    id: dm.id,
+    name: dm.name,
+    kind: dm.kind,
+    currentOfficeholder: dm.decision_maker_profiles?.current_officeholder ?? null,
+  }));
 
   // Decision-maker-only chain now — funding used to live here as a
   // second node_type (grants join) but has moved to the Phases section

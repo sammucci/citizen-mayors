@@ -11,15 +11,16 @@ import { PhillyMap } from "./philly-map";
 // the exact same map full-size in a modal — so browsing pins in detail
 // is still one click away, not gone.
 //
-// The preview stretches to fill its grid row (fill, via lg:h-full) so it
-// matches however tall the two featured cards next to it end up being,
-// instead of sitting at a fixed short height regardless of that. A
-// min-height floor on top of that stretch keeps it from collapsing down
-// to a sliver when there's only one short card (or none) next to it to
-// stretch against — "at least 2 cards tall" no matter how many actual
-// proposal cards there are. Below lg there's no shared row (map and
-// cards each get their own line), so it falls back to the same
-// min-height floor without the stretch.
+// Fixed height (~2 stacked featured-card heights) rather than stretching
+// to match the cards next to it — stretching used to pull the CARDS up
+// to the map's height instead (grid row stretch cuts both ways), which
+// left an ugly empty gap in a short card. The parent grid now opts out
+// of stretch (items-start, see the landing page), so each side just
+// takes its own height instead of matching the other. A real height
+// (not just min-height) here, rather than relying on stretch to make it
+// definite, is what lets PhillyMap's "fill" (h-full) sizing resolve
+// cleanly instead of collapsing — a percentage height only resolves
+// against a parent with a definite height.
 export function ExpandableMap({
   proposals,
   totalCount,
@@ -48,7 +49,7 @@ export function ExpandableMap({
           flush against the card edge. Border is brand purple now instead
           of neutral/white — a plain white border still blended into the
           cream background. */}
-      <div className="min-h-[420px] rounded-lg border-2 border-duty-purple bg-white p-2 shadow-sm lg:h-full lg:min-h-[520px]">
+      <div className="h-[420px] rounded-lg border-2 border-duty-purple bg-white p-2 shadow-sm lg:h-[520px]">
         <div className="relative h-full">
           <PhillyMap proposals={proposals} totalCount={totalCount} fill />
           <button

@@ -260,41 +260,68 @@ export function PhasesSection({
             </div>
 
             {isOwner && (
-              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-neutral-200 pt-2 text-xs">
+              <div className="mt-3 flex items-center gap-1.5 border-t border-neutral-200 pt-2">
+                {/* Icon buttons instead of a row of text links — same
+                    icon-plus-hover-tooltip pattern already used for
+                    approve (✓) and remove (✕) elsewhere in the app, so
+                    this isn't a new convention, just the same one applied
+                    here. The two "insert" buttons bake the direction
+                    into the icon itself (+◀ / ▶+) rather than two plain
+                    "+"s that would look identical sitting next to each
+                    other. */}
                 <button
                   type="button"
                   onClick={() => moveBy(-1)}
                   disabled={realIndex <= 0}
-                  className="text-neutral-500 underline hover:text-neutral-700 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-40"
+                  title="Move this phase earlier"
+                  aria-label="Move this phase earlier"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-sm text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  ← Move earlier
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInsertMode(insertMode === "before" ? null : "before")}
+                  title="Insert a new phase before this one"
+                  aria-label="Insert a new phase before this one"
+                  className={`flex h-7 w-9 items-center justify-center rounded-full border text-xs font-bold ${
+                    insertMode === "before"
+                      ? "border-neutral-500 bg-neutral-100 text-neutral-700"
+                      : "border-dashed border-neutral-300 text-neutral-500 hover:bg-neutral-100"
+                  }`}
+                >
+                  +◀
+                </button>
+                <div className="mx-1 h-5 w-px bg-neutral-200" aria-hidden="true" />
+                <button
+                  type="button"
+                  onClick={() => setInsertMode(insertMode === "after" ? null : "after")}
+                  title="Insert a new phase after this one"
+                  aria-label="Insert a new phase after this one"
+                  className={`flex h-7 w-9 items-center justify-center rounded-full border text-xs font-bold ${
+                    insertMode === "after"
+                      ? "border-neutral-500 bg-neutral-100 text-neutral-700"
+                      : "border-dashed border-neutral-300 text-neutral-500 hover:bg-neutral-100"
+                  }`}
+                >
+                  ▶+
                 </button>
                 <button
                   type="button"
                   onClick={() => moveBy(1)}
                   disabled={realIndex === -1 || realIndex >= phases.length - 1}
-                  className="text-neutral-500 underline hover:text-neutral-700 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-40"
+                  title="Move this phase later"
+                  aria-label="Move this phase later"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-sm text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  Move later →
+                  ▶
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setInsertMode(insertMode === "before" ? null : "before")}
-                  className="text-neutral-500 underline hover:text-neutral-700"
-                >
-                  + Insert before
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInsertMode(insertMode === "after" ? null : "after")}
-                  className="text-neutral-500 underline hover:text-neutral-700"
-                >
-                  + Insert after
-                </button>
+
                 <button
                   type="button"
                   onClick={() => setConfirmingRemove(true)}
-                  className="text-duty-red underline hover:opacity-80"
+                  title="Remove this phase"
+                  className="ml-2 text-xs text-duty-red underline hover:opacity-80"
                 >
                   Remove
                 </button>
