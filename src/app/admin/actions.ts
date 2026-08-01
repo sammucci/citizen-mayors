@@ -617,3 +617,195 @@ export async function setVolunteerCategoryGroup(formData: FormData): Promise<{ e
   revalidatePath("/admin/tags");
   return {};
 }
+
+// --- Grants registry admin (same shape as decision_makers above: anyone
+// signed in can add a new grant while attaching one to a proposal, only
+// an admin can edit or remove it from the shared list here). ---
+
+export async function addGrantAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireAdmin();
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "Give it a name first." };
+  const funder = (formData.get("funder") as string | null)?.trim() || null;
+  const url = (formData.get("url") as string | null)?.trim() || null;
+  const description = (formData.get("description") as string | null)?.trim() || null;
+
+  const { data: existing } = await supabase.from("grants").select("id").ilike("name", name).maybeSingle();
+  if (existing) return { error: "That's already in the registry." };
+
+  const { error } = await supabase
+    .from("grants")
+    .insert({ name, funder, url, description, added_by: user.id });
+  if (error) return { error: "Something went wrong adding that entry." };
+
+  revalidatePath("/admin/grants");
+  return {};
+}
+
+// Full edit (not just rename) — a grant's funder/url/description are
+// just as likely to need fixing as its name (a dead link, a program
+// that's been renamed by its funder), so this updates all four at once
+// from a single form rather than only exposing the name like the
+// decision-maker rename does.
+export async function updateGrantAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "Name can't be empty." };
+  const funder = (formData.get("funder") as string | null)?.trim() || null;
+  const url = (formData.get("url") as string | null)?.trim() || null;
+  const description = (formData.get("description") as string | null)?.trim() || null;
+
+  const { data: existing } = await supabase
+    .from("grants")
+    .select("id")
+    .ilike("name", name)
+    .neq("id", id)
+    .maybeSingle();
+  if (existing) return { error: "Another entry already has that name." };
+
+  const { error } = await supabase.from("grants").update({ name, funder, url, description }).eq("id", id);
+  if (error) return { error: "Something went wrong updating that entry." };
+
+  revalidatePath("/admin/grants");
+  return {};
+}
+
+export async function deleteGrantAdmin(
+  formData: FormData
+): Promise<{ error?: string; inUseCount?: number }> {
+  const { supabase } = await requireAdmin();
+
+  const grantId = String(formData.get("grant_id"));
+
+  const { count } = await supabase
+    .from("proposal_grants")
+    .select("id", { count: "exact", head: true })
+    .eq("grant_id", grantId);
+
+  if (count && count > 0) {
+    return {
+      error: `Can't delete — it's currently attached to ${count} proposal${count === 1 ? "" : "s"}.`,
+      inUseCount: count,
+    };
+  }
+
+  const { error } = await supabase.from("grants").delete().eq("id", grantId);
+  if (error) return { error: "Something went wrong deleting that entry." };
+
+  revalidatePath("/admin/grants");
+  return {};
+}
+
+// Same escape hatch as forceDeleteDecisionMaker — only reachable through
+// a second, explicit confirmation, for a grant entry that never should
+// have been added (spam, duplicate junk) and is stuck because it's
+// already attached somewhere.
+export async function forceDeleteGrantAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const grantId = String(formData.get("grant_id"));
+
+  const { error: attachError } = await supabase.from("proposal_grants").delete().eq("grant_id", grantId);
+  if (attachError) return { error: "Couldn't remove it from proposals it's attached to. Try again." };
+
+  const { error } = await supabase.from("grants").delete().eq("id", grantId);
+  if (error) return { error: "Something went wrong deleting that entry." };
+
+  revalidatePath("/admin/grants");
+  return {};
+}
+
+// --- Organizations registry admin (same shape again — anyone signed in
+// can add an organization to their own civic profile, which creates the
+// shared registry entry; only an admin edits/removes it here). ---
+
+export async function addOrganizationAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireAdmin();
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "Give it a name first." };
+
+  const { data: existing } = await supabase.from("organizations").select("id").ilike("name", name).maybeSingle();
+  if (existing) return { error: "That's already in the registry." };
+
+  const { error } = await supabase.from("organizations").insert({ name, added_by: user.id });
+  if (error) return { error: "Something went wrong adding that entry." };
+
+  revalidatePath("/admin/organizations");
+  return {};
+}
+
+export async function renameOrganizationAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "Name can't be empty." };
+
+  const { data: existing } = await supabase
+    .from("organizations")
+    .select("id")
+    .ilike("name", name)
+    .neq("id", id)
+    .maybeSingle();
+  if (existing) return { error: "Another entry already has that name." };
+
+  const { error } = await supabase.from("organizations").update({ name }).eq("id", id);
+  if (error) return { error: "Something went wrong renaming that entry." };
+
+  revalidatePath("/admin/organizations");
+  return {};
+}
+
+export async function deleteOrganizationAdmin(
+  formData: FormData
+): Promise<{ error?: string; inUseCount?: number }> {
+  const { supabase } = await requireAdmin();
+
+  const organizationId = String(formData.get("organization_id"));
+
+  const { count } = await supabase
+    .from("profile_organizations")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
+
+  if (count && count > 0) {
+    return {
+      error: `Can't delete — ${count} Citizen Mayor${count === 1 ? "" : "s"} currently ${
+        count === 1 ? "has" : "have"
+      } this attached to their profile.`,
+      inUseCount: count,
+    };
+  }
+
+  const { error } = await supabase.from("organizations").delete().eq("id", organizationId);
+  if (error) return { error: "Something went wrong deleting that entry." };
+
+  revalidatePath("/admin/organizations");
+  return {};
+}
+
+// Same escape hatch pattern once more — for an organization entry that
+// never should have existed (spam, an inappropriate name), reachable
+// only through a second explicit confirmation, since it detaches it from
+// every resident's civic profile it's currently part of.
+export async function forceDeleteOrganizationAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const organizationId = String(formData.get("organization_id"));
+
+  const { error: attachError } = await supabase
+    .from("profile_organizations")
+    .delete()
+    .eq("organization_id", organizationId);
+  if (attachError) return { error: "Couldn't detach it from residents' profiles. Try again." };
+
+  const { error } = await supabase.from("organizations").delete().eq("id", organizationId);
+  if (error) return { error: "Something went wrong deleting that entry." };
+
+  revalidatePath("/admin/organizations");
+  return {};
+}

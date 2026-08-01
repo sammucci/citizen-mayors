@@ -946,6 +946,10 @@ create policy "members attach their own organizations" on public.profile_organiz
   for insert to authenticated with check (auth.uid() = profile_id);
 create policy "members remove their own organizations" on public.profile_organizations
   for delete to authenticated using (auth.uid() = profile_id);
+-- Admin override for the organizations admin screen's force-delete —
+-- same reasoning as the power-tree-nodes override above.
+create policy "admin removes any profile organization" on public.profile_organizations
+  for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
 -- Same trust model as decision_makers: anyone signed in can add a grant
 -- to the shared registry, but only an admin can rename or remove the
@@ -975,6 +979,14 @@ create policy "authenticated contribute to power tree" on public.proposal_power_
   with check (auth.role() = 'authenticated');
 create policy "owner edits own power tree" on public.proposal_power_tree_nodes for delete
   using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
+-- Admin override, added alongside the grants/organizations admin
+-- screens: without this, an admin's "force delete anyway" on an abusive
+-- decision-maker entry (see admin/actions.ts forceDeleteDecisionMaker)
+-- silently failed via RLS for any proposal chain the admin didn't
+-- personally own — the app-level admin check isn't what actually
+-- allows the write, this policy is.
+create policy "admin removes any power tree node" on public.proposal_power_tree_nodes for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 -- Every insert (including a non-owner's suggestion) is immediately
 -- followed by a full reindex — every node's sort_order gets rewritten
 -- to match its new array position, so the new entry lands exactly

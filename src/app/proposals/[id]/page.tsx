@@ -801,6 +801,12 @@ export default async function ProposalPage({
             >
               The idea starts with you. Now, what's it take to get it done?
             </InfoHeading>
+            {/* A warmer, more inviting nudge toward actually collaborating —
+                sits right under the explainer, before the more formal
+                "nothing lands without your OK" reassurance. */}
+            <p className="mt-1 text-sm font-medium" style={{ color: categoryColor }}>
+              Got a piece of the puzzle? Add it in.
+            </p>
             <p className="mt-1 text-xs italic text-neutral-500">
               Note: This is a collaborative chain. Your fellow citizens are
               to help you figure it out – and nothing lands in the chain

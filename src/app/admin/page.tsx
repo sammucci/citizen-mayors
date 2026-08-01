@@ -70,6 +70,22 @@ export default async function AdminHomePage() {
             The 7 founding budget categories every proposal picks from.
           </p>
         </li>
+        <li className="rounded-lg border border-neutral-200 bg-white p-4">
+          <Link href="/admin/grants" className="text-sm font-semibold underline">
+            Grants
+          </Link>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Clean up typos, dead links, and duplicates in the shared grants registry.
+          </p>
+        </li>
+        <li className="rounded-lg border border-neutral-200 bg-white p-4">
+          <Link href="/admin/organizations" className="text-sm font-semibold underline">
+            Organizations
+          </Link>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Clean up typos and duplicates in the shared civic-organization registry.
+          </p>
+        </li>
       </ul>
     </div>
   );
