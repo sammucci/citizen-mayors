@@ -205,7 +205,10 @@ export function PowerTreeNodeCard({
                     <span
                       {...dragHandleProps}
                       className="shrink-0 cursor-grab select-none text-sm"
-                      style={isFinal && !isPending ? { color: finalTextColor, opacity: 0.7 } : undefined}
+                      style={{
+                        ...dragHandleProps?.style,
+                        ...(isFinal && !isPending ? { color: finalTextColor, opacity: 0.7 } : {}),
+                      }}
                       title="Drag to reorder"
                       aria-hidden="true"
                     >

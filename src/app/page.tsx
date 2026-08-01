@@ -131,16 +131,15 @@ export default async function HomePage({
         </p>
       </div>
 
-      {/* Map + first proposals side by side on desktop, so you can see an
-          actual proposal without scrolling past a full-width map first.
-          The map used to sit alone here at a fixed 500px; it's now a
-          compact preview (see expandable-map.tsx) sharing the row with
-          the first couple of cards, with a button to pop the same map
-          open full-size when you actually want to browse it. Below lg,
-          there's no row to share, so the map still gets its own line —
-          just shorter than before. */}
-      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-5">
-        <div className="lg:col-span-3">
+      {/* Map + first proposals share the same invisible 3-column grid as
+          the proposal list below (lg:grid-cols-3), so column edges line
+          up across the whole page instead of the map row using its own
+          5-column split — the map takes 2 of the 3 columns, the featured
+          cards stack in the 3rd, same column width as every card below.
+          Below lg, there's no row to share, so the map still gets its
+          own line — just shorter than before. */}
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="lg:col-span-2">
           {/* Supabase's loose typing for the embedded categories join infers
               an array shape even though it's actually a single object at
               runtime for this to-one relationship — same mismatch handled
@@ -150,7 +149,7 @@ export default async function HomePage({
               text underneath — see philly-map.tsx. */}
           <ExpandableMap proposals={onMap as any} totalCount={filteredProposals.length} />
         </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:col-span-2 lg:grid-cols-1">
+        <div className="grid grid-cols-1 gap-5">
           {featuredProposals.map((p: any) => renderProposalCard(p))}
         </div>
       </div>

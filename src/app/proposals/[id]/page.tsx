@@ -789,10 +789,11 @@ export default async function ProposalPage({
                 needed to cover both: who this moves through, AND what it
                 actually takes to make it real. The explainer now lives
                 behind an (i) icon (InfoHeading) instead of as permanent
-                subtext, with the "this is collaborative, nothing lands
-                without your OK" note kept as its own separate line right
-                underneath — that reassurance is important enough to stay
-                visible, not tucked behind a hover. */}
+                subtext. The separate "this is collaborative, nothing
+                lands without your OK" note that used to sit underneath
+                was dropped — "Got a piece of the puzzle? Add it in."
+                already carries that same reassurance without a second
+                line saying it again. */}
             <h2 className="text-base font-semibold">Getting it done</h2>
             <InfoHeading
               as="p"
@@ -801,16 +802,8 @@ export default async function ProposalPage({
             >
               The idea starts with you. Now, what's it take to get it done?
             </InfoHeading>
-            {/* A warmer, more inviting nudge toward actually collaborating —
-                sits right under the explainer, before the more formal
-                "nothing lands without your OK" reassurance. */}
             <p className="mt-1 text-sm font-medium" style={{ color: categoryColor }}>
               Got a piece of the puzzle? Add it in.
-            </p>
-            <p className="mt-1 text-xs italic text-neutral-500">
-              Note: This is a collaborative chain. Your fellow citizens are
-              to help you figure it out – and nothing lands in the chain
-              until it has your approval.
             </p>
 
             <PowerTreeChain

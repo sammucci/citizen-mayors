@@ -332,49 +332,27 @@ export function PowerTreeChain({
             ref={(el) => {
               cardRefs.current[i] = el;
             }}
-            className={`flex items-start gap-1.5 transition-opacity ${
-              touchDragIndex === i ? "opacity-50" : ""
-            }`}
+            className={`transition-opacity ${touchDragIndex === i ? "opacity-50" : ""}`}
           >
-            {/* Grip handle — the actual drag surface, via Pointer Events
-                rather than HTML5 drag-and-drop, so this works the same
-                way for a mouse click-and-drag and a finger touch-and-drag
-                (see handlePointerDownOnHandle above). Living the card
-                itself since HTML5 drag on the whole card doesn't fire on
-                touch at all — this is the fix for that, not a variant of
-                it. */}
-            {isOwner && (
-              <button
-                type="button"
-                aria-label="Drag to reorder"
-                title="Drag to reorder"
-                onPointerDown={(e) => handlePointerDownOnHandle(e, i, node.id)}
-                onPointerMove={handlePointerMoveOnHandle}
-                onPointerUp={handlePointerUpOnHandle}
-                onPointerCancel={handlePointerUpOnHandle}
-                style={{ touchAction: "none" }}
-                className="mt-3 flex shrink-0 select-none items-center justify-center rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:cursor-grabbing"
-              >
-                <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor" aria-hidden="true">
-                  <circle cx="4" cy="3" r="1.6" />
-                  <circle cx="10" cy="3" r="1.6" />
-                  <circle cx="4" cy="10" r="1.6" />
-                  <circle cx="10" cy="10" r="1.6" />
-                  <circle cx="4" cy="17" r="1.6" />
-                  <circle cx="10" cy="17" r="1.6" />
-                </svg>
-              </button>
-            )}
-            <div className="min-w-0 flex-1">
-              <PowerTreeNodeCard
-                proposalId={proposalId}
-                node={node}
-                isFinal={i === firstApprovedDisplayIndex}
-                isOwner={isOwner}
-                canContribute={canContribute}
-                categoryColor={categoryColor}
-              />
-            </div>
+            {/* The card already has its own grip-dot handle built in
+                (the ⠿ next to the name) — this just wires that existing
+                handle up to the real Pointer Events drag gesture instead
+                of adding a second handle alongside it. */}
+            <PowerTreeNodeCard
+              proposalId={proposalId}
+              node={node}
+              isFinal={i === firstApprovedDisplayIndex}
+              isOwner={isOwner}
+              canContribute={canContribute}
+              categoryColor={categoryColor}
+              dragHandleProps={{
+                onPointerDown: (e) => handlePointerDownOnHandle(e, i, node.id),
+                onPointerMove: handlePointerMoveOnHandle,
+                onPointerUp: handlePointerUpOnHandle,
+                onPointerCancel: handlePointerUpOnHandle,
+                style: { touchAction: "none" },
+              }}
+            />
           </div>
           <GapInserter displayGapIndex={i + 1} isDropTarget={touchDragIndex !== null && touchOverGap === i + 1} />
         </Fragment>
