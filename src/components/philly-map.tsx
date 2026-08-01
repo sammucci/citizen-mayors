@@ -50,6 +50,7 @@ export function PhillyMap({
   proposals,
   totalCount,
   height = 500,
+  fill = false,
 }: {
   proposals: Proposal[];
   // Total proposals in the current filtered set, including ones with no
@@ -60,7 +61,15 @@ export function PhillyMap({
   // Pixel height. Lets the same map render as a compact landing-page
   // preview (see expandable-map.tsx) or full-size inside that preview's
   // "expand" modal, without two copies of this component to keep in sync.
+  // Ignored when fill is true.
   height?: number;
+  // When true, the map fills 100% of its parent's height instead of a
+  // fixed pixel height — used by the landing-page preview so it stretches
+  // to match the featured proposal cards next to it (grid row height),
+  // rather than sitting at a fixed short height regardless of how tall
+  // that column ends up being. The modal ("expand map") still uses a
+  // fixed height since it isn't sharing a row with anything.
+  fill?: boolean;
 }) {
   const [districts, setDistricts] = useState<any>(null);
   const [centroids, setCentroids] = useState<Record<string, [number, number]>>({});
@@ -79,11 +88,14 @@ export function PhillyMap({
       });
   }, []);
 
+  const sizeClass = fill ? "h-full" : "";
+  const sizeStyle = fill ? undefined : { height };
+
   if (!districts) {
     return (
       <div
-        className="flex items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-sm text-neutral-500"
-        style={{ height }}
+        className={`flex items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-sm text-neutral-500 ${sizeClass}`}
+        style={sizeStyle}
       >
         Loading map…
       </div>
@@ -110,13 +122,13 @@ export function PhillyMap({
   const hiddenCount = totalCount !== undefined ? totalCount - proposals.length : null;
 
   return (
-    <div className="relative">
+    <div className={`relative ${sizeClass}`}>
       <MapContainer
         center={[40.0, -75.14]}
         zoom={11}
         scrollWheelZoom={false}
-        className="w-full rounded-lg"
-        style={{ height }}
+        className={`w-full rounded-lg border border-neutral-200 ${sizeClass}`}
+        style={sizeStyle}
       >
         {/* Light-grey basemap (CartoDB Positron) instead of standard OSM
             tiles — the default OSM style is busy with labels, roads, and

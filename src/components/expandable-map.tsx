@@ -6,13 +6,18 @@ import { PhillyMap } from "./philly-map";
 // The map used to always render at a fixed 500px, full width, above the
 // entire proposal list — meant scrolling past it before seeing even the
 // first project. This wraps the same PhillyMap in a shorter "preview"
-// size that sits next to the first couple of proposal cards instead of
-// above all of them (see the landing page layout), with a button that
-// opens the exact same map full-size in a modal — so browsing pins in
-// detail is still one click away, not gone. Desktop-focused per request;
-// on narrow screens there's no side-by-side room to gain back anyway, so
-// the preview just renders a bit shorter than before rather than
-// changing layout.
+// that sits next to the first couple of proposal cards instead of above
+// all of them (see the landing page layout), with a button that opens
+// the exact same map full-size in a modal — so browsing pins in detail
+// is still one click away, not gone.
+//
+// The preview stretches to fill its grid row (fill, via lg:h-full) so it
+// matches however tall the two featured cards next to it end up being,
+// instead of sitting at a fixed short height regardless of that —
+// Samantha's report of "the map is still super short" was this exact
+// mismatch (map fixed at 260px while the card column next to it was
+// taller). Below lg there's no shared row (map and cards each get their
+// own line), so it falls back to a fixed height there instead.
 export function ExpandableMap({
   proposals,
   totalCount,
@@ -33,8 +38,8 @@ export function ExpandableMap({
 
   return (
     <>
-      <div className="relative">
-        <PhillyMap proposals={proposals} totalCount={totalCount} height={260} />
+      <div className="relative h-[260px] lg:h-full">
+        <PhillyMap proposals={proposals} totalCount={totalCount} fill />
         <button
           type="button"
           onClick={() => setExpanded(true)}

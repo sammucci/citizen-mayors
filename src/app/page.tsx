@@ -136,8 +136,13 @@ export default async function HomePage({
           up across the whole page instead of the map row using its own
           5-column split — the map takes 2 of the 3 columns, the featured
           cards stack in the 3rd, same column width as every card below.
-          Below lg, there's no row to share, so the map still gets its
-          own line — just shorter than before. */}
+          Grid rows stretch their items to equal height by default, and
+          the map fills that stretched height (see expandable-map.tsx'
+          "fill" mode) instead of sitting at its own fixed height — so it
+          matches however tall the two featured cards end up being,
+          rather than looking short next to a taller card stack. Below
+          lg, there's no row to share, so the map still gets its own
+          line at a fixed shorter height instead. */}
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           {/* Supabase's loose typing for the embedded categories join infers
