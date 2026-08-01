@@ -6,7 +6,7 @@ import { NeighborhoodField } from "@/components/neighborhood-field";
 import { readableTextColor } from "@/lib/readable-text-color";
 import { SelectField } from "@/components/select-field";
 
-type Category = { id: number; label: string; requires_budget: boolean; color: string };
+type Category = { id: number; label: string; description: string | null; requires_budget: boolean; color: string };
 type Tag = { id: number; label: string };
 
 const DISTRICTS = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -83,20 +83,54 @@ export function NewProposalForm({
         </SelectField>
       </Field>
 
+      {/* Cards instead of a plain-text dropdown — Samantha's call:
+          categories genuinely overlap in real proposals (a stop sign
+          could read as Public Safety or as Infrastructure and
+          Sanitation, depending on who's writing it), and a bare label in
+          a <select> gives no way to judge which is the closer fit. The
+          description on each card is the thing that actually helps you
+          decide. Selection is tracked the same way it always was
+          (categoryId state, already used for the submit button's live
+          color) — just a hidden input carries it into the form now
+          instead of a <select>'s own value. */}
       <Field label="Category">
-        <SelectField
-          name="category_id"
-          required
-          value={categoryId ?? ""}
-          onChange={(e) => setCategoryId(Number(e.target.value))}
-        >
-          {categories?.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}
-              {c.requires_budget ? "" : " (no direct budget line)"}
-            </option>
-          ))}
-        </SelectField>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {categories?.map((c) => {
+            const selected = c.id === categoryId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCategoryId(c.id)}
+                aria-pressed={selected}
+                className="rounded-lg border p-3 text-left transition hover:bg-neutral-50"
+                style={{
+                  borderColor: selected ? c.color : "#e5e5e5",
+                  backgroundColor: selected ? `${c.color}14` : "#ffffff",
+                  boxShadow: selected ? `0 0 0 2px ${c.color}66` : undefined,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.color }} />
+                  <span className="text-sm font-semibold text-neutral-800">{c.label}</span>
+                </div>
+                {c.description && (
+                  <p className="mt-1 text-xs leading-snug text-neutral-600">{c.description}</p>
+                )}
+                {!c.requires_budget && (
+                  <p className="mt-1 text-[11px] italic text-neutral-400">No direct budget line</p>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {/* Not `required` on purpose — a hidden input can't be focused
+            for native validation (some browsers throw "not focusable"
+            and silently block submit instead of showing a message).
+            categoryId already defaults to the first category on mount,
+            so it's only ever empty if there are zero categories at all,
+            in which case there's nothing to require anyway. */}
+        <input type="hidden" name="category_id" value={categoryId ?? ""} />
       </Field>
 
       <Field label="Tags (select any that apply)">

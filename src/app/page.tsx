@@ -88,14 +88,18 @@ export default async function HomePage({
     : proposals ?? [];
 
   // A proposal plots on the map if it has either a council district
-  // (centroid fallback) or real geocoded coordinates (an address that
-  // was successfully matched by the Census geocoder — see
-  // geocode-address.ts). Respects whatever filters are active, so the
-  // map and the grid below always show the same set.
+  // (centroid fallback), real geocoded coordinates (an address that was
+  // successfully matched by the Census geocoder — see geocode-address.ts),
+  // or a neighborhood that matched the curated centroid list (see
+  // geocode-neighborhood.ts — same "representative point, not an exact
+  // location" idea as a district centroid). Respects whatever filters
+  // are active, so the map and the grid below always show the same set.
   const onMap = filteredProposals.filter(
     (p: any) =>
       (p.geography_scope === "council_district" && p.council_district) ||
-      (p.geography_scope === "address" && p.geocoded_lat != null && p.geocoded_lng != null)
+      ((p.geography_scope === "address" || p.geography_scope === "neighborhood") &&
+        p.geocoded_lat != null &&
+        p.geocoded_lng != null)
   );
 
   // The newest 2 proposals sit up top next to the map so there's actually

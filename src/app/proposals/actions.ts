@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { geocodeAddress } from "@/lib/geocode-address";
+import { canonicalizeNeighborhoodName, geocodeNeighborhood } from "@/lib/geocode-neighborhood";
 
 // Used at the top of every mutating action (vote, comment, add tags,
 // etc.). Signed-out visitors can browse everything, but any action that
@@ -90,7 +91,16 @@ export async function createProposal(formData: FormData) {
   const summary = String(formData.get("summary") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   const geographyScope = String(formData.get("geography_scope") ?? "citywide");
-  const geographyLabel = String(formData.get("geography_label") ?? "").trim();
+  // Canonicalized against the curated neighborhood list up front (see
+  // geocode-neighborhood.ts) — "point breeze" and "Point Breeze" need to
+  // end up as the exact same stored string, or every count/filter that
+  // groups by geography_label silently splits into two. A no-op for
+  // every other scope, and for a neighborhood name that isn't in the
+  // list at all (still stored as typed, just not normalized or geocoded).
+  const geographyLabel =
+    geographyScope === "neighborhood"
+      ? canonicalizeNeighborhoodName(String(formData.get("geography_label") ?? ""))
+      : String(formData.get("geography_label") ?? "").trim();
   const tagIds = formData.getAll("tag_ids").map((v) => Number(v));
   // Two submit buttons on the form share the "published" field name with
   // different values — only the one actually clicked ends up in
@@ -125,7 +135,11 @@ export async function createProposal(formData: FormData) {
   // data that existed). Failing quietly (geocodeAddress never throws) so
   // a geocoding hiccup never blocks posting a proposal.
   const geocoded =
-    geographyScope === "address" && geographyLabel ? await geocodeAddress(geographyLabel) : null;
+    geographyScope === "address" && geographyLabel
+      ? await geocodeAddress(geographyLabel)
+      : geographyScope === "neighborhood" && geographyLabel
+      ? geocodeNeighborhood(geographyLabel)
+      : null;
 
   const { data: proposal, error } = await supabase
     .from("proposals")
@@ -356,7 +370,10 @@ export async function updateProposalDetails(formData: FormData) {
   const type = String(formData.get("type") ?? "policy");
   const categoryId = Number(formData.get("category_id"));
   const geographyScope = String(formData.get("geography_scope") ?? "citywide");
-  const geographyLabel = String(formData.get("geography_label") ?? "").trim();
+  const geographyLabel =
+    geographyScope === "neighborhood"
+      ? canonicalizeNeighborhoodName(String(formData.get("geography_label") ?? ""))
+      : String(formData.get("geography_label") ?? "").trim();
 
   const { data: proposal } = await supabase
     .from("proposals")
@@ -379,7 +396,9 @@ export async function updateProposalDetails(formData: FormData) {
   // scope just switched TO address, or a previous attempt never found a
   // match) — re-saving a proposal with the same address every time
   // someone edits an unrelated field shouldn't re-fire an external API
-  // call for no reason.
+  // call for no reason. Neighborhood centroids are a plain local lookup
+  // (no external call), so there's no cost to just recomputing those
+  // every time — no need for the same unchanged-shortcut.
   let geocoded: { lat: number; lng: number } | null = null;
   if (geographyScope === "address" && geographyLabel) {
     const addressUnchanged =
@@ -388,6 +407,8 @@ export async function updateProposalDetails(formData: FormData) {
       addressUnchanged && proposal?.geocoded_lat != null && proposal?.geocoded_lng != null
         ? { lat: proposal.geocoded_lat, lng: proposal.geocoded_lng }
         : await geocodeAddress(geographyLabel);
+  } else if (geographyScope === "neighborhood" && geographyLabel) {
+    geocoded = geocodeNeighborhood(geographyLabel);
   }
 
   const { error } = await supabase
@@ -416,25 +437,57 @@ export async function updateProposalDetails(formData: FormData) {
 // the whole decision-power-tree, reactions, flags, tag suggestions) is
 // declared "on delete cascade" back to proposals in the schema, so this
 // one delete cleans up all of it — no separate cleanup queries needed.
+//
+// Also usable by an admin on ANY proposal, not just their own — admins
+// pile up test proposals while trying out functionality, and one-at-a-
+// time deletion from each proposal's own page was the only path before
+// this (see the "delete from the list/card" button on the profile page's
+// proposal grid, and "admin deletes any proposal" in schema.sql, which
+// backs this at the RLS layer too).
 export async function deleteProposal(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
 
-  const { data: proposal } = await supabase
-    .from("proposals")
-    .select("owner_id")
-    .eq("id", proposalId)
-    .single();
-  if (proposal?.owner_id !== user.id) {
-    throw new Error("Only the proposal owner can delete it.");
+  const [{ data: proposal }, { data: profile }] = await Promise.all([
+    supabase.from("proposals").select("owner_id").eq("id", proposalId).single(),
+    supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle(),
+  ]);
+  if (proposal?.owner_id !== user.id && !profile?.is_admin) {
+    throw new Error("Only the proposal owner or an admin can delete it.");
   }
 
   const { error } = await supabase.from("proposals").delete().eq("id", proposalId);
   if (error) throw new Error(error.message);
 
   revalidatePath("/");
+  revalidatePath("/profile");
   redirect("/");
+}
+
+// Same delete, but for use from a list/card (profile page's proposal
+// grid) instead of the proposal's own page — that context shouldn't
+// redirect anywhere since you're not ON the proposal you just deleted,
+// you're on a list of OTHER proposals that should just re-render minus
+// this one.
+export async function deleteProposalFromList(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+
+  const [{ data: proposal }, { data: profile }] = await Promise.all([
+    supabase.from("proposals").select("owner_id").eq("id", proposalId).single(),
+    supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle(),
+  ]);
+  if (proposal?.owner_id !== user.id && !profile?.is_admin) {
+    throw new Error("Only the proposal owner or an admin can delete it.");
+  }
+
+  const { error } = await supabase.from("proposals").delete().eq("id", proposalId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/");
+  revalidatePath("/profile");
 }
 
 // Reversible alternative to deleting — takes a proposal down from
@@ -988,38 +1041,31 @@ async function reindexPowerTreeNodes(
   }
 }
 
-// Adds a link to this proposal's power tree, at a specific position
-// rather than always appended at the end — insertIndex is a 0-based
-// position in ascending sort_order terms (lowest = closest to "We the
-// people", highest = the final decision-maker/top of the chain).
-// Omitting it appends at the end, same as the old behavior.
+// Adds a decision-maker to this proposal's power tree, at a specific
+// position rather than always appended at the end — insertIndex is a
+// 0-based position in ascending sort_order terms (lowest = closest to
+// "We the people", highest = the final decision-maker/top of the
+// chain). Omitting it appends at the end, same as the old behavior.
 //
-// Branches on node_type, since a chain link is one of two different
-// things now:
-//   'decision_maker' (default, unchanged): looks up the shared
-//   decision_makers registry by name first (case-insensitive) so
-//   re-typing "Streets Department" reuses the same row instead of
-//   creating a duplicate; creates a new registry entry only if nothing
-//   matched.
-//   'funding': money that has to be secured at this exact point in the
-//   chain — Samantha's call after realizing a project can need funding
-//   at more than one stage, so this isn't a single flag anymore, it's
-//   its own kind of link, sequenced right alongside decision-makers.
-//   Optionally names a specific grant/program (same create-or-reuse
-//   match against the shared grants registry as the old
-//   addProposalGrant did); the grant_name field can be left blank —
-//   "funding is needed here" is worth logging even before anyone's
-//   identified a specific source.
+// Looks up the shared decision_makers registry by name first (case-
+// insensitive) so re-typing "Streets Department" reuses the same row
+// instead of creating a duplicate; creates a new registry entry only if
+// nothing matched.
 //
-// Open to the whole community either way, not just the proposal owner
-// — the chain is meant to be a shared, crowdsourced record. The
-// owner's own additions still land approved immediately; anyone else's
-// land 'pending' until the owner approves or removes them.
+// Decision-maker only now — funding used to be a second node_type here,
+// but it's moved to proposal_phases (see migration_phases.sql and
+// addPhase below). The chain is purely the approval path ("who has to
+// say yes"); funding is something you secure during implementation, not
+// something you need permission for.
+//
+// Open to the whole community, not just the proposal owner — the chain
+// is meant to be a shared, crowdsourced record. The owner's own
+// additions still land approved immediately; anyone else's land
+// 'pending' until the owner approves or removes them.
 export async function addPowerTreeNode(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
-  const nodeType = formData.get("node_type") === "funding" ? "funding" : "decision_maker";
   const note = String(formData.get("note") ?? "").trim();
   const insertIndexRaw = formData.get("insert_index");
 
@@ -1031,61 +1077,26 @@ export async function addPowerTreeNode(formData: FormData) {
   if (!proposal) throw new Error("Proposal not found.");
   const isOwner = proposal.owner_id === user.id;
 
-  let decisionMakerId: string | null = null;
-  let grantId: string | null = null;
+  const rawName = String(formData.get("decision_maker_name") ?? "").trim();
+  const kind = String(formData.get("kind") ?? "other");
+  if (!rawName) throw new Error("Pick or name a decision-maker.");
 
-  if (nodeType === "decision_maker") {
-    const rawName = String(formData.get("decision_maker_name") ?? "").trim();
-    const kind = String(formData.get("kind") ?? "other");
-    if (!rawName) throw new Error("Pick or name a decision-maker.");
+  let { data: decisionMaker } = await supabase
+    .from("decision_makers")
+    .select("id")
+    .ilike("name", rawName)
+    .maybeSingle();
 
-    let { data: decisionMaker } = await supabase
+  if (!decisionMaker) {
+    const { data: created, error } = await supabase
       .from("decision_makers")
+      .insert({ name: toTitleCase(rawName), kind, added_by: user.id })
       .select("id")
-      .ilike("name", rawName)
-      .maybeSingle();
-
-    if (!decisionMaker) {
-      const { data: created, error } = await supabase
-        .from("decision_makers")
-        .insert({ name: toTitleCase(rawName), kind, added_by: user.id })
-        .select("id")
-        .single();
-      if (error || !created) throw new Error(error?.message ?? "Could not add that decision-maker.");
-      decisionMaker = created;
-    }
-    decisionMakerId = decisionMaker.id;
-  } else {
-    const rawGrantName = String(formData.get("grant_name") ?? "").trim();
-    if (rawGrantName) {
-      const funder = String(formData.get("funder") ?? "").trim();
-      const url = String(formData.get("url") ?? "").trim();
-      const description = String(formData.get("description") ?? "").trim();
-
-      let { data: grant } = await supabase
-        .from("grants")
-        .select("id")
-        .ilike("name", rawGrantName)
-        .maybeSingle();
-
-      if (!grant) {
-        const { data: created, error } = await supabase
-          .from("grants")
-          .insert({
-            name: rawGrantName,
-            funder: funder || null,
-            url: url || null,
-            description: description || null,
-            added_by: user.id,
-          })
-          .select("id")
-          .single();
-        if (error || !created) throw new Error(error?.message ?? "Could not add that grant.");
-        grant = created;
-      }
-      grantId = grant.id;
-    }
+      .single();
+    if (error || !created) throw new Error(error?.message ?? "Could not add that decision-maker.");
+    decisionMaker = created;
   }
+  const decisionMakerId = decisionMaker.id;
 
   const { data: existingNodes } = await supabase
     .from("proposal_power_tree_nodes")
@@ -1098,9 +1109,7 @@ export async function addPowerTreeNode(formData: FormData) {
     .from("proposal_power_tree_nodes")
     .insert({
       proposal_id: proposalId,
-      node_type: nodeType,
       decision_maker_id: decisionMakerId,
-      grant_id: grantId,
       note: note || null,
       sort_order: existingIds.length, // placeholder — reindexed below
       status: isOwner ? "approved" : "pending",
@@ -1122,13 +1131,11 @@ export async function addPowerTreeNode(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
-// Marks a chain link — decision-maker or funding, doesn't matter which
-// — as actually done: a decision-maker really engaged, or funding
-// actually secured. Deliberately not a permission gate on anything
-// else, just a visual, motivating progress marker; owner-only to keep
-// it consistent with the rest of the chain-editing actions (approve,
-// remove, reorder), even though notes/updates themselves stay open to
-// everyone.
+// Marks a chain link as actually done — this decision-maker really
+// engaged. Deliberately not a permission gate on anything else, just a
+// visual, motivating progress marker; owner-only to keep it consistent
+// with the rest of the chain-editing actions (approve, remove, reorder),
+// even though notes/updates themselves stay open to everyone.
 export async function toggleNodeCompleted(formData: FormData) {
   const { supabase, user } = await requireUser();
 
@@ -1258,6 +1265,131 @@ export async function removePowerTreeNode(formData: FormData) {
   }
 
   await supabase.from("proposal_power_tree_nodes").delete().eq("id", nodeId);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Project Phases — the "how does this actually get done" list, separate
+// from the decision chain above. See migration_phases.sql for why this
+// exists and where funding went. Same crowdsourced-suggestion shape as
+// the chain (open to add, owner approves/removes/reorders/toggles
+// progress), just simpler: one label + an optional note, no drag reorder
+// in this first version — phases append in the order they're added,
+// which matches how Samantha described building this list out ("write
+// proposal > talk to your council person > ...").
+// ---------------------------------------------------------------------------
+
+// Anyone signed in can suggest a phase; the owner's own additions land
+// approved immediately, anyone else's land pending until the owner
+// approves or removes them — identical trust model to addPowerTreeNode.
+export async function addPhase(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const label = String(formData.get("label") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  if (!label) throw new Error("A phase needs at least a short label.");
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (!proposal) throw new Error("Proposal not found.");
+  const isOwner = proposal.owner_id === user.id;
+
+  const { count } = await supabase
+    .from("proposal_phases")
+    .select("id", { count: "exact", head: true })
+    .eq("proposal_id", proposalId);
+
+  const { error } = await supabase.from("proposal_phases").insert({
+    proposal_id: proposalId,
+    label,
+    note: note || null,
+    sort_order: count ?? 0,
+    status: isOwner ? "approved" : "pending",
+    added_by: user.id,
+  });
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Owner-only: flips a community-suggested phase from pending to
+// approved — same as approvePowerTreeNode.
+export async function approvePhase(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const phaseId = String(formData.get("phase_id"));
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can approve suggestions.");
+  }
+
+  await supabase
+    .from("proposal_phases")
+    .update({ status: "approved", updated_at: new Date().toISOString() })
+    .eq("id", phaseId);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Owner-only. Rejecting a suggested phase is just this — no separate
+// "reject" action, same pattern as the decision chain.
+export async function removePhase(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const phaseId = String(formData.get("phase_id"));
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can edit its phases.");
+  }
+
+  await supabase.from("proposal_phases").delete().eq("id", phaseId);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Owner-only: moves a phase between not_started / in_progress / done —
+// a visual, motivating progress marker, same spirit as the chain's
+// completed toggle, just three states instead of two since "in
+// progress" is a meaningful, real state for something like "securing
+// funding" in a way it wasn't for "did this decision-maker sign off."
+export async function updatePhaseProgress(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const phaseId = String(formData.get("phase_id"));
+  const progress = String(formData.get("progress") ?? "not_started");
+  if (!["not_started", "in_progress", "done"].includes(progress)) return;
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can update phase progress.");
+  }
+
+  await supabase
+    .from("proposal_phases")
+    .update({ progress, updated_at: new Date().toISOString() })
+    .eq("id", phaseId);
 
   revalidatePath(`/proposals/${proposalId}`);
 }

@@ -456,53 +456,69 @@ create table public.proposal_versions (
 -- the shared decision_makers registry (with "add new" when someone's
 -- missing).
 --
--- Two kinds of link share this same ordered chain, distinguished by
--- node_type: a 'decision_maker' entry (the original kind — a person or
--- office, from decision_makers) and a 'funding' entry (money that has
--- to be secured at that specific point in the chain — see grant_id
--- below). Funding used to be a single proposal-wide flag plus a flat
--- list; that didn't capture a project needing money at more than one
--- distinct stage (e.g. permitting, then construction). Modeling it as
--- its own node type, sequenced right alongside decision-makers, does.
+-- decision-maker only, going forward — this used to also hold 'funding'
+-- nodes (money needed at some point in the chain), but Samantha's call:
+-- the chain should be purely the approval/permission path ("who has to
+-- say yes"), not a mix of who-approves-this and how-does-it-get-paid-
+-- for. Funding now lives in proposal_phases below instead, as part of
+-- actually DOING the thing rather than a rung on the permission ladder.
+-- See migration_phases.sql for how existing funding nodes moved over.
 create table public.proposal_power_tree_nodes (
   id uuid primary key default gen_random_uuid(),
   proposal_id uuid not null references public.proposals(id) on delete cascade,
-  node_type text not null default 'decision_maker' check (node_type in ('decision_maker', 'funding')),
-  -- Required for a decision_maker node, always null for a funding node —
-  -- enforced by the check constraint below rather than a plain not-null,
-  -- since this column now has to be nullable to allow funding nodes at all.
-  decision_maker_id uuid references public.decision_makers(id),
-  -- Only ever set for a funding node — which shared grants/funding
-  -- program (if any) is the likely source at this point in the chain.
-  -- Nullable even for a funding node: "money is needed here" can be
-  -- logged before anyone's identified a specific program yet.
-  grant_id uuid references public.grants(id),
+  node_type text not null default 'decision_maker' check (node_type = 'decision_maker'),
+  decision_maker_id uuid not null references public.decision_makers(id),
   parent_node_id uuid references public.proposal_power_tree_nodes(id),
-  note text, -- decision_maker: e.g. "final sign-off"; funding: e.g. "$50k needed for permitting"
+  note text, -- e.g. "final sign-off"
   sort_order int not null default 0,
   -- Open to the whole community, not just the proposal owner: anyone
-  -- signed in can suggest adding a link to the chain (decision-maker or
-  -- funding). The owner's own additions land approved immediately
-  -- (unchanged behavior); anyone else's land pending until the owner
-  -- approves or removes them, so the chain stays owner-curated even
-  -- though suggestions can come from anywhere.
+  -- signed in can suggest a decision-maker for the chain. The owner's
+  -- own additions land approved immediately (unchanged behavior);
+  -- anyone else's land pending until the owner approves or removes
+  -- them, so the chain stays owner-curated even though suggestions can
+  -- come from anywhere.
   status text not null default 'approved' check (status in ('pending', 'approved')),
   submitted_by uuid references public.profiles(id), -- who suggested it, if not the owner
-  -- Marks a link as actually done — a decision-maker really engaged, or
-  -- funding actually secured. Visual, motivating progress marker on the
-  -- chain, not a permission gate; any node can be checked off and
-  -- unchecked again.
+  -- Marks a link as actually done — this decision-maker really engaged.
+  -- Visual, motivating progress marker on the chain, not a permission
+  -- gate; any node can be checked off and unchecked again.
   completed boolean not null default false,
   completed_at timestamptz,
   created_at timestamptz not null default now(),
   -- Bumped whenever status changes (e.g. approved) — lets notifications
   -- tell "your suggested link was approved" apart from "you just added
   -- this," since a fresh row's created_at and updated_at start equal.
-  updated_at timestamptz not null default now(),
-  constraint power_tree_node_type_fields check (
-    (node_type = 'decision_maker' and decision_maker_id is not null)
-    or (node_type = 'funding' and decision_maker_id is null)
-  )
+  updated_at timestamptz not null default now()
+);
+
+-- Implementation phases — the "how does this actually get done" half,
+-- separate from the decision chain above ("who has to say yes"). Seeded
+-- conceptually from Samantha's sketch: every proposal implicitly starts
+-- at "write proposal" (that's the proposal itself, not a row here), and
+-- from there a resident sees phases other proposals in the same
+-- category have used (see getRecommendedPhases in proposals/actions.ts
+-- — plain frequency off real usage, no separate admin-curated template
+-- table to maintain) as one-click suggestions, or can add their own.
+-- Funding now lives here too (see label/note on a migrated phase) — it's
+-- something you secure DURING implementation, not something you need
+-- permission for.
+create table public.proposal_phases (
+  id uuid primary key default gen_random_uuid(),
+  proposal_id uuid not null references public.proposals(id) on delete cascade,
+  label text not null,
+  note text,
+  sort_order int not null default 0,
+  -- Actual completion state — separate from `status` below (pending vs.
+  -- approved), same split as the decision chain's completed/status pair,
+  -- just named to fit a 3-state progress bar instead of a boolean.
+  progress text not null default 'not_started' check (progress in ('not_started', 'in_progress', 'done')),
+  -- Same crowdsourced-suggestion model as the decision chain: anyone
+  -- signed in can propose a phase; the owner's own additions land
+  -- approved immediately, anyone else's land pending until approved.
+  status text not null default 'approved' check (status in ('pending', 'approved')),
+  added_by uuid references public.profiles(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 -- Running log of dated notes on a specific decision-maker within a
@@ -673,6 +689,7 @@ alter table public.proposals enable row level security;
 alter table public.proposal_tags enable row level security;
 alter table public.proposal_versions enable row level security;
 alter table public.proposal_power_tree_nodes enable row level security;
+alter table public.proposal_phases enable row level security;
 alter table public.power_tree_node_updates enable row level security;
 alter table public.comments enable row level security;
 alter table public.reactions enable row level security;
@@ -823,6 +840,14 @@ create policy "owner updates own proposal" on public.proposals for update
 -- whole proposal's data with no separate cleanup step needed.
 create policy "owner deletes own proposal" on public.proposals for delete
   using (auth.uid() = owner_id);
+-- Same admin-override idea as "admin deletes decision makers" above — an
+-- admin testing the app ends up with a pile of test proposals under
+-- their own account, and one-at-a-time deletion from each proposal's own
+-- page was the only path. This lets an admin delete ANY proposal (not
+-- just their own) straight from the list/card, same as every other
+-- admin force-delete override in this schema.
+create policy "admin deletes any proposal" on public.proposals for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
 create policy "authenticated create proposal_tags" on public.proposal_tags for insert
   with check (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
@@ -1043,6 +1068,23 @@ create policy "admin removes any power tree node" on public.proposal_power_tree_
 -- ownership themselves in the server action, before ever touching the
 -- database.
 create policy "authenticated reindex power tree" on public.proposal_power_tree_nodes for update
+  using (auth.role() = 'authenticated');
+
+-- Same shape as the decision-chain policies above: public read, anyone
+-- signed in can insert (the app decides pending vs. approved based on
+-- ownership), owner or admin can delete, and update is open to any
+-- authenticated user because reindexing after an insert touches every
+-- row's sort_order — the actions that need real owner-only enforcement
+-- (approve, reorder, progress toggle) check ownership themselves in the
+-- server action before ever touching the database.
+create policy "public read proposal phases" on public.proposal_phases for select using (true);
+create policy "authenticated add proposal phases" on public.proposal_phases for insert
+  with check (auth.role() = 'authenticated');
+create policy "owner deletes own proposal phases" on public.proposal_phases for delete
+  using (exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid()));
+create policy "admin deletes any proposal phase" on public.proposal_phases for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "authenticated updates proposal phases" on public.proposal_phases for update
   using (auth.role() = 'authenticated');
 
 create policy "authenticated add power_tree_node_updates" on public.power_tree_node_updates for insert

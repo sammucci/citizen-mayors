@@ -40,15 +40,6 @@ function formatDate(iso: string) {
 // the role note and the add-note box, all in one place you can actually
 // read.
 //
-// A node is one of two kinds now (node.nodeType): the original
-// 'decision_maker' (a person/office), or 'funding' (money that has to
-// be secured at this exact point in the chain — see grantUrl). Rather
-// than a parallel set of styles, a funding node reuses the same
-// name/subtitle slots (its "name" is the grant name or "Funding
-// needed," its "subtitle" is the funder or "Source not yet
-// identified") — the one visible difference is the 💰 badge below, so
-// it still reads at a glance without a second, differently-shaped card
-// type to learn.
 export function PowerTreeNodeCard({
   proposalId,
   node,
@@ -61,7 +52,6 @@ export function PowerTreeNodeCard({
   proposalId: string;
   node: {
     id: string;
-    nodeType: "decision_maker" | "funding";
     name: string;
     subtitle: string | null;
     note: string | null;
@@ -69,7 +59,6 @@ export function PowerTreeNodeCard({
     completed: boolean;
     submittedByName: string;
     submittedById: string | null;
-    grantUrl: string | null;
     decisionMakerId: string | null;
     updates: Update[];
   };
@@ -95,7 +84,6 @@ export function PowerTreeNodeCard({
   const router = useRouter();
   const finalTextColor = readableTextColor(categoryColor);
   const isPending = node.status === "pending";
-  const isFunding = node.nodeType === "funding";
   // Pending or final still get the two-row layout (badge row above the
   // name) same as before; a completed node now does too, so there's
   // somewhere for the "Done" badge to live without cramming it onto the
@@ -218,14 +206,6 @@ export function PowerTreeNodeCard({
                   {isPending && (
                     <span className="inline-block shrink-0 whitespace-nowrap rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
                       ⏳ Pending approval
-                    </span>
-                  )}
-                  {isFunding && (
-                    <span
-                      className="inline-block shrink-0 whitespace-nowrap rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                      style={isFinal && !isPending ? { color: finalTextColor } : { color: "#a16207" }}
-                    >
-                      💰 Funding
                     </span>
                   )}
                   {isFinal && !isPending && (
@@ -362,7 +342,6 @@ export function PowerTreeNodeCard({
                   title="View notes and civic dialogue"
                 >
                   <span className="block truncate text-base font-semibold">
-                    {isFunding ? "💰 " : ""}
                     {node.name}
                   </span>
                   <span className="block truncate text-xs" style={{ color: "#737373" }}>
@@ -468,14 +447,6 @@ export function PowerTreeNodeCard({
                       ⏳ Pending approval
                     </span>
                   )}
-                  {isFunding && (
-                    <span
-                      className="inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                      style={isFinal && !isPending ? { color: finalTextColor } : { color: "#a16207" }}
-                    >
-                      💰 Funding
-                    </span>
-                  )}
                   {isFinal && !isPending && (
                     <span
                       className="inline-block rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
@@ -506,23 +477,11 @@ export function PowerTreeNodeCard({
                 >
                   {isPending ? `Suggested by ${node.submittedByName}` : node.subtitle}
                 </p>
-                {isFunding && node.grantUrl && (
-                  <a
-                    href={node.grantUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs underline"
-                    style={isFinal && !isPending ? { color: finalTextColor } : { color: "#a16207" }}
-                  >
-                    View funding program ↗
-                  </a>
-                )}
-                {/* Only decision-maker nodes (not funding) have a real
-                    profile to link to, and only once the node's actually
-                    tied to a specific decision_makers row (a rare edge
-                    case, but the "We the people" anchor and old data
-                    could theoretically lack one). */}
-                {!isFunding && node.decisionMakerId && (
+                {/* Only once the node's actually tied to a specific
+                    decision_makers row (a rare edge case, but the "We the
+                    people" anchor and old data could theoretically lack
+                    one) is there a real profile to link to. */}
+                {node.decisionMakerId && (
                   <Link
                     href={`/decision-makers/${node.decisionMakerId}`}
                     className="block text-xs underline"

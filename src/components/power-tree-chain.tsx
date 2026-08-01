@@ -4,7 +4,6 @@ import { Fragment, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addPowerTreeNode, reorderPowerTreeNodes, updatePeopleActionNote } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
-import { GrantField } from "@/components/grant-field";
 import { PowerTreeNodeCard } from "@/components/power-tree-node-card";
 import { readableTextColor } from "@/lib/readable-text-color";
 
@@ -19,7 +18,6 @@ type Update = {
 };
 type Node = {
   id: string;
-  nodeType: "decision_maker" | "funding";
   name: string;
   subtitle: string | null;
   note: string | null;
@@ -27,7 +25,6 @@ type Node = {
   completed: boolean;
   submittedByName: string;
   submittedById: string | null;
-  grantUrl: string | null;
   decisionMakerId: string | null;
   updates: Update[];
 };
@@ -54,7 +51,6 @@ export function PowerTreeChain({
   categoryColor,
   nodesAscending,
   decisionMakers,
-  grants,
   isOwner,
   canContribute,
   peopleActionNote,
@@ -63,7 +59,6 @@ export function PowerTreeChain({
   categoryColor: string;
   nodesAscending: Node[];
   decisionMakers: { id: string; name: string; kind: string }[];
-  grants: { id: string; name: string; funder: string | null }[];
   isOwner: boolean;
   canContribute: boolean;
   peopleActionNote?: string | null;
@@ -94,12 +89,6 @@ export function PowerTreeChain({
   const [touchOverGap, setTouchOverGap] = useState<number | null>(null);
   const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [openGap, setOpenGap] = useState<number | null>(null); // ascending insert index
-  // Which kind of link a currently-open gap is inserting — decision-maker
-  // (the original, default) or funding (Samantha's chain-node redesign:
-  // money needed at this exact point, rather than one flag for the whole
-  // proposal). Resets to the default whenever a gap opens/closes so a
-  // stale pick from a previous insert never carries over.
-  const [insertType, setInsertType] = useState<"decision_maker" | "funding">("decision_maker");
   // Inline edit for the fixed "We the people" anchor's optional action
   // note (e.g. "Write proposal", "Make petition") — same pattern as a
   // power-tree node's role note, just against the proposal row directly
@@ -238,48 +227,13 @@ export function PowerTreeChain({
             className="w-full space-y-2 rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-2"
           >
             <input type="hidden" name="proposal_id" value={proposalId} />
-            <input type="hidden" name="node_type" value={insertType} />
             <input
               type="hidden"
               name="insert_index"
               value={ascendingInsertIndexForGap(displayGapIndex)}
             />
             <p className="text-[11px] text-neutral-500">{gapHint}</p>
-            {/* Same chain, two kinds of link — pick which this spot is
-                before showing the matching field. Funding needed to be
-                its own kind of entry rather than one flag for the whole
-                proposal, since money can be needed at more than one
-                distinct stage. */}
-            <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
-              <button
-                type="button"
-                onClick={() => setInsertType("decision_maker")}
-                className={`flex-1 px-2 py-1 ${
-                  insertType === "decision_maker"
-                    ? "font-medium text-white"
-                    : "bg-white text-neutral-500 hover:bg-neutral-50"
-                }`}
-                style={insertType === "decision_maker" ? { backgroundColor: categoryColor } : undefined}
-              >
-                Decision-maker
-              </button>
-              <button
-                type="button"
-                onClick={() => setInsertType("funding")}
-                className={`flex-1 border-l border-neutral-300 px-2 py-1 ${
-                  insertType === "funding"
-                    ? "bg-amber-600 font-medium text-white"
-                    : "bg-white text-neutral-500 hover:bg-neutral-50"
-                }`}
-              >
-                💰 Funding
-              </button>
-            </div>
-            {insertType === "decision_maker" ? (
-              <DecisionMakerField decisionMakers={decisionMakers} />
-            ) : (
-              <GrantField grants={grants} />
-            )}
+            <DecisionMakerField decisionMakers={decisionMakers} />
             <div className="flex gap-2">
               <button
                 className="rounded px-2 py-1 text-xs"
@@ -289,10 +243,7 @@ export function PowerTreeChain({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setOpenGap(null);
-                  setInsertType("decision_maker");
-                }}
+                onClick={() => setOpenGap(null)}
                 className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
               >
                 Cancel
@@ -302,10 +253,7 @@ export function PowerTreeChain({
         ) : (
           <button
             type="button"
-            onClick={() => {
-              setOpenGap(displayGapIndex);
-              setInsertType("decision_maker");
-            }}
+            onClick={() => setOpenGap(displayGapIndex)}
             className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
             title={gapHint}
           >

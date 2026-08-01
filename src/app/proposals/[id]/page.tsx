@@ -17,6 +17,7 @@ import { CoverImageControl } from "@/components/cover-image-control";
 import { EditProposalForm } from "@/components/edit-proposal-form";
 import { PublishToggleButton } from "@/components/publish-toggle-button";
 import { PowerTreeChain } from "@/components/power-tree-chain";
+import { PhasesSection } from "@/components/phases-section";
 import { InfoHeading } from "@/components/info-heading";
 import { RepositionableImage } from "@/components/repositionable-image";
 import { ReplyToggle } from "@/components/reply-toggle";
@@ -165,24 +166,85 @@ export default async function ProposalPage({
     .select("id, name, kind")
     .order("name");
 
-  // node_type/completed/grant_id are the funding-as-chain-node redesign:
-  // a link in this chain is either a decision-maker (unchanged) or a
-  // funding entry (grants join, only ever set for those) — see
-  // power-tree-chain.tsx / power-tree-node-card.tsx for how the two
-  // share the same ordered list and mostly the same rendering.
+  // Decision-maker-only chain now — funding used to live here as a
+  // second node_type (grants join) but has moved to the Phases section
+  // below, see power-tree-chain.tsx / power-tree-node-card.tsx.
   const { data: powerTreeNodes } = await supabase
     .from("proposal_power_tree_nodes")
     .select(
-      "id, node_type, note, parent_node_id, status, completed, submitted_by, decision_maker_id, decision_makers ( name, kind ), grants ( name, funder, url ), profiles ( display_name ), power_tree_node_updates ( id, body, created_at, author_id, parent_update_id, talked_to, profiles ( display_name ) )"
+      "id, note, parent_node_id, status, completed, submitted_by, decision_maker_id, decision_makers ( name, kind ), profiles ( display_name ), power_tree_node_updates ( id, body, created_at, author_id, parent_update_id, talked_to, profiles ( display_name ) )"
     )
     .eq("proposal_id", proposal.id)
     .order("sort_order");
 
-  // Needed any time someone might insert a funding node into the chain
-  // (i.e. always, now that funding isn't gated behind a proposal-wide
-  // flag anymore) — the GrantField autocomplete in power-tree-chain.tsx
-  // matches against this shared, growing list.
-  const { data: allGrants } = await supabase.from("grants").select("id, name, funder").order("name");
+  // Phases — the "how does this actually get done" list, separate from
+  // the approval chain above (see migration_phases.sql for why funding
+  // moved here).
+  const { data: proposalPhases } = await supabase
+    .from("proposal_phases")
+    .select("id, label, note, progress, status, added_by, profiles ( display_name )")
+    .eq("proposal_id", proposal.id)
+    .order("sort_order");
+
+  // "Common next steps for proposals like this one" — looks at every
+  // OTHER proposal in the same category, tallies how often each approved
+  // phase label shows up, and surfaces the most common ones as one-click
+  // quick-adds. Deliberately just a frequency count over real crowd data
+  // rather than a hardcoded admin-authored template list per category —
+  // the suggestions get better as more proposals in a category get built
+  // out, instead of needing to be maintained by hand.
+  let recommendedPhaseLabels: string[] = [];
+  if (proposal.category_id) {
+    const { data: categoryPeers } = await supabase
+      .from("proposals")
+      .select("id")
+      .eq("category_id", proposal.category_id)
+      .neq("id", proposal.id);
+    const peerIds = (categoryPeers ?? []).map((p) => p.id);
+    if (peerIds.length > 0) {
+      const { data: peerPhases } = await supabase
+        .from("proposal_phases")
+        .select("label")
+        .in("proposal_id", peerIds)
+        .eq("status", "approved");
+      const alreadyHave = new Set(
+        (proposalPhases ?? []).map((p) => p.label.trim().toLowerCase())
+      );
+      const counts = new Map<string, { label: string; count: number }>();
+      for (const p of peerPhases ?? []) {
+        const key = p.label.trim().toLowerCase();
+        if (!key || alreadyHave.has(key)) continue;
+        const existing = counts.get(key);
+        if (existing) existing.count += 1;
+        else counts.set(key, { label: p.label.trim(), count: 1 });
+      }
+      recommendedPhaseLabels = Array.from(counts.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+        .map((c) => c.label);
+    }
+  }
+
+  // "Stuck? Your council person is always a good place to start" — only
+  // resolvable to a specific person when the proposal is scoped to a
+  // single council district; citywide/neighborhood/address-scoped
+  // proposals just get the generic version of the note (no one
+  // "represents_district" match to point to).
+  let councilPerson: { id: string; name: string } | null = null;
+  if (proposal.geography_scope === "council_district" && proposal.council_district) {
+    const { data: rep } = await supabase
+      .from("decision_maker_profiles")
+      .select("decision_maker_id, decision_makers ( name )")
+      .eq("represents_scope", "district")
+      .eq("represents_district", proposal.council_district)
+      .maybeSingle();
+    if (rep?.decision_makers) {
+      councilPerson = {
+        id: rep.decision_maker_id,
+        name: (rep.decision_makers as any).name,
+      };
+    }
+  }
 
   const { data: allTags } = await supabase.from("tags").select("id, label").order("label");
   const appliedTagIds = new Set(
@@ -783,24 +845,24 @@ export default async function ProposalPage({
               {proposal.categories?.label} • {proposal.type}
             </div>
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
-            {/* Renamed from "Decision chain" — this section covers more
-                than just who has to sign off now (funding is one of the
-                link types in the chain itself, see below), so the name
-                needed to cover both: who this moves through, AND what it
-                actually takes to make it real. The explainer now lives
-                behind an (i) icon (InfoHeading) instead of as permanent
-                subtext. The separate "this is collaborative, nothing
-                lands without your OK" note that used to sit underneath
-                was dropped — "Got a piece of the puzzle? Add it in."
-                already carries that same reassurance without a second
-                line saying it again. */}
+            {/* Renamed from "Decision chain" to "Getting it done" — the
+                explainer now lives behind an (i) icon (InfoHeading)
+                instead of as permanent subtext. The separate "this is
+                collaborative, nothing lands without your OK" note that
+                used to sit underneath was dropped — "Got a piece of the
+                puzzle? Add it in." already carries that same reassurance
+                without a second line saying it again. Funding no longer
+                lives in this chain at all — it moved to the "Phases"
+                section below, since the chain is purely the
+                approval/permission path now (who has to say yes), not
+                where money gets secured. */}
             <h2 className="text-base font-semibold">Getting it done</h2>
             <InfoHeading
               as="p"
               className="mt-1 text-sm text-neutral-600"
-              tooltip={`This chain shows who your proposal would move through and what funding it would require (or might qualify for) to get it done. It climbs from "We the people" (you) at the bottom, to the final decision-maker at the top. So where's your idea going next?`}
+              tooltip={`This chain shows who your proposal would move through to get approval. It climbs from "We the people" (you) at the bottom, to the final decision-maker at the top. So where's your idea going next?`}
             >
-              The idea starts with you. Now, what's it take to get it done?
+              The idea starts with you. Now, who does it need to move through?
             </InfoHeading>
             <p className="mt-1 text-sm font-medium" style={{ color: categoryColor }}>
               Got a piece of the puzzle? Add it in.
@@ -813,26 +875,18 @@ export default async function ProposalPage({
               canContribute={Boolean(user)}
               peopleActionNote={proposal.people_action_note}
               decisionMakers={allDecisionMakers ?? []}
-              grants={allGrants ?? []}
               nodesAscending={(powerTreeNodes ?? []).map((node: any) => {
-                const isFunding = node.node_type === "funding";
-                const { primary, subtitle } = isFunding
-                  ? { primary: "", subtitle: "" }
-                  : splitDecisionMakerLabel(node.decision_makers?.name ?? "");
+                const { primary, subtitle } = splitDecisionMakerLabel(node.decision_makers?.name ?? "");
                 return {
                   id: node.id,
-                  nodeType: isFunding ? "funding" : "decision_maker",
-                  name: isFunding ? node.grants?.name ?? "Funding needed" : primary,
-                  subtitle: isFunding
-                    ? node.grants?.funder ?? "Source not yet identified"
-                    : subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ") ?? null,
+                  name: primary,
+                  subtitle: subtitle ?? node.decision_makers?.kind?.replace(/_/g, " ") ?? null,
                   note: node.note,
                   status: node.status === "pending" ? "pending" : "approved",
                   completed: Boolean(node.completed),
                   submittedByName: node.profiles?.display_name ?? "A resident",
                   submittedById: node.submitted_by ?? null,
-                  grantUrl: node.grants?.url ?? null,
-                  decisionMakerId: isFunding ? null : node.decision_maker_id ?? null,
+                  decisionMakerId: node.decision_maker_id ?? null,
                   updates: (node.power_tree_node_updates ?? [])
                     .slice()
                     .sort(
@@ -853,6 +907,23 @@ export default async function ProposalPage({
             />
           </div>
           </div>
+
+          <PhasesSection
+            proposalId={proposal.id}
+            categoryColor={categoryColor}
+            isOwner={isOwner}
+            canContribute={Boolean(user)}
+            recommendedLabels={recommendedPhaseLabels}
+            councilPerson={councilPerson}
+            phases={(proposalPhases ?? []).map((p: any) => ({
+              id: p.id,
+              label: p.label,
+              note: p.note,
+              progress: p.progress,
+              status: p.status,
+              addedByName: p.profiles?.display_name ?? "A resident",
+            }))}
+          />
 
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
             <h2 className="text-base font-semibold">Tags</h2>

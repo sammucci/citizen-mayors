@@ -463,6 +463,7 @@ export default async function ProfilePage() {
         <div className="mt-3">
           <ProposalMiniCardGrid
             emptyText="You haven't posted a proposal yet."
+            showDelete
             proposals={(myProposals ?? []).map((p: any) => ({
               id: p.id,
               title: p.title,

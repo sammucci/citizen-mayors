@@ -23,6 +23,13 @@ create table if not exists public.profile_followed_tags (
 
 alter table public.profile_followed_tags enable row level security;
 
+-- drop-then-create, like every other migration here, so running this
+-- file twice (easy to do by accident) doesn't error on "policy already
+-- exists" instead of just being a harmless no-op the second time.
+drop policy if exists "user reads own followed tags" on public.profile_followed_tags;
+drop policy if exists "user follows tags" on public.profile_followed_tags;
+drop policy if exists "user unfollows own tags" on public.profile_followed_tags;
+
 create policy "user reads own followed tags" on public.profile_followed_tags for select
   using (auth.uid() = profile_id);
 create policy "user follows tags" on public.profile_followed_tags for insert

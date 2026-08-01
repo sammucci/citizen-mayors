@@ -10,6 +10,7 @@ type Proposal = {
   title: string;
   council_district: number | null;
   geography_scope: string;
+  geography_label: string | null;
   geocoded_lat: number | null;
   geocoded_lng: number | null;
   categories: { color: string | null; label: string | null } | null;
@@ -102,12 +103,16 @@ export function PhillyMap({
     );
   }
 
-  // Two different kinds of pin: an address-scope proposal with a real
+  // Three different kinds of pin: an address-scope proposal with a real
   // geocoded point plots exactly there — no grouping or jitter needed,
   // it's an actual location. A council-district-scope proposal has no
   // single point to plot (the whole point of that scope is "applies to
-  // this district," not "at this spot"), so those still group at the
+  // this district," not "at this spot"), so those group at the
   // district's centroid with jitter to keep multiple pins from stacking.
+  // A neighborhood-scope proposal is the same idea as a district — no
+  // single address, just a representative point (see
+  // geocode-neighborhood.ts) — so it's grouped and jittered the same way,
+  // just keyed by its centroid coordinates instead of a district number.
   const geocodedProposals = proposals.filter(
     (p) => p.geography_scope === "address" && p.geocoded_lat != null && p.geocoded_lng != null
   );
@@ -117,6 +122,22 @@ export function PhillyMap({
     const list = byDistrict.get(p.council_district) ?? [];
     list.push(p);
     byDistrict.set(p.council_district, list);
+  }
+  const byNeighborhoodPoint = new Map<string, { lat: number; lng: number; label: string | null; proposals: Proposal[] }>();
+  for (const p of proposals) {
+    if (p.geography_scope !== "neighborhood" || p.geocoded_lat == null || p.geocoded_lng == null) continue;
+    const key = `${p.geocoded_lat.toFixed(4)},${p.geocoded_lng.toFixed(4)}`;
+    const existing = byNeighborhoodPoint.get(key);
+    if (existing) {
+      existing.proposals.push(p);
+    } else {
+      byNeighborhoodPoint.set(key, {
+        lat: p.geocoded_lat,
+        lng: p.geocoded_lng,
+        label: p.geography_label,
+        proposals: [p],
+      });
+    }
   }
 
   const hiddenCount = totalCount !== undefined ? totalCount - proposals.length : null;
@@ -175,6 +196,36 @@ export function PhillyMap({
             );
           });
         })}
+        {/* Neighborhood-centroid pins — same jitter treatment as
+            district centroids, since a neighborhood is also a
+            representative area rather than an exact point. */}
+        {Array.from(byNeighborhoodPoint.values()).flatMap(({ lat: centerLat, lng: centerLng, label, proposals: ps }) =>
+          ps.map((p, i) => {
+            const angle = (i / ps.length) * 2 * Math.PI;
+            const radius = ps.length > 1 ? 0.006 : 0;
+            const lat = centerLat + radius * Math.sin(angle);
+            const lng = centerLng + radius * Math.cos(angle);
+            const color = p.categories?.color ?? "#6C3FD1";
+            return (
+              <CircleMarker
+                key={p.id}
+                center={[lat, lng]}
+                radius={8}
+                pathOptions={{ color, fillColor: color, fillOpacity: 0.85, weight: 2 }}
+              >
+                <Popup>
+                  <Link href={`/proposals/${p.id}`} className="font-medium hover:underline">
+                    {p.title}
+                  </Link>
+                  <div className="mt-1 text-xs text-neutral-500">
+                    {label ?? "Neighborhood"}
+                    {p.categories?.label ? ` · ${p.categories.label}` : ""}
+                  </div>
+                </Popup>
+              </CircleMarker>
+            );
+          })
+        )}
         {/* Exact-address pins — real coordinates, no jitter needed since
             each one is an actual distinct location rather than a shared
             district centroid. A slightly larger, more solid marker than
@@ -212,9 +263,10 @@ export function PhillyMap({
         <div className="pointer-events-none absolute bottom-2 left-2 z-[500] max-w-[85%] rounded-md bg-white/85 px-2.5 py-1.5 text-[11px] leading-snug text-neutral-700 shadow-sm backdrop-blur-sm sm:max-w-xs">
           <span aria-hidden="true">📍</span> Showing {proposals.length} of {totalCount} proposal
           {totalCount === 1 ? "" : "s"} on the map — a bold pin for an exact address,
-          a lighter one at the middle of a council district when that's all we have. The
-          rest ({hiddenCount} located by neighborhood, zip, or citywide) only show up in
-          the list below.
+          a lighter one at a neighborhood's or council district's center when that's
+          all we have. The rest ({hiddenCount} located by zip or citywide, or a
+          neighborhood name we don't have a map point for yet) only show up in the
+          list below.
         </div>
       )}
     </div>
