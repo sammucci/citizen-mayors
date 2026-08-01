@@ -49,6 +49,7 @@ function polygonCentroid(ring: [number, number][]): [number, number] {
 export function PhillyMap({
   proposals,
   totalCount,
+  height = 500,
 }: {
   proposals: Proposal[];
   // Total proposals in the current filtered set, including ones with no
@@ -56,6 +57,10 @@ export function PhillyMap({
   // caption how much of what's below is actually plotted. Optional so
   // this component still works anywhere it's used without that context.
   totalCount?: number;
+  // Pixel height. Lets the same map render as a compact landing-page
+  // preview (see expandable-map.tsx) or full-size inside that preview's
+  // "expand" modal, without two copies of this component to keep in sync.
+  height?: number;
 }) {
   const [districts, setDistricts] = useState<any>(null);
   const [centroids, setCentroids] = useState<Record<string, [number, number]>>({});
@@ -76,7 +81,10 @@ export function PhillyMap({
 
   if (!districts) {
     return (
-      <div className="flex h-[500px] items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-sm text-neutral-500">
+      <div
+        className="flex items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-sm text-neutral-500"
+        style={{ height }}
+      >
         Loading map…
       </div>
     );
@@ -107,7 +115,8 @@ export function PhillyMap({
         center={[40.0, -75.14]}
         zoom={11}
         scrollWheelZoom={false}
-        className="h-[500px] w-full rounded-lg"
+        className="w-full rounded-lg"
+        style={{ height }}
       >
         {/* Light-grey basemap (CartoDB Positron) instead of standard OSM
             tiles — the default OSM style is busy with labels, roads, and

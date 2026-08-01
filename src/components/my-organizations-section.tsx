@@ -7,7 +7,7 @@ import { addOrganizationToMyProfile, removeOrganizationFromMyProfile } from "@/a
 
 // Samantha's ask: "neighborhood groups and civic organizations near me"
 // on the profile page — attaching one here is what makes an organization
-// profile's "Serves # Citizen Mayors" count go up (see
+// profile's "# Citizen Mayors involved" count go up (see
 // organization_profiles/profile_organizations in schema.sql). Typing an
 // existing name (the datalist autocompletes against every org already
 // in the shared registry) attaches that one; typing a new name creates

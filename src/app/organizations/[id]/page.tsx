@@ -9,9 +9,12 @@ function formatDateTime(iso: string) {
 }
 
 // Public profile page — no login needed to view, same "public read"
-// model as decision-maker profiles. "Serves # Citizen Mayors" counts
-// rows in profile_organizations, never lists WHO — same aggregate-only,
-// no-public-roster stance as the demographic-privacy work.
+// model as decision-maker profiles. "# Citizen Mayors are involved"
+// counts rows in profile_organizations, never lists WHO — same
+// aggregate-only, no-public-roster stance as the demographic-privacy
+// work. Worded as "involved" rather than "Serves" — this counts how
+// many residents have added the organization to their own profile, not
+// how many people the organization serves, which "Serves" implied.
 export default async function OrganizationProfilePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
   const {
@@ -65,7 +68,7 @@ export default async function OrganizationProfilePage({ params }: { params: { id
         <div className="shrink-0 rounded-lg bg-duty-purple/10 px-3 py-2 text-right">
           <p className="text-lg font-bold text-duty-purple">{servesCount ?? 0}</p>
           <p className="text-[11px] text-neutral-500">
-            Serves {servesCount ?? 0} Citizen Mayor{servesCount === 1 ? "" : "s"}
+            Citizen Mayor{servesCount === 1 ? "" : "s"} involved
           </p>
         </div>
       </div>

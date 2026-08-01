@@ -38,7 +38,17 @@ export type DistrictCensusStats = {
   race: { label: string; count: number }[];
   gender: { label: string; count: number }[];
   housing: { label: string; count: number }[];
+  age: { label: string; count: number }[];
 };
+
+// Age brackets pulled separately from ACS5 table B01001 ("Sex by Age"),
+// summed male+female per bracket, then combined into the same six
+// brackets residents choose from on their own profile (see the
+// age_range options in profile-info-card.tsx: 18-24, 25-34, 35-44,
+// 45-54, 55-64, 65+ — under-18 isn't collected there, so it's left out
+// here too for a clean side-by-side comparison). Same tract-centroid-
+// to-district join described above, just a second pass over a
+// different table.
 
 export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> = {
   1: {
@@ -58,6 +68,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Homeowner", count: 42351 },
       { label: "Renter", count: 40655 },
     ],
+    age: [
+      { label: "18-24", count: 10546 },
+      { label: "25-34", count: 40161 },
+      { label: "35-44", count: 27474 },
+      { label: "45-54", count: 16507 },
+      { label: "55-64", count: 14658 },
+      { label: "65+", count: 20257 },
+    ],
   },
   2: {
     totalPopulation: 145698,
@@ -75,6 +93,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
     housing: [
       { label: "Homeowner", count: 33670 },
       { label: "Renter", count: 36313 },
+    ],
+    age: [
+      { label: "18-24", count: 12021 },
+      { label: "25-34", count: 38881 },
+      { label: "35-44", count: 23780 },
+      { label: "45-54", count: 16668 },
+      { label: "55-64", count: 17319 },
+      { label: "65+", count: 19588 },
     ],
   },
   3: {
@@ -94,6 +120,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Homeowner", count: 22801 },
       { label: "Renter", count: 41421 },
     ],
+    age: [
+      { label: "18-24", count: 31252 },
+      { label: "25-34", count: 29746 },
+      { label: "35-44", count: 15691 },
+      { label: "45-54", count: 13434 },
+      { label: "55-64", count: 12415 },
+      { label: "65+", count: 16419 },
+    ],
   },
   4: {
     totalPopulation: 156280,
@@ -111,6 +145,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
     housing: [
       { label: "Homeowner", count: 35689 },
       { label: "Renter", count: 35898 },
+    ],
+    age: [
+      { label: "18-24", count: 16120 },
+      { label: "25-34", count: 33591 },
+      { label: "35-44", count: 20443 },
+      { label: "45-54", count: 15306 },
+      { label: "55-64", count: 17155 },
+      { label: "65+", count: 23693 },
     ],
   },
   5: {
@@ -130,6 +172,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Homeowner", count: 27684 },
       { label: "Renter", count: 47105 },
     ],
+    age: [
+      { label: "18-24", count: 24736 },
+      { label: "25-34", count: 36608 },
+      { label: "35-44", count: 20191 },
+      { label: "45-54", count: 14246 },
+      { label: "55-64", count: 17784 },
+      { label: "65+", count: 21596 },
+    ],
   },
   6: {
     totalPopulation: 146475,
@@ -147,6 +197,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
     housing: [
       { label: "Homeowner", count: 35953 },
       { label: "Renter", count: 21005 },
+    ],
+    age: [
+      { label: "18-24", count: 10251 },
+      { label: "25-34", count: 21698 },
+      { label: "35-44", count: 20983 },
+      { label: "45-54", count: 16466 },
+      { label: "55-64", count: 19434 },
+      { label: "65+", count: 22026 },
     ],
   },
   7: {
@@ -166,6 +224,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Homeowner", count: 33145 },
       { label: "Renter", count: 24280 },
     ],
+    age: [
+      { label: "18-24", count: 14003 },
+      { label: "25-34", count: 24827 },
+      { label: "35-44", count: 20820 },
+      { label: "45-54", count: 20988 },
+      { label: "55-64", count: 19147 },
+      { label: "65+", count: 14632 },
+    ],
   },
   8: {
     totalPopulation: 159357,
@@ -183,6 +249,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
     housing: [
       { label: "Homeowner", count: 35758 },
       { label: "Renter", count: 34081 },
+    ],
+    age: [
+      { label: "18-24", count: 14015 },
+      { label: "25-34", count: 22423 },
+      { label: "35-44", count: 19833 },
+      { label: "45-54", count: 17790 },
+      { label: "55-64", count: 21723 },
+      { label: "65+", count: 28274 },
     ],
   },
   9: {
@@ -202,6 +276,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Homeowner", count: 43981 },
       { label: "Renter", count: 22701 },
     ],
+    age: [
+      { label: "18-24", count: 13131 },
+      { label: "25-34", count: 24788 },
+      { label: "35-44", count: 21776 },
+      { label: "45-54", count: 21046 },
+      { label: "55-64", count: 20932 },
+      { label: "65+", count: 26921 },
+    ],
   },
   10: {
     totalPopulation: 162208,
@@ -219,6 +301,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
     housing: [
       { label: "Homeowner", count: 40873 },
       { label: "Renter", count: 24064 },
+    ],
+    age: [
+      { label: "18-24", count: 8666 },
+      { label: "25-34", count: 22846 },
+      { label: "35-44", count: 21094 },
+      { label: "45-54", count: 19451 },
+      { label: "55-64", count: 21717 },
+      { label: "65+", count: 33723 },
     ],
   },
 };
@@ -239,5 +329,6 @@ export function citywideCensusStats(): DistrictCensusStats {
     race: sum((d) => d.race),
     gender: sum((d) => d.gender),
     housing: sum((d) => d.housing),
+    age: sum((d) => d.age),
   };
 }

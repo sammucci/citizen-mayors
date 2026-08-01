@@ -779,22 +779,24 @@ export default async function CommunityDashboardPage({
             full sourcing note and known limitations (no non-binary
             category in Census data, "Other" groups several small race
             categories together, "Unhoused" isn't something ACS housing
-            tenure can measure). Age isn't included yet — same data
-            source, just needs one more processing pass. Each row now
-            just shows the two bare percentages (purple = here, grey =
-            Philly) instead of repeating "here"/"Philly" as text on every
-            line — the one-time Key at the bottom of the card explains
-            the color convention instead. */}
+            tenure can measure). Age was added in a later pass (same
+            tract-to-district join, second ACS table, B01001) — labels
+            match the resident age_range options verbatim so no remap
+            helper is needed there, unlike race/gender. Each row shows
+            the two bare percentages (purple = here, grey = Philly)
+            instead of repeating "here"/"Philly" as text on every line —
+            the one-time Key at the bottom of the card explains the
+            color convention instead. */}
         <div className="mt-5 rounded-md border border-neutral-200 bg-white p-4">
           <InfoHeading
             className="text-sm font-semibold text-neutral-800"
             tooltip={`Real 2020-2024 Census (ACS5) data by council district, not an estimate. ${
               selectedDistrict ? `Comparing District ${selectedDistrict} only.` : "Citywide comparison."
-            } Race/ethnicity and gender categories don't map 1:1 to the options above — see each column's own info icon for specifics. Age isn't in this comparison yet.`}
+            } Race/ethnicity and gender categories don't map 1:1 to the options above — see each column's own info icon for specifics.`}
           >
             How this compares to Philadelphia
           </InfoHeading>
-          <div className="mt-5 grid grid-cols-1 gap-7 sm:grid-cols-3">
+          <div className="mt-5 grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-4">
             <CensusComparisonSection
               title="Race / ethnicity"
               tooltip='ACS reports "Other" as one bucket covering American Indian/Alaska Native, Native Hawaiian/Pacific Islander, and multiracial residents, who each get their own option on the profile form — those are combined here so the two sides compare the same categories.'
@@ -817,6 +819,14 @@ export default async function CommunityDashboardPage({
               memberItems={housingBreakdown.map((i) => ({ label: i.label, count: i.count }))}
               censusItems={
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.housing : citywideCensusStats().housing) ?? []
+              }
+            />
+            <CensusComparisonSection
+              title="Age"
+              tooltip="ACS age brackets summed to match the same six ranges residents choose from on their profile (18-24 through 65+). Under-18 residents aren't counted on either side, since the profile doesn't collect ages below 18 either."
+              memberItems={ageBreakdown.map((i) => ({ label: i.label, count: i.count }))}
+              censusItems={
+                (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.age : citywideCensusStats().age) ?? []
               }
             />
           </div>

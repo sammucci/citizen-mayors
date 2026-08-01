@@ -10,12 +10,15 @@ export const dynamic = "force-dynamic";
 // as nextDynamicImport since the route-config export above is required
 // to be named exactly "dynamic"). Was its own /map page; merged onto the
 // dashboard instead so there's one view of the same proposals, not two.
-const PhillyMap = nextDynamicImport(
-  () => import("@/components/philly-map").then((m) => m.PhillyMap),
+// Loads ExpandableMap (a compact preview + "expand to full map" modal)
+// instead of PhillyMap directly now, so the map takes up less of the
+// landing page above the fold, per request.
+const ExpandableMap = nextDynamicImport(
+  () => import("@/components/expandable-map").then((m) => m.ExpandableMap),
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[360px] items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-sm text-neutral-500">
+      <div className="flex h-[260px] items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-sm text-neutral-500">
         Loading map…
       </div>
     ),
@@ -95,6 +98,12 @@ export default async function HomePage({
       (p.geography_scope === "address" && p.geocoded_lat != null && p.geocoded_lng != null)
   );
 
+  // The newest 2 proposals sit up top next to the map so there's actually
+  // something to look at above the fold; the rest of the list below picks
+  // up right where that leaves off, so nothing appears twice.
+  const featuredProposals = filteredProposals.slice(0, 2);
+  const restProposals = filteredProposals.slice(2);
+
   return (
     <div>
       <h1 className="text-2xl font-semibold">If I were mayor...</h1>
@@ -122,94 +131,32 @@ export default async function HomePage({
         </p>
       </div>
 
-      <div className="mt-6">
-        {/* Supabase's loose typing for the embedded categories join infers
-            an array shape even though it's actually a single object at
-            runtime for this to-one relationship — same mismatch handled
-            with `any` elsewhere in this codebase. */}
-        {/* Caption now lives overlaid on the map itself (bottom-left
-            corner, semi-transparent) instead of as a separate line of
-            text underneath — see philly-map.tsx. */}
-        <PhillyMap proposals={onMap as any} totalCount={filteredProposals.length} />
+      {/* Map + first proposals side by side on desktop, so you can see an
+          actual proposal without scrolling past a full-width map first.
+          The map used to sit alone here at a fixed 500px; it's now a
+          compact preview (see expandable-map.tsx) sharing the row with
+          the first couple of cards, with a button to pop the same map
+          open full-size when you actually want to browse it. Below lg,
+          there's no row to share, so the map still gets its own line —
+          just shorter than before. */}
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          {/* Supabase's loose typing for the embedded categories join infers
+              an array shape even though it's actually a single object at
+              runtime for this to-one relationship — same mismatch handled
+              with `any` elsewhere in this codebase. */}
+          {/* Caption still lives overlaid on the map itself (bottom-left
+              corner, semi-transparent) instead of as a separate line of
+              text underneath — see philly-map.tsx. */}
+          <ExpandableMap proposals={onMap as any} totalCount={filteredProposals.length} />
+        </div>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:col-span-2 lg:grid-cols-1">
+          {featuredProposals.map((p: any) => renderProposalCard(p))}
+        </div>
       </div>
 
       <ul className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredProposals.map((p: any) => {
-          const score = (p.reactions ?? []).reduce(
-            (sum: number, r: any) => sum + r.value,
-            0
-          );
-
-          const location =
-            p.geography_scope === "citywide"
-              ? "Citywide"
-              : p.geography_scope === "council_district" && p.council_district
-              ? `District ${p.council_district}`
-              : p.geography_label ?? p.geography_scope;
-
-          return (
-            <li
-              key={p.id}
-              className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white"
-            >
-              {/* The color strip now always shows, image or not — it was
-                  getting replaced entirely by the cover image before,
-                  which meant cards with an image lost their category
-                  color cue at a glance. */}
-              <div
-                className="h-2"
-                style={{ backgroundColor: p.categories?.color ?? "#e5e5e5" }}
-              />
-              {p.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={p.image_url}
-                  alt=""
-                  className="h-36 w-full object-cover"
-                  style={{
-                    objectPosition: `${p.image_position_x ?? 50}% ${p.image_position_y ?? 50}%`,
-                  }}
-                />
-              )}
-              <div className="flex flex-1 flex-col p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/?category=${p.categories?.slug ?? ""}`}
-                    className="rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700 hover:underline"
-                    style={{ backgroundColor: `${p.categories?.color ?? "#e5e5e5"}33` }}
-                  >
-                    {p.categories?.label}
-                  </Link>
-                  <span className="text-xs uppercase tracking-wide text-neutral-400">
-                    {p.type}
-                  </span>
-                </div>
-                <Link
-                  href={`/proposals/${p.id}`}
-                  className="mt-2 block text-base font-semibold leading-snug hover:underline"
-                >
-                  {p.title}
-                </Link>
-                <p className="mt-1 line-clamp-2 text-sm text-neutral-600">{p.summary}</p>
-
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {p.proposal_tags?.map((pt: any) => (
-                    <span key={pt.tags?.slug} className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
-                      #{pt.tags?.label}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-auto flex items-center justify-between pt-3 text-xs text-neutral-500">
-                  <span>📍 {location}</span>
-                  <span className="font-medium text-neutral-700">
-                    {score >= 0 ? `+${score}` : score} votes
-                  </span>
-                </div>
-              </div>
-            </li>
-          );
-        })}
+        {restProposals.map((p: any) => renderProposalCard(p))}
         {filteredProposals.length === 0 && (
           <li className="text-neutral-500">
             No proposals yet — be the first mayor.
@@ -218,4 +165,83 @@ export default async function HomePage({
       </ul>
     </div>
   );
+
+  // Shared card markup for both the featured pair up top and the full
+  // grid below it, so the two spots can't drift apart in styling.
+  function renderProposalCard(p: any) {
+    const score = (p.reactions ?? []).reduce(
+      (sum: number, r: any) => sum + r.value,
+      0
+    );
+
+    const location =
+      p.geography_scope === "citywide"
+        ? "Citywide"
+        : p.geography_scope === "council_district" && p.council_district
+        ? `District ${p.council_district}`
+        : p.geography_label ?? p.geography_scope;
+
+    return (
+      <li
+        key={p.id}
+        className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white"
+      >
+        {/* The color strip now always shows, image or not — it was
+            getting replaced entirely by the cover image before,
+            which meant cards with an image lost their category
+            color cue at a glance. */}
+        <div
+          className="h-2"
+          style={{ backgroundColor: p.categories?.color ?? "#e5e5e5" }}
+        />
+        {p.image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={p.image_url}
+            alt=""
+            className="h-36 w-full object-cover"
+            style={{
+              objectPosition: `${p.image_position_x ?? 50}% ${p.image_position_y ?? 50}%`,
+            }}
+          />
+        )}
+        <div className="flex flex-1 flex-col p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/?category=${p.categories?.slug ?? ""}`}
+              className="rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700 hover:underline"
+              style={{ backgroundColor: `${p.categories?.color ?? "#e5e5e5"}33` }}
+            >
+              {p.categories?.label}
+            </Link>
+            <span className="text-xs uppercase tracking-wide text-neutral-400">
+              {p.type}
+            </span>
+          </div>
+          <Link
+            href={`/proposals/${p.id}`}
+            className="mt-2 block text-base font-semibold leading-snug hover:underline"
+          >
+            {p.title}
+          </Link>
+          <p className="mt-1 line-clamp-2 text-sm text-neutral-600">{p.summary}</p>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {p.proposal_tags?.map((pt: any) => (
+              <span key={pt.tags?.slug} className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
+                #{pt.tags?.label}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-auto flex items-center justify-between pt-3 text-xs text-neutral-500">
+            <span>📍 {location}</span>
+            <span className="font-medium text-neutral-700">
+              {score >= 0 ? `+${score}` : score} votes
+            </span>
+          </div>
+        </div>
+      </li>
+    );
+  }
 }
