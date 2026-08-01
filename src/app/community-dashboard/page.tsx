@@ -33,7 +33,7 @@ const statNumberFont = Fredoka({ subsets: ["latin"], weight: ["700"], display: "
 const STAT_COLORS = {
   proposals: "#8358D3", // Public Safety
   contributed: "#4069D9", // General Government Operations
-  comments: "#F86767", // Benefits and Pensions
+  comments: "#F86767", // Public Employment & Benefits
   decisionMakers: "#FF74A5", // Infrastructure and Sanitation
   letters: "#6BAB68", // Culture and Leisure
   contactedOfficials: "#FF881A", // Education and Subsidies

@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { markNotificationsSeen } from "@/app/actions";
 import type { NotificationItem, NotificationIcon } from "@/lib/notifications";
-import { BellIcon, CommentIcon, LinkIcon, CheckCircleIcon, HourglassIcon } from "@/components/icons";
+import { BellIcon, CommentIcon, LinkIcon, CheckCircleIcon, HourglassIcon, TagIcon } from "@/components/icons";
 
 const ICONS_BY_TYPE: Record<NotificationIcon, (props: { className?: string }) => React.ReactElement> = {
   comment: CommentIcon,
   link: LinkIcon,
   approved: CheckCircleIcon,
   pending: HourglassIcon,
+  tag: TagIcon,
 };
 
 function NotificationRow({ item, onNavigate }: { item: NotificationItem; onNavigate: () => void }) {

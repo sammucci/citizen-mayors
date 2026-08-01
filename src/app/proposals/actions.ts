@@ -260,6 +260,58 @@ export async function updateProposalImage(
   return result;
 }
 
+// Lets the owner clear a cover image entirely instead of only ever being
+// able to replace it with another one — previously the only path back
+// from "I don't want this image anymore" was uploading a different file.
+// Best-effort delete of the actual file from storage too, so removing an
+// image doesn't just hide it while leaving it sitting in the bucket
+// forever; not fatal if that part fails (a URL that doesn't parse the
+// way expected, a storage hiccup) since clearing image_url is the part
+// that actually controls what renders.
+export async function removeProposalImage(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id, image_url")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can remove the image.");
+  }
+
+  if (proposal.image_url) {
+    const marker = "/proposal-images/";
+    const idx = proposal.image_url.indexOf(marker);
+    if (idx !== -1) {
+      const path = proposal.image_url.slice(idx + marker.length);
+      const { error: storageError } = await supabase.storage
+        .from("proposal-images")
+        .remove([path]);
+      if (storageError) {
+        console.error("removeProposalImage: storage delete failed", storageError);
+      }
+    }
+  }
+
+  const { error } = await supabase
+    .from("proposals")
+    .update({ image_url: null, image_position_x: null, image_position_y: null })
+    .eq("id", proposalId);
+  if (error) {
+    console.error("removeProposalImage: clearing image_url failed", error);
+    return { error: "Couldn't remove the image. Try again." };
+  }
+
+  revalidatePath(`/proposals/${proposalId}`);
+  revalidatePath("/");
+  return {};
+}
+
 // Lets the owner set the cover image's focal point — the crop
 // (object-cover) can cut off the part of the photo that actually
 // matters, so this stores where "the important part" is as an x/y

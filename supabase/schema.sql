@@ -387,7 +387,33 @@ create table public.proposals (
 create table public.proposal_tags (
   proposal_id uuid references public.proposals(id) on delete cascade,
   tag_id int references public.tags(id) on delete cascade,
+  -- Lets the notification bell time-gate "a tag you follow just showed up
+  -- on a proposal" the same way every other bell item is time-gated
+  -- (created_at > notifications_seen_at) — see profile_followed_tags
+  -- below and getNotifications() in lib/notifications.ts. A brand-new
+  -- proposal's initial tags get this at creation time, and a tag added
+  -- later to an existing proposal (the tag-suggestion approval flow)
+  -- gets it then — one column covers both cases Samantha asked for
+  -- ("new proposals AND later tag additions") without two separate code
+  -- paths to keep in sync.
+  created_at timestamptz not null default now(),
   primary key (proposal_id, tag_id)
+);
+
+-- Tags a resident follows on their own profile — the "crowdsourced
+-- expertise" piece: pick the topics you know about or care about, and
+-- get alerted (via the notification bell, see getNotifications()) when a
+-- proposal shows up carrying one of them, whether that's a brand-new
+-- proposal or an existing one that just got tagged with it. Deliberately
+-- NOT scoped to geography (citywide/district) — Samantha's call: someone
+-- who knows zoning law might want to weigh in citywide, not just in
+-- their own council district, so expertise shouldn't be fenced off by
+-- where you happen to live.
+create table public.profile_followed_tags (
+  profile_id uuid references public.profiles(id) on delete cascade,
+  tag_id int references public.tags(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (profile_id, tag_id)
 );
 
 -- Anyone signed in can propose a tag on a proposal they don't own — the
@@ -573,7 +599,7 @@ create table public.proposal_flags (
 -- ---------------------------------------------------------------------------
 insert into public.categories (slug, label, description, requires_budget, sort_order, color) values
   ('public_safety', 'Public Safety', 'Police, fire, prisons, and criminal justice.', true, 1, '#8358D3'),
-  ('benefits_pensions', 'Benefits and Pensions', 'Employee retirement contributions and health care fringe benefits.', true, 2, '#F86767'),
+  ('benefits_pensions', 'Public Employment & Benefits', 'City jobs and salaries, plus employee retirement and health care benefits.', true, 2, '#F86767'),
   ('general_government', 'General Government Operations', 'Administration, internal tech, legal, fleet, and facilities.', true, 3, '#4069D9'),
   ('infrastructure_sanitation', 'Infrastructure and Sanitation', 'Streets, cleaning, and transit support.', true, 4, '#FF74A5'),
   ('culture_leisure', 'Culture and Leisure', 'Parks, recreation, libraries, and arts.', true, 5, '#6BAB68'),
@@ -637,6 +663,7 @@ alter table public.zip_council_districts enable row level security;
 alter table public.categories enable row level security;
 alter table public.tags enable row level security;
 alter table public.tag_groups enable row level security;
+alter table public.profile_followed_tags enable row level security;
 alter table public.decision_makers enable row level security;
 alter table public.grants enable row level security;
 alter table public.proposal_grants enable row level security;
@@ -681,6 +708,19 @@ create policy "admin updates volunteer category groups" on public.volunteer_cate
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 create policy "admin deletes volunteer category groups" on public.volunteer_category_groups for delete
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+-- Owner-only in every direction, on purpose — which tags someone follows
+-- says something about what they're interested in/expert on, and unlike
+-- organization membership (public, since it's just "which civic groups
+-- are you part of") this isn't shown anywhere publicly. If the citizen-
+-- expert badge feature later needs a public signal, that should be a
+-- separate derived/aggregate value, not exposing this table itself.
+create policy "user reads own followed tags" on public.profile_followed_tags for select
+  using (auth.uid() = profile_id);
+create policy "user follows tags" on public.profile_followed_tags for insert
+  with check (auth.uid() = profile_id);
+create policy "user unfollows own tags" on public.profile_followed_tags for delete
+  using (auth.uid() = profile_id);
+
 create policy "public read proposal power tree" on public.proposal_power_tree_nodes for select using (true);
 create policy "public read power_tree_node_updates" on public.power_tree_node_updates for select using (true);
 -- Unpublished proposals are only visible to their own owner — everyone

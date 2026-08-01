@@ -38,15 +38,23 @@ export function ExpandableMap({
 
   return (
     <>
-      <div className="relative h-[260px] lg:h-full">
-        <PhillyMap proposals={proposals} totalCount={totalCount} fill />
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="absolute right-2 top-2 z-[500] rounded-md bg-white/90 px-2.5 py-1.5 text-xs font-medium text-neutral-700 shadow-sm backdrop-blur-sm transition hover:bg-white"
-        >
-          <span aria-hidden="true">⤢</span> Expand map
-        </button>
+      {/* White padded card around the map (same treatment as the modal's
+          own bg-white p-3 shadow-xl wrapper below) instead of the map
+          sitting directly on the cream page background — it was blending
+          in with almost no visual separation. The padding also gives the
+          map itself a bit of breathing room instead of its border sitting
+          flush against the card edge. */}
+      <div className="h-[260px] rounded-lg border border-neutral-200 bg-white p-2 shadow-sm lg:h-full">
+        <div className="relative h-full">
+          <PhillyMap proposals={proposals} totalCount={totalCount} fill />
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="absolute right-2 top-2 z-[500] rounded-md bg-white/90 px-2.5 py-1.5 text-xs font-medium text-neutral-700 shadow-sm backdrop-blur-sm transition hover:bg-white"
+          >
+            <span aria-hidden="true">⤢</span> Expand map
+          </button>
+        </div>
       </div>
 
       {expanded && (

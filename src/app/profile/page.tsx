@@ -4,6 +4,7 @@ import { CivicReportCard, type CivicLog, type CivicStats } from "@/components/ci
 import { ProfileInfoCard } from "@/components/profile-info-card";
 import { ProposalMiniCardGrid } from "@/components/proposal-mini-card-grid";
 import { MyOrganizationsSection } from "@/components/my-organizations-section";
+import { FollowedTagsSection } from "@/components/followed-tags-section";
 import { statusColorClasses } from "@/lib/status-colors";
 import { HourglassIcon } from "@/components/icons";
 
@@ -337,6 +338,37 @@ export default async function ProfilePage() {
     .filter(Boolean) as { id: string; name: string }[];
   const allOrganizationNames = (allOrganizations ?? []).map((o: any) => o.name);
 
+  // "Your expertise & interests" — the tag half of the crowdsourced-
+  // expertise feature (see profile_followed_tags in schema.sql). Grouped
+  // exactly the way the admin tag repository groups them (same
+  // order("label") on both tags and tag_groups) so a resident sees the
+  // same topic buckets Samantha curates, not a second, different
+  // grouping invented just for this screen. Tags with no group_id fall
+  // into an "Other" bucket rather than getting silently dropped.
+  const [{ data: allTagsRaw }, { data: tagGroupsRaw }, { data: myFollowedTagsRaw }] = await Promise.all([
+    supabase.from("tags").select("id, label, group_id").order("label"),
+    supabase.from("tag_groups").select("id, label").order("label"),
+    supabase.from("profile_followed_tags").select("tag_id").eq("profile_id", user.id),
+  ]);
+  const followedTagIds = new Set((myFollowedTagsRaw ?? []).map((r: any) => r.tag_id));
+  const tagsByGroup = new Map<number | "other", { id: number; label: string; following: boolean }[]>();
+  for (const t of (allTagsRaw ?? []) as any[]) {
+    const key = t.group_id ?? "other";
+    const list = tagsByGroup.get(key) ?? [];
+    list.push({ id: t.id, label: t.label, following: followedTagIds.has(t.id) });
+    tagsByGroup.set(key, list);
+  }
+  const tagGroups = [
+    ...(tagGroupsRaw ?? []).map((g: any) => ({
+      id: g.id,
+      label: g.label,
+      tags: tagsByGroup.get(g.id) ?? [],
+    })),
+    ...(tagsByGroup.has("other")
+      ? [{ id: "other", label: "Other", tags: tagsByGroup.get("other")! }]
+      : []),
+  ];
+
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
@@ -419,6 +451,8 @@ export default async function ProfilePage() {
       />
 
       <MyOrganizationsSection myOrganizations={myOrganizations} allOrganizationNames={allOrganizationNames} />
+
+      <FollowedTagsSection tagGroups={tagGroups} />
 
       <div>
         <h2 className="text-lg font-semibold">Your proposals</h2>

@@ -94,3 +94,21 @@ export function HourglassIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function TagIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M11.5 3.5H6a2.5 2.5 0 0 0-2.5 2.5v5.5a1 1 0 0 0 .29.71l8.5 8.5a1 1 0 0 0 1.42 0l7.09-7.09a1 1 0 0 0 0-1.42l-8.5-8.5a1 1 0 0 0-.71-.29Z" />
+      <circle cx="8.25" cy="8.25" r="1.25" />
+    </svg>
+  );
+}

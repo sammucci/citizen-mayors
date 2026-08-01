@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 
-export type NotificationIcon = "comment" | "link" | "approved" | "pending";
+export type NotificationIcon = "comment" | "link" | "approved" | "pending" | "tag";
 
 export type NotificationItem = {
   id: string;
@@ -41,12 +41,14 @@ export async function getNotifications(
     .maybeSingle();
   const lastSeenAt = profile?.notifications_seen_at ?? new Date(0).toISOString();
 
-  const [{ data: myProposals }, { data: myComments }] = await Promise.all([
+  const [{ data: myProposals }, { data: myComments }, { data: myFollowedTags }] = await Promise.all([
     supabase.from("proposals").select("id").eq("owner_id", userId),
     supabase.from("comments").select("id").eq("author_id", userId),
+    supabase.from("profile_followed_tags").select("tag_id").eq("profile_id", userId),
   ]);
   const myProposalIds = (myProposals ?? []).map((p: any) => p.id);
   const myCommentIds = (myComments ?? []).map((c: any) => c.id);
+  const followedTagIds = (myFollowedTags ?? []).map((t: any) => t.tag_id);
 
   const [
     { data: newCommentsOnMyProposals },
@@ -55,6 +57,7 @@ export async function getNotifications(
     { data: myApprovedLinks },
     { data: openSuggestionsOnMyProposals },
     { data: pendingLinksOnMyProposals },
+    { data: taggedMatches },
   ] = await Promise.all([
     myProposalIds.length > 0
       ? supabase
@@ -115,6 +118,21 @@ export async function getNotifications(
           .eq("status", "pending")
           .neq("submitted_by", userId)
       : Promise.resolve({ data: [] as any[] }),
+    // The "crowdsourced expertise" alert (see profile_followed_tags in
+    // schema.sql): a proposal now carries one of your followed tags,
+    // whether it's brand-new or an existing proposal that just got
+    // tagged with it — proposal_tags.created_at covers both cases with
+    // one time gate, since a new proposal's initial tags get that same
+    // timestamp at creation too. Filtered down to published, not-your-own
+    // proposals in JS below (your own proposals aren't useful to alert
+    // yourself about, and drafts shouldn't surface at all).
+    followedTagIds.length > 0
+      ? supabase
+          .from("proposal_tags")
+          .select("proposal_id, created_at, tags ( label ), proposals ( id, title, owner_id, published )")
+          .in("tag_id", followedTagIds)
+          .gt("created_at", lastSeenAt)
+      : Promise.resolve({ data: [] as any[] }),
   ]);
 
   const newCommentsById = new Map<string, { title: string; proposalId: string }>();
@@ -139,6 +157,32 @@ export async function getNotifications(
       icon: "link",
       text: `${n.decision_makers?.name ?? "Someone"} was added to the decision chain on "${n.proposals?.title ?? "a proposal"}"`,
       href: `/proposals/${n.proposal_id}`,
+    });
+  }
+
+  // Tag-match alerts (crowdsourced expertise) — grouped by proposal so a
+  // proposal that matches two or three followed tags at once shows up as
+  // one item ("matches your interest in X, Y") instead of one row per
+  // tag. Excludes your own proposals (nothing to discover about your own
+  // work) and anything unpublished (a draft shouldn't alert anyone).
+  const taggedMatchesByProposal = new Map<string, { title: string; labels: string[] }>();
+  for (const m of (taggedMatches ?? []) as any[]) {
+    const proposal = m.proposals;
+    if (!proposal || !proposal.published || proposal.owner_id === userId) continue;
+    const existing = taggedMatchesByProposal.get(proposal.id);
+    const label = m.tags?.label ?? "a topic you follow";
+    if (existing) {
+      if (!existing.labels.includes(label)) existing.labels.push(label);
+    } else {
+      taggedMatchesByProposal.set(proposal.id, { title: proposal.title ?? "A proposal", labels: [label] });
+    }
+  }
+  for (const [proposalId, v] of taggedMatchesByProposal.entries()) {
+    items.push({
+      id: `tag-${proposalId}`,
+      icon: "tag",
+      text: `"${v.title}" matches your interest in ${v.labels.join(", ")}`,
+      href: `/proposals/${proposalId}`,
     });
   }
 
