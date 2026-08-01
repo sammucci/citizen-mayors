@@ -844,7 +844,7 @@ export default async function ProposalPage({
             >
               {proposal.categories?.label} • {proposal.type}
             </div>
-          <div className="rounded-lg border border-neutral-200 bg-white p-4">
+          <div id="decision-chain-anchor" className="rounded-lg border border-neutral-200 bg-white p-4">
             {/* Briefly renamed to "Getting it done" — reverted back to
                 "Decision chain" per your call, since that name already
                 matches the underlying decision-maker language used

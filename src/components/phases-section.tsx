@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { addPhase, approvePhase, removePhase, reorderPhases, updatePhaseProgress } from "@/app/proposals/actions";
@@ -21,26 +21,20 @@ const PROGRESS_LABELS: Record<Phase["progress"], string> = {
   done: "Done",
 };
 
-// The "how does this actually get done" list — separate from the
-// decision chain above it on the proposal page, and laid out horizontally
-// left-to-right (per the GoVocal reference you sent) instead of stacked
-// vertically, since a step-by-step process reads more naturally that way
-// and the chain + phases both being tall vertical stacks side by side was
-// too much of the same visual rhythm.
+// Redesigned per your GoVocal reference: a numbered progress bar across
+// the top (click any number, or use the ‹ › arrows, to step through),
+// and one phase's full detail shown below at a time — not a scrollable
+// row of small cards, which read as "back end and messy" rather than a
+// real part of the page.
 //
-// A fixed "Map your decision chain" card always leads the list — same
-// idea as the chain's own "We the people" anchor: not a real database
-// row, can't be dragged, removed, or reordered, just always there as the
-// first thing every project starts with before anything else gets added.
+// Step 1 is always a fixed "Map your decision chain" card — same idea as
+// "We the people" on the decision chain itself: not a real database row,
+// can't be moved, inserted around, or removed, just always there as
+// where every project starts. Everything after it is a real phase.
 //
-// Real phases (everything after the anchor) support the same
-// crowdsourced trust model as the chain: anyone signed in can suggest
-// one, the owner's own additions land approved immediately, anyone
-// else's land pending until the owner approves or removes them. They can
-// also be dragged into a new position or inserted into any gap between
-// two existing phases — they used to only ever append at the end, which
-// read as "just keep adding on top of each other" with no way to slot a
-// step in between two you'd already added.
+// Selection tracks the phase's id (not a raw array index) so it follows
+// the right phase around correctly even after a reorder or an insert
+// shifts everyone else's position.
 export function PhasesSection({
   proposalId,
   categoryColor,
@@ -61,172 +55,352 @@ export function PhasesSection({
   const router = useRouter();
   const finalTextColor = readableTextColor(categoryColor);
 
-  // Local copy so a drag can move things around instantly, before the
-  // server round-trip confirms it — same pattern as PowerTreeChain.
-  const [ordered, setOrdered] = useState(phases);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [touchDragIndex, setTouchDragIndex] = useState<number | null>(null);
-  const [touchOverGap, setTouchOverGap] = useState<number | null>(null);
-  const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const [openGap, setOpenGap] = useState<number | null>(null);
-  const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string>(
+    phases.length > 0 ? phases[phases.length - 1].id : "anchor"
+  );
+  const [insertMode, setInsertMode] = useState<"before" | "after" | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
-  // Resync if the underlying data changed elsewhere (added/removed, or a
-  // status/progress/note change) — same "content, not just id list"
-  // fingerprint PowerTreeChain uses, so an approve or a progress update
-  // never gets silently swallowed by a stale local copy.
-  const currentKey = phases
-    .map((p) => `${p.id}:${p.status}:${p.progress}:${p.note ?? ""}`)
-    .join("|");
-  const [syncedKey, setSyncedKey] = useState(currentKey);
-  if (currentKey !== syncedKey) {
-    setOrdered(phases);
-    setSyncedKey(currentKey);
-    setOpenGap(null);
+  const steps: Array<{ id: string; label: string; phase: Phase | null }> = [
+    { id: "anchor", label: "Map your decision chain", phase: null },
+    ...phases.map((p) => ({ id: p.id, label: p.label, phase: p })),
+  ];
+  let selectedIndex = steps.findIndex((s) => s.id === selectedId);
+  if (selectedIndex === -1) selectedIndex = steps.length - 1;
+  const selected = steps[selectedIndex];
+  const selectedPhase = selected.phase;
+  // Index within the real (non-anchor) phases array — needed for
+  // move-left/right and insert-before/after, which only ever operate on
+  // real phases and their neighbors.
+  const realIndex = selectedPhase ? phases.findIndex((p) => p.id === selectedPhase.id) : -1;
+
+  function goTo(index: number) {
+    const clamped = Math.max(0, Math.min(steps.length - 1, index));
+    setSelectedId(steps[clamped].id);
+    setInsertMode(null);
   }
 
-  function persistOrder(newOrdered: Phase[]) {
-    setOrdered(newOrdered);
+  function persistOrder(newPhases: Phase[]) {
     const fd = new FormData();
     fd.set("proposal_id", proposalId);
-    newOrdered.forEach((p) => fd.append("phase_id", p.id));
+    newPhases.forEach((p) => fd.append("phase_id", p.id));
     reorderPhases(fd).then(() => router.refresh());
   }
 
-  function handleDropAtIndex(targetIndex: number) {
-    if (!dragId) return;
-    const current = [...ordered];
-    const fromIndex = current.findIndex((p) => p.id === dragId);
-    if (fromIndex === -1) return;
-    const [moved] = current.splice(fromIndex, 1);
-    const adjustedTarget = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
-    current.splice(adjustedTarget, 0, moved);
-    persistOrder(current);
-    setDragId(null);
+  function moveBy(delta: -1 | 1) {
+    if (realIndex === -1) return;
+    const target = realIndex + delta;
+    if (target < 0 || target >= phases.length) return;
+    const next = [...phases];
+    [next[realIndex], next[target]] = [next[target], next[realIndex]];
+    persistOrder(next);
   }
 
-  function handlePointerDownOnHandle(e: React.PointerEvent, index: number, phaseId: string) {
-    if (!isOwner) return;
-    e.preventDefault();
-    e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setDragId(phaseId);
-    setTouchDragIndex(index);
-    setTouchOverGap(index);
-  }
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">Phases</h2>
+        <div className="flex items-center gap-1.5">
+          {canContribute && (
+            <button
+              type="button"
+              onClick={() => {
+                goTo(steps.length - 1);
+                setInsertMode("after");
+              }}
+              className="rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+            >
+              + Add phase
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => goTo(selectedIndex - 1)}
+            disabled={selectedIndex === 0}
+            aria-label="Previous phase"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-sm text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => goTo(selectedIndex + 1)}
+            disabled={selectedIndex === steps.length - 1}
+            aria-label="Next phase"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-sm text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+      <p className="mt-1 text-sm text-neutral-600">
+        Getting approval is one part of it. Here's the rest of what it actually takes to make this real, step by step.
+      </p>
 
-  function handlePointerMoveOnHandle(e: React.PointerEvent) {
-    if (touchDragIndex === null) return;
-    const x = e.clientX;
-    let gap = 0;
-    cardRefs.current.forEach((el, i) => {
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      if (x > rect.left + rect.width / 2) gap = i + 1;
-    });
-    setTouchOverGap(gap);
-  }
+      {/* Numbered progress bar — click a number, or use ‹ › above, to
+          jump to that phase. min-w per segment plus overflow-x-auto
+          keeps this readable instead of squeezing every number down to
+          nothing once there are more than a handful of phases. */}
+      <div className="mt-4 overflow-x-auto pb-1">
+        <div className="flex gap-1">
+          {steps.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => goTo(i)}
+              className="min-w-[64px] flex-1 rounded-md py-2 text-xs font-bold transition"
+              style={
+                i === selectedIndex
+                  ? { backgroundColor: categoryColor, color: finalTextColor }
+                  : { backgroundColor: "#e5e5e5", color: "#737373" }
+              }
+              title={s.label}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </div>
+        <div className="mt-1 flex gap-1">
+          {steps.map((s) => (
+            <div key={s.id} className="min-w-[64px] flex-1 truncate text-center text-[10px] text-neutral-500">
+              {s.label}
+            </div>
+          ))}
+        </div>
+      </div>
 
-  function handlePointerUpOnHandle() {
-    if (touchOverGap !== null) {
-      handleDropAtIndex(touchOverGap);
-    }
-    setTouchDragIndex(null);
-    setTouchOverGap(null);
-  }
+      {/* Detail panel for whichever step is selected. */}
+      <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+        {!selectedPhase ? (
+          <>
+            <h3 className="text-base font-semibold text-neutral-800">🗺️ Map your decision chain</h3>
+            <p className="mt-1 text-sm text-neutral-600">
+              Every project starts here — figuring out who actually has to say yes to make this real.
+            </p>
+            <Link
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById("decision-chain-anchor")?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="mt-2 inline-block text-xs underline"
+              style={{ color: categoryColor }}
+            >
+              ↑ See the decision chain above
+            </Link>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {selectedPhase.status === "pending" && (
+                <span className="inline-block rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                  ⏳ Pending approval
+                </span>
+              )}
+              <h3 className="text-base font-semibold text-neutral-800">{selectedPhase.label}</h3>
+            </div>
+            {selectedPhase.status === "pending" ? (
+              <p className="mt-0.5 text-xs text-neutral-500">Suggested by {selectedPhase.addedByName}</p>
+            ) : (
+              <p className="mt-0.5 text-xs font-medium text-neutral-500">
+                {PROGRESS_LABELS[selectedPhase.progress]}
+              </p>
+            )}
+            {selectedPhase.note && (
+              <p className="mt-2 text-sm text-neutral-700">{selectedPhase.note}</p>
+            )}
 
-  // One-click add straight from a recommendation chip — skips the open
-  // form entirely since the label's already decided; always appends at
-  // the end (no insert_index). Still lands pending for a non-owner, same
-  // as typing it in by hand would.
-  function quickAdd(label: string) {
-    const fd = new FormData();
-    fd.set("proposal_id", proposalId);
-    fd.set("label", label);
-    addPhase(fd).then(() => router.refresh());
-  }
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {selectedPhase.status === "pending" && isOwner && (
+                <form
+                  action={async (formData) => {
+                    await approvePhase(formData);
+                    router.refresh();
+                  }}
+                >
+                  <input type="hidden" name="proposal_id" value={proposalId} />
+                  <input type="hidden" name="phase_id" value={selectedPhase.id} />
+                  <button
+                    className="rounded-full px-3 py-1 text-xs font-medium text-white"
+                    style={{ backgroundColor: categoryColor }}
+                  >
+                    Approve this suggestion
+                  </button>
+                </form>
+              )}
+              {selectedPhase.status === "approved" && isOwner && (
+                <div className="flex flex-wrap gap-1">
+                  {(["not_started", "in_progress", "done"] as const).map((p) => (
+                    <form
+                      key={p}
+                      action={async (formData) => {
+                        await updatePhaseProgress(formData);
+                        router.refresh();
+                      }}
+                    >
+                      <input type="hidden" name="proposal_id" value={proposalId} />
+                      <input type="hidden" name="phase_id" value={selectedPhase.id} />
+                      <input type="hidden" name="progress" value={p} />
+                      <button
+                        className={`rounded-full border px-2 py-0.5 text-[11px] ${
+                          selectedPhase.progress === p ? "" : "border-neutral-300 text-neutral-500 hover:bg-white"
+                        }`}
+                        style={
+                          selectedPhase.progress === p
+                            ? { backgroundColor: categoryColor, borderColor: categoryColor, color: finalTextColor }
+                            : undefined
+                        }
+                      >
+                        {PROGRESS_LABELS[p]}
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              )}
+            </div>
 
-  function GapInserter({ gapIndex, isDropTarget }: { gapIndex: number; isDropTarget?: boolean }) {
-    if (!canContribute) return null;
-    const isOpen = openGap === gapIndex;
+            {isOwner && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-neutral-200 pt-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => moveBy(-1)}
+                  disabled={realIndex <= 0}
+                  className="text-neutral-500 underline hover:text-neutral-700 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-40"
+                >
+                  ← Move earlier
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveBy(1)}
+                  disabled={realIndex === -1 || realIndex >= phases.length - 1}
+                  className="text-neutral-500 underline hover:text-neutral-700 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-40"
+                >
+                  Move later →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInsertMode(insertMode === "before" ? null : "before")}
+                  className="text-neutral-500 underline hover:text-neutral-700"
+                >
+                  + Insert before
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInsertMode(insertMode === "after" ? null : "after")}
+                  className="text-neutral-500 underline hover:text-neutral-700"
+                >
+                  + Insert after
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingRemove(true)}
+                  className="text-duty-red underline hover:opacity-80"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
 
-    return (
-      <div
-        className={`flex shrink-0 items-stretch justify-center rounded transition-colors ${
-          isDropTarget ? "bg-duty-purple/10 ring-2 ring-duty-purple/40" : ""
-        }`}
-      >
-        {isOpen ? (
+            {confirmingRemove && (
+              <form
+                action={async (formData) => {
+                  await removePhase(formData);
+                  router.refresh();
+                  setConfirmingRemove(false);
+                }}
+                className="mt-2 flex flex-wrap items-center gap-1.5 rounded border border-duty-red/40 bg-duty-red/5 p-2"
+              >
+                <input type="hidden" name="proposal_id" value={proposalId} />
+                <input type="hidden" name="phase_id" value={selectedPhase.id} />
+                <p className="flex-1 text-xs text-neutral-700">Remove this phase?</p>
+                <button className="rounded bg-duty-red px-2 py-1 text-xs font-medium text-white">Remove</button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingRemove(false)}
+                  className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-white"
+                >
+                  Cancel
+                </button>
+              </form>
+            )}
+          </>
+        )}
+
+        {/* Insert form — appends a brand-new phase either right before or
+            right after whichever step is currently selected (or, from
+            the anchor, right after it — i.e. as the very first real
+            phase). */}
+        {insertMode && (
           <form
             action={async (formData) => {
               await addPhase(formData);
               router.refresh();
-              setOpenGap(null);
+              setInsertMode(null);
             }}
-            className="w-56 space-y-1.5 rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-2"
+            className="mt-3 space-y-1.5 rounded-lg border border-dashed border-neutral-300 bg-white p-2.5"
           >
             <input type="hidden" name="proposal_id" value={proposalId} />
-            <input type="hidden" name="insert_index" value={gapIndex} />
+            <input
+              type="hidden"
+              name="insert_index"
+              value={
+                selectedPhase
+                  ? insertMode === "before"
+                    ? realIndex
+                    : realIndex + 1
+                  : 0
+              }
+            />
+            <p className="text-[11px] text-neutral-500">
+              {selectedPhase
+                ? `Inserting ${insertMode} "${selectedPhase.label}"`
+                : "Adding the first real phase, right after the anchor"}
+            </p>
             <input
               name="label"
               required
               autoFocus
               placeholder="e.g. Write a letter to the editor"
-              className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
             />
             <input
               name="note"
-              placeholder="Optional note"
-              className="w-full rounded border border-neutral-300 px-2 py-1 text-[11px]"
+              placeholder="Optional note — why this step, or how to do it"
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
             />
             <div className="flex gap-1.5">
               <button
-                className="rounded px-2 py-1 text-[11px]"
+                className="rounded px-2 py-1 text-xs"
                 style={{ backgroundColor: categoryColor, color: finalTextColor }}
               >
-                Insert here
+                Add
               </button>
               <button
                 type="button"
-                onClick={() => setOpenGap(null)}
-                className="rounded border border-neutral-300 px-2 py-1 text-[11px] text-neutral-600 hover:bg-neutral-50"
+                onClick={() => setInsertMode(null)}
+                className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
               >
                 Cancel
               </button>
             </div>
           </form>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setOpenGap(gapIndex)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-full border border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
-            title="Insert a phase here"
-          >
-            +
-          </button>
         )}
       </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <h2 className="text-base font-semibold">Phases</h2>
-      <p className="mt-1 text-sm text-neutral-600">
-        Getting approval is one part of it. Here's the rest of what it actually takes to make this real, step by step.
-      </p>
 
       {recommendedLabels.length > 0 && (
         <div className="mt-3">
-          <p className="text-xs font-medium text-neutral-500">
-            Common next steps for proposals like this one:
-          </p>
+          <p className="text-xs font-medium text-neutral-500">Common next steps for proposals like this one:</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {recommendedLabels.map((label) => (
               <button
                 key={label}
                 type="button"
-                onClick={() => quickAdd(label)}
+                onClick={() => {
+                  const fd = new FormData();
+                  fd.set("proposal_id", proposalId);
+                  fd.set("label", label);
+                  addPhase(fd).then(() => router.refresh());
+                }}
                 className="rounded-full border border-dashed px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
                 style={{ borderColor: `${categoryColor}88` }}
               >
@@ -236,168 +410,6 @@ export function PhasesSection({
           </div>
         </div>
       )}
-
-      {/* Horizontal, left-to-right scrollable timeline. overflow-x-auto
-          with a bit of bottom padding keeps the scrollbar (on the
-          platforms that show one) from sitting flush against the cards. */}
-      <div className="mt-3 flex items-stretch gap-2 overflow-x-auto pb-2">
-        {/* Fixed anchor — not a real phase, never draggable, never
-            removable. Every project starts here, same idea as "We the
-            people" on the decision chain. */}
-        <div className="flex w-40 shrink-0 flex-col justify-center rounded-lg border border-dashed border-neutral-300 bg-cream/60 p-3 text-center">
-          <span className="text-sm font-medium text-neutral-600">🗺️ Map your decision chain</span>
-          <span className="mt-1 text-[11px] text-neutral-400">Always step one</span>
-        </div>
-
-        <GapInserter gapIndex={0} isDropTarget={touchDragIndex !== null && touchOverGap === 0} />
-
-        {ordered.map((phase, i) => {
-          const isPending = phase.status === "pending";
-          return (
-            <Fragment key={phase.id}>
-              <div
-                ref={(el) => {
-                  cardRefs.current[i] = el;
-                }}
-                className={`flex w-56 shrink-0 flex-col rounded-lg border p-3 transition-opacity ${
-                  isPending ? "border-dashed border-neutral-400" : "border-neutral-200"
-                } ${touchDragIndex === i ? "opacity-50" : ""}`}
-              >
-                <div className="flex items-start justify-between gap-1.5">
-                  <div className="flex min-w-0 items-center gap-1">
-                    {isOwner && (
-                      <span
-                        onPointerDown={(e) => handlePointerDownOnHandle(e, i, phase.id)}
-                        onPointerMove={handlePointerMoveOnHandle}
-                        onPointerUp={handlePointerUpOnHandle}
-                        onPointerCancel={handlePointerUpOnHandle}
-                        style={{ touchAction: "none" }}
-                        className="shrink-0 cursor-grab select-none text-sm"
-                        title="Drag to reorder"
-                        aria-hidden="true"
-                      >
-                        ⠿
-                      </span>
-                    )}
-                    <span className="truncate text-sm font-semibold">{phase.label}</span>
-                  </div>
-                  {isOwner && (
-                    <div className="flex shrink-0 items-center gap-1">
-                      {isPending && (
-                        <form
-                          action={async (formData) => {
-                            await approvePhase(formData);
-                            router.refresh();
-                          }}
-                        >
-                          <input type="hidden" name="proposal_id" value={proposalId} />
-                          <input type="hidden" name="phase_id" value={phase.id} />
-                          <button
-                            className="rounded-full border border-neutral-300 px-1.5 text-xs text-neutral-500 hover:border-green-600 hover:text-green-600"
-                            title="Approve this suggestion"
-                          >
-                            ✓
-                          </button>
-                        </form>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setConfirmingRemoveId(phase.id)}
-                        className="rounded-full border border-neutral-300 px-1.5 text-xs text-neutral-500 hover:border-duty-red hover:text-duty-red"
-                        title={isPending ? "Reject this suggestion" : "Remove this phase"}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {isPending && (
-                  <p className="mt-0.5 text-[11px] text-neutral-500">Suggested by {phase.addedByName}</p>
-                )}
-                {phase.note && (
-                  <p className="mt-1 text-xs italic text-neutral-500">{phase.note}</p>
-                )}
-
-                {!isPending && isOwner && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {(["not_started", "in_progress", "done"] as const).map((p) => (
-                      <form
-                        key={p}
-                        action={async (formData) => {
-                          await updatePhaseProgress(formData);
-                          router.refresh();
-                        }}
-                      >
-                        <input type="hidden" name="proposal_id" value={proposalId} />
-                        <input type="hidden" name="phase_id" value={phase.id} />
-                        <input type="hidden" name="progress" value={p} />
-                        <button
-                          className={`rounded-full border px-1.5 py-0.5 text-[10px] ${
-                            phase.progress === p ? "" : "border-neutral-300 text-neutral-500 hover:bg-neutral-50"
-                          }`}
-                          style={
-                            phase.progress === p
-                              ? { backgroundColor: categoryColor, borderColor: categoryColor, color: finalTextColor }
-                              : undefined
-                          }
-                        >
-                          {PROGRESS_LABELS[p]}
-                        </button>
-                      </form>
-                    ))}
-                  </div>
-                )}
-                {!isPending && !isOwner && (
-                  <p className="mt-2 text-[11px] font-medium text-neutral-500">
-                    {PROGRESS_LABELS[phase.progress]}
-                  </p>
-                )}
-
-                {confirmingRemoveId === phase.id && (
-                  <form
-                    action={async (formData) => {
-                      await removePhase(formData);
-                      router.refresh();
-                      setConfirmingRemoveId(null);
-                    }}
-                    className="mt-2 space-y-1 rounded border border-duty-red/40 bg-duty-red/5 p-1.5"
-                  >
-                    <input type="hidden" name="proposal_id" value={proposalId} />
-                    <input type="hidden" name="phase_id" value={phase.id} />
-                    <p className="text-[11px] text-neutral-700">
-                      {isPending ? "Reject this suggested phase?" : "Remove this phase?"}
-                    </p>
-                    <div className="flex gap-1">
-                      <button className="rounded bg-duty-red px-2 py-0.5 text-[11px] font-medium text-white">
-                        {isPending ? "Reject" : "Remove"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmingRemoveId(null)}
-                        className="rounded border border-neutral-300 px-2 py-0.5 text-[11px] text-neutral-600 hover:bg-neutral-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-
-              <GapInserter
-                gapIndex={i + 1}
-                isDropTarget={touchDragIndex !== null && touchOverGap === i + 1}
-              />
-            </Fragment>
-          );
-        })}
-
-        {ordered.length === 0 && !canContribute && (
-          <div className="flex w-56 shrink-0 items-center text-sm text-neutral-500">
-            No phases mapped out yet.
-          </div>
-        )}
-      </div>
 
       <p className="mt-3 text-xs text-neutral-500">
         {councilPerson ? (
