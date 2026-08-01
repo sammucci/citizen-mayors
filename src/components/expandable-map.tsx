@@ -11,13 +11,12 @@ import { PhillyMap } from "./philly-map";
 // the exact same map full-size in a modal — so browsing pins in detail
 // is still one click away, not gone.
 //
-// The preview stretches to fill its grid row (fill, via lg:h-full) so it
-// matches however tall the two featured cards next to it end up being,
-// instead of sitting at a fixed short height regardless of that —
-// Samantha's report of "the map is still super short" was this exact
-// mismatch (map fixed at 260px while the card column next to it was
-// taller). Below lg there's no shared row (map and cards each get their
-// own line), so it falls back to a fixed height there instead.
+// Now sits at the top of the right-hand column (map, then the 2 featured
+// cards stacked underneath it — see the landing page layout) instead of
+// beside a row of cards, so there's no sibling height to stretch and
+// match anymore — just a fixed height, tall enough to read as roughly 2
+// stacked cards' worth of visual weight instead of a thin strip easy to
+// miss up in that corner.
 export function ExpandableMap({
   proposals,
   totalCount,
@@ -43,8 +42,10 @@ export function ExpandableMap({
           sitting directly on the cream page background — it was blending
           in with almost no visual separation. The padding also gives the
           map itself a bit of breathing room instead of its border sitting
-          flush against the card edge. */}
-      <div className="h-[260px] rounded-lg border border-neutral-200 bg-white p-2 shadow-sm lg:h-full">
+          flush against the card edge. Border is brand purple now instead
+          of neutral/white — a plain white border still blended into the
+          cream background. */}
+      <div className="h-[420px] rounded-lg border-2 border-duty-purple bg-white p-2 shadow-sm">
         <div className="relative h-full">
           <PhillyMap proposals={proposals} totalCount={totalCount} fill />
           <button

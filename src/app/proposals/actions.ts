@@ -1273,22 +1273,49 @@ export async function removePowerTreeNode(formData: FormData) {
 // Project Phases — the "how does this actually get done" list, separate
 // from the decision chain above. See migration_phases.sql for why this
 // exists and where funding went. Same crowdsourced-suggestion shape as
-// the chain (open to add, owner approves/removes/reorders/toggles
-// progress), just simpler: one label + an optional note, no drag reorder
-// in this first version — phases append in the order they're added,
-// which matches how Samantha described building this list out ("write
-// proposal > talk to your council person > ...").
+// the chain (open to add, owner approves/removes/toggles progress), and
+// now also the same drag-reorder-and-insert-at-any-gap behavior as the
+// chain (see reorderPhases and the insert_index handling below) — phases
+// used to only ever append at the end, but that read as "just keep
+// adding on top of each other" with no way to slot a step in between two
+// existing ones, which was a real complaint.
 // ---------------------------------------------------------------------------
+
+// Same full-reindex approach as reindexPowerTreeNodes — rewrites
+// sort_order = array position for the whole ordered list in one go, so
+// both "insert at a specific spot" and drag reorder share one code path
+// instead of two different partial-shift implementations.
+async function reindexPhases(
+  supabase: ReturnType<typeof createClient>,
+  orderedIds: string[]
+) {
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from("proposal_phases").update({ sort_order: index }).eq("id", id)
+    )
+  );
+  const failed = results.filter((r) => r.error);
+  if (failed.length > 0) {
+    console.error(
+      "reindexPhases: one or more sort_order updates failed",
+      failed.map((r) => r.error?.message)
+    );
+  }
+}
 
 // Anyone signed in can suggest a phase; the owner's own additions land
 // approved immediately, anyone else's land pending until the owner
 // approves or removes them — identical trust model to addPowerTreeNode.
+// insert_index is a 0-based position in the phase list (0 = right after
+// the fixed "Map your decision chain" anchor); omitting it appends at
+// the end, same as the old always-append behavior.
 export async function addPhase(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
   const label = String(formData.get("label") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
+  const insertIndexRaw = formData.get("insert_index");
   if (!label) throw new Error("A phase needs at least a short label.");
 
   const { data: proposal } = await supabase
@@ -1299,20 +1326,57 @@ export async function addPhase(formData: FormData) {
   if (!proposal) throw new Error("Proposal not found.");
   const isOwner = proposal.owner_id === user.id;
 
-  const { count } = await supabase
+  const { data: existingPhases } = await supabase
     .from("proposal_phases")
-    .select("id", { count: "exact", head: true })
-    .eq("proposal_id", proposalId);
+    .select("id, sort_order")
+    .eq("proposal_id", proposalId)
+    .order("sort_order", { ascending: true });
+  const existingIds = (existingPhases ?? []).map((p) => p.id);
 
-  const { error } = await supabase.from("proposal_phases").insert({
-    proposal_id: proposalId,
-    label,
-    note: note || null,
-    sort_order: count ?? 0,
-    status: isOwner ? "approved" : "pending",
-    added_by: user.id,
-  });
-  if (error) throw new Error(error.message);
+  const { data: newPhase, error } = await supabase
+    .from("proposal_phases")
+    .insert({
+      proposal_id: proposalId,
+      label,
+      note: note || null,
+      sort_order: existingIds.length, // placeholder — reindexed below
+      status: isOwner ? "approved" : "pending",
+      added_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (error || !newPhase) throw new Error(error?.message ?? "Could not add that phase.");
+
+  const insertIndex =
+    insertIndexRaw != null && insertIndexRaw !== ""
+      ? Math.max(0, Math.min(existingIds.length, Number(insertIndexRaw)))
+      : existingIds.length;
+  existingIds.splice(insertIndex, 0, newPhase.id);
+  await reindexPhases(supabase, existingIds);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Full drag-and-drop reorder, same shape as reorderPowerTreeNodes — the
+// client sends every phase id in its new order and this just reindexes
+// to match.
+export async function reorderPhases(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const orderedIds = formData.getAll("phase_id").map(String);
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can reorder its phases.");
+  }
+  if (orderedIds.length === 0) return;
+
+  await reindexPhases(supabase, orderedIds);
 
   revalidatePath(`/proposals/${proposalId}`);
 }

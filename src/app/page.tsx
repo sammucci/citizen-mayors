@@ -18,7 +18,7 @@ const ExpandableMap = nextDynamicImport(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[260px] items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-sm text-neutral-500">
+      <div className="flex h-[420px] items-center justify-center rounded-lg border-2 border-duty-purple/40 bg-neutral-50 text-sm text-neutral-500">
         Loading map…
       </div>
     ),
@@ -110,55 +110,51 @@ export default async function HomePage({
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">If I were mayor...</h1>
-      <p className="mt-2 text-neutral-600">
-        Propose a policy or project for Philadelphia, and help shape everyone
-        else&apos;s.
-      </p>
-
-      {/* The real, prominent call to action — the header's "New
-          proposal" pill is there for when you're on some other page,
-          but this is the front-and-center version for the dashboard
-          itself, per your ask ("fun, not just a menu item"). */}
-      <Link
-        href="/proposals/new"
-        className="mt-5 inline-flex items-center gap-2 rounded-full bg-duty-purple px-6 py-3 text-base font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:opacity-90"
-      >
-        <span aria-hidden="true">🎉</span> Submit your proposal
-      </Link>
-
-      <div className="mt-6">
-        <ProposalFilters categories={categories ?? []} tags={tags ?? []} />
-        <p className="mt-1 text-xs text-neutral-400">
-          District filters also include citywide proposals, since those apply
-          everywhere.
-        </p>
-      </div>
-
-      {/* Map + first proposals share the same invisible 3-column grid as
-          the proposal list below (lg:grid-cols-3), so column edges line
-          up across the whole page instead of the map row using its own
-          5-column split — the map takes 2 of the 3 columns, the featured
-          cards stack in the 3rd, same column width as every card below.
-          Grid rows stretch their items to equal height by default, and
-          the map fills that stretched height (see expandable-map.tsx'
-          "fill" mode) instead of sitting at its own fixed height — so it
-          matches however tall the two featured cards end up being,
-          rather than looking short next to a taller card stack. Below
-          lg, there's no row to share, so the map still gets its own
-          line at a fixed shorter height instead. */}
-      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
+      {/* Reworked into a two-column hero per your sketch: the headline/
+          CTA/filters live in the left column, and the map now sits up in
+          the top-right corner instead of down in its own row — the
+          featured cards stack directly underneath it in that same right
+          column, so the map reads as "part of that corner" rather than a
+          wide banner splitting the page. Below lg there's no room for two
+          columns side by side, so it all just stacks in one, map first. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          {/* Supabase's loose typing for the embedded categories join infers
-              an array shape even though it's actually a single object at
-              runtime for this to-one relationship — same mismatch handled
-              with `any` elsewhere in this codebase. */}
-          {/* Caption still lives overlaid on the map itself (bottom-left
-              corner, semi-transparent) instead of as a separate line of
-              text underneath — see philly-map.tsx. */}
-          <ExpandableMap proposals={onMap as any} totalCount={filteredProposals.length} />
+          <h1 className="text-2xl font-semibold">If I were mayor...</h1>
+          <p className="mt-2 text-neutral-600">
+            Propose a policy or project for Philadelphia, and help shape
+            everyone else&apos;s.
+          </p>
+
+          {/* The real, prominent call to action — the header's "New
+              proposal" pill is there for when you're on some other page,
+              but this is the front-and-center version for the dashboard
+              itself, per your ask ("fun, not just a menu item"). */}
+          <Link
+            href="/proposals/new"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-duty-purple px-6 py-3 text-base font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:opacity-90"
+          >
+            <span aria-hidden="true">🎉</span> Submit your proposal
+          </Link>
+
+          <div className="mt-6">
+            <ProposalFilters categories={categories ?? []} tags={tags ?? []} />
+            <p className="mt-1 text-xs text-neutral-400">
+              District filters also include citywide proposals, since those
+              apply everywhere.
+            </p>
+          </div>
         </div>
+
+        {/* Map + the 2 featured cards share this one right-hand column
+            now — map on top (fixed-ish height via its own min-height
+            floor, see expandable-map.tsx), cards stacked below it,
+            instead of the map stretching to match a row it shared with
+            the cards. Supabase's loose typing for the embedded categories
+            join infers an array shape even though it's actually a single
+            object at runtime for this to-one relationship — same
+            mismatch handled with `any` elsewhere in this codebase. */}
         <div className="grid grid-cols-1 gap-5">
+          <ExpandableMap proposals={onMap as any} totalCount={filteredProposals.length} />
           {featuredProposals.map((p: any) => renderProposalCard(p))}
         </div>
       </div>

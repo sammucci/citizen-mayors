@@ -46,6 +46,15 @@ export const PHILLY_NEIGHBORHOOD_CENTROIDS: Record<string, [number, number]> = {
   "Fishtown": [39.9729, -75.1247],
   "East Kensington": [39.9845, -75.1276],
   "West Kensington": [39.9844, -75.1375],
+  // The broader "Kensington" name is a valid pick in the curated list
+  // (separate from its East/West/Olde sub-areas above), but the source
+  // boundary dataset only has polygons for those sub-areas, not one for
+  // "Kensington" as a whole — this was reported as a real bug (a
+  // proposal tagged plain "Kensington" wasn't showing on the map), so
+  // rather than leave it out like the other unmatched names, this is a
+  // manually-placed point near Kensington & Somerset, roughly the center
+  // of the broader neighborhood as commonly understood.
+  "Kensington": [39.9843, -75.1258],
   "Port Richmond": [39.9753, -75.1064],
   "Bridesburg": [39.9973, -75.0694],
   "Harrowgate": [39.9975, -75.1021],

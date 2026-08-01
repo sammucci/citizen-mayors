@@ -148,7 +148,7 @@ export function PhillyMap({
         center={[40.0, -75.14]}
         zoom={11}
         scrollWheelZoom={false}
-        className={`w-full rounded-lg border border-neutral-200 ${sizeClass}`}
+        className={`w-full rounded-lg border border-duty-purple/20 ${sizeClass}`}
         style={sizeStyle}
       >
         {/* Light-grey basemap (CartoDB Positron) instead of standard OSM
@@ -253,20 +253,30 @@ export function PhillyMap({
         })}
       </MapContainer>
 
-      {/* Overlaid on the map itself now, bottom-left, instead of a caption
-          line living underneath it — was easy to miss as a separate
-          block of text below the fold of the map; this way it reads as
-          part of the map the moment you look at it. z-[500] sits above
-          Leaflet's tile/marker panes (z-index up to ~400) but below the
-          default zoom control (z-index 1000, top-left, so no overlap). */}
+      {/* Same explanation as before (what's plotted vs. what's only in
+          the list below), but tucked behind a small (i) icon instead of
+          sitting on the map as permanent static text — that read as
+          cluttered hanging out there unprompted. Bottom-left, same spot
+          the old caption lived. z-[500] sits above Leaflet's tile/marker
+          panes (z-index up to ~400) but below the default zoom control
+          (z-index 1000, top-left, so no overlap). */}
       {totalCount !== undefined && (
-        <div className="pointer-events-none absolute bottom-2 left-2 z-[500] max-w-[85%] rounded-md bg-white/85 px-2.5 py-1.5 text-[11px] leading-snug text-neutral-700 shadow-sm backdrop-blur-sm sm:max-w-xs">
-          <span aria-hidden="true">📍</span> Showing {proposals.length} of {totalCount} proposal
-          {totalCount === 1 ? "" : "s"} on the map — a bold pin for an exact address,
-          a lighter one at a neighborhood's or council district's center when that's
-          all we have. The rest ({hiddenCount} located by zip or citywide, or a
-          neighborhood name we don't have a map point for yet) only show up in the
-          list below.
+        <div className="group absolute bottom-2 left-2 z-[500]">
+          <span
+            tabIndex={0}
+            className="flex h-6 w-6 cursor-help items-center justify-center rounded-full border border-duty-purple/40 bg-white/90 text-xs font-bold leading-none text-duty-purple shadow-sm outline-none backdrop-blur-sm transition hover:scale-110 focus-visible:ring-2 focus-visible:ring-duty-purple/50"
+            aria-label="What's shown on this map"
+          >
+            i
+          </span>
+          <div className="pointer-events-none absolute bottom-full left-0 mb-1.5 hidden w-64 rounded-md border border-neutral-200 bg-white p-2.5 text-[11px] leading-snug text-neutral-700 shadow-md group-hover:block group-focus-within:block">
+            <span aria-hidden="true">📍</span> Showing {proposals.length} of {totalCount} proposal
+            {totalCount === 1 ? "" : "s"} on the map — a bold pin for an exact address,
+            a lighter one at a neighborhood's or council district's center when that's
+            all we have. The rest ({hiddenCount} located by zip or citywide, or a
+            neighborhood name we don't have a map point for yet) only show up in the
+            list below.
+          </div>
         </div>
       )}
     </div>

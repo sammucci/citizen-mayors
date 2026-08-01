@@ -48,9 +48,9 @@ export default async function GrantsAdminPage() {
       </Link>
       <h1 className="mt-2 text-xl font-bold">Grants</h1>
       <p className="mt-1 text-sm text-neutral-500">
-        The shared registry anyone can attach to a proposal under "Getting it done." Click an
-        entry to fix its name, funder, link, or description — deleting removes it from the
-        registry for everyone and fails safely if it's currently attached to a proposal.
+        A shared reference list of funding sources — worth checking when writing up a
+        "secure funding" phase on a proposal. Click an entry to fix its name, funder, link,
+        or description; deleting removes it from the registry for everyone.
       </p>
 
       <div className="mt-4">

@@ -845,18 +845,20 @@ export default async function ProposalPage({
               {proposal.categories?.label} • {proposal.type}
             </div>
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
-            {/* Renamed from "Decision chain" to "Getting it done" — the
-                explainer now lives behind an (i) icon (InfoHeading)
-                instead of as permanent subtext. The separate "this is
-                collaborative, nothing lands without your OK" note that
-                used to sit underneath was dropped — "Got a piece of the
-                puzzle? Add it in." already carries that same reassurance
-                without a second line saying it again. Funding no longer
-                lives in this chain at all — it moved to the "Phases"
-                section below, since the chain is purely the
-                approval/permission path now (who has to say yes), not
-                where money gets secured. */}
-            <h2 className="text-base font-semibold">Getting it done</h2>
+            {/* Briefly renamed to "Getting it done" — reverted back to
+                "Decision chain" per your call, since that name already
+                matches the underlying decision-maker language used
+                everywhere else in the app. The explainer still lives
+                behind an (i) icon (InfoHeading) instead of as permanent
+                subtext. The separate "this is collaborative, nothing
+                lands without your OK" note that used to sit underneath
+                was dropped — "Got a piece of the puzzle? Add it in."
+                already carries that same reassurance without a second
+                line saying it again. Funding no longer lives in this
+                chain at all — it moved to the "Phases" section below,
+                since the chain is purely the approval/permission path
+                now (who has to say yes), not where money gets secured. */}
+            <h2 className="text-base font-semibold">Decision chain</h2>
             <InfoHeading
               as="p"
               className="mt-1 text-sm text-neutral-600"
@@ -907,23 +909,6 @@ export default async function ProposalPage({
             />
           </div>
           </div>
-
-          <PhasesSection
-            proposalId={proposal.id}
-            categoryColor={categoryColor}
-            isOwner={isOwner}
-            canContribute={Boolean(user)}
-            recommendedLabels={recommendedPhaseLabels}
-            councilPerson={councilPerson}
-            phases={(proposalPhases ?? []).map((p: any) => ({
-              id: p.id,
-              label: p.label,
-              note: p.note,
-              progress: p.progress,
-              status: p.status,
-              addedByName: p.profiles?.display_name ?? "A resident",
-            }))}
-          />
 
           <div className="rounded-lg border border-neutral-200 bg-white p-4">
             <h2 className="text-base font-semibold">Tags</h2>
@@ -1087,6 +1072,31 @@ export default async function ProposalPage({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Full-width now, below the two-column layout above, instead of
+          crammed into the narrow sidebar next to the decision chain —
+          that made for a lot of vertical stacking (chain + phases both
+          tall and skinny) and the horizontal, left-to-right step-by-step
+          feel of this list (per the GoVocal reference) needs real width
+          to work at all. */}
+      <div className="mt-6">
+        <PhasesSection
+          proposalId={proposal.id}
+          categoryColor={categoryColor}
+          isOwner={isOwner}
+          canContribute={Boolean(user)}
+          recommendedLabels={recommendedPhaseLabels}
+          councilPerson={councilPerson}
+          phases={(proposalPhases ?? []).map((p: any) => ({
+            id: p.id,
+            label: p.label,
+            note: p.note,
+            progress: p.progress,
+            status: p.status,
+            addedByName: p.profiles?.display_name ?? "A resident",
+          }))}
+        />
       </div>
     </div>
   );
