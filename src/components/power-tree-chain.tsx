@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addPowerTreeNode, reorderPowerTreeNodes, updatePeopleActionNote } from "@/app/proposals/actions";
 import { DecisionMakerField } from "@/components/decision-maker-field";
@@ -41,11 +41,14 @@ type Node = {
 // between every pair of entries lets you insert a decision-maker at
 // that exact spot instead of only ever appending at the end.
 //
-// Drag-and-drop here is plain HTML5 drag events, which works well with
-// a mouse but has no real touch support on phones (iOS/Android don't
-// fire these events for a finger drag at all). A ▲▼ tap-to-move
-// alternative was tried here for phones and pulled back out per
-// Samantha's call — dragging is still the only way to reorder for now.
+// Reordering is driven by a small grip handle on each card using Pointer
+// Events (pointerdown/pointermove/pointerup) instead of HTML5 drag
+// events — HTML5 drag never fires on a touch device at all, which is why
+// this used to be desktop/mouse-only. Pointer Events fire the same way
+// for a mouse, a finger, or a pen, so this is one code path that works
+// everywhere rather than a separate mobile fallback. (A ▲▼ tap-to-move
+// button approach was tried here previously for phones and pulled back
+// out per Samantha's call — this replaces that attempt, not extends it.)
 export function PowerTreeChain({
   proposalId,
   categoryColor,
@@ -79,6 +82,17 @@ export function PowerTreeChain({
   // server round-trip confirms it.
   const [ascending, setAscending] = useState(nodesAscending);
   const [dragId, setDragId] = useState<string | null>(null);
+  // Pointer Events (not HTML5 drag-and-drop) power the actual drag
+  // gesture for every pointer type — mouse, touch, and pen all fire the
+  // same pointerdown/pointermove/pointerup events, so this is the one
+  // code path that makes reordering work on a phone, not just a mouse.
+  // touchDragIndex is which DISPLAY card is being lifted; touchOverGap is
+  // which gap (0..display.length) the pointer is currently over, judged
+  // by comparing the pointer's Y position against each card's vertical
+  // midpoint as it moves — the same logic a native sortable list uses.
+  const [touchDragIndex, setTouchDragIndex] = useState<number | null>(null);
+  const [touchOverGap, setTouchOverGap] = useState<number | null>(null);
+  const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [openGap, setOpenGap] = useState<number | null>(null); // ascending insert index
   // Which kind of link a currently-open gap is inserting — decision-maker
   // (the original, default) or funding (Samantha's chain-node redesign:
@@ -141,27 +155,41 @@ export function PowerTreeChain({
     setDragId(null);
   }
 
-  // Dropping directly ON A CARD is different — it used to always mean
-  // "insert above this card" (same math as a gap drop), which made
-  // dragging a card down onto the very next card a no-op: removing the
-  // dragged card shifts the target up by one, and "insert above the
-  // target's new position" lands you right back where you started. A
-  // downward drag reads naturally as "put it after this card," an
-  // upward drag as "put it before this card" — so which side it lands
-  // on now follows the direction you dragged, matching how sortable
-  // lists elsewhere (Trello, etc.) behave.
-  function handleDropOnCard(targetDisplayIndex: number) {
-    if (!dragId) return;
-    const current = [...display];
-    const fromIndex = current.findIndex((n) => n.id === dragId);
-    if (fromIndex === -1 || fromIndex === targetDisplayIndex) return;
-    const draggingDown = fromIndex < targetDisplayIndex;
-    const [moved] = current.splice(fromIndex, 1);
-    let adjustedTarget = draggingDown ? targetDisplayIndex - 1 : targetDisplayIndex;
-    if (draggingDown) adjustedTarget += 1; // land after the target, not above it
-    current.splice(adjustedTarget, 0, moved);
-    persistOrder([...current].reverse());
-    setDragId(null);
+  // Starts a drag from the grip handle — works identically whether it's
+  // a mouse click or a finger touch, since both fire the same pointer
+  // events. setPointerCapture keeps every subsequent pointermove/pointerup
+  // routed to THIS element even once the pointer moves outside it, which
+  // is what makes dragging past the card's own edges (up toward the top
+  // of the chain, or down past the last card) work without needing a
+  // window-level listener.
+  function handlePointerDownOnHandle(e: React.PointerEvent, displayIndex: number, nodeId: string) {
+    if (!isOwner) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setDragId(nodeId);
+    setTouchDragIndex(displayIndex);
+    setTouchOverGap(displayIndex);
+  }
+
+  function handlePointerMoveOnHandle(e: React.PointerEvent) {
+    if (touchDragIndex === null) return;
+    const y = e.clientY;
+    let gap = 0;
+    cardRefs.current.forEach((el, i) => {
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (y > rect.top + rect.height / 2) gap = i + 1;
+    });
+    setTouchOverGap(gap);
+  }
+
+  function handlePointerUpOnHandle() {
+    if (touchOverGap !== null) {
+      handleDropAtDisplayIndex(touchOverGap);
+    }
+    setTouchDragIndex(null);
+    setTouchOverGap(null);
   }
 
   // Display gap index i -> ascending insert index. Gap 0 is above the
@@ -172,7 +200,7 @@ export function PowerTreeChain({
     return ascending.length - displayGapIndex;
   }
 
-  function GapInserter({ displayGapIndex }: { displayGapIndex: number }) {
+  function GapInserter({ displayGapIndex, isDropTarget }: { displayGapIndex: number; isDropTarget?: boolean }) {
     // Anyone signed in can suggest an addition, not just the owner —
     // it just lands pending until the owner approves it.
     if (!canContribute) return null;
@@ -196,9 +224,9 @@ export function PowerTreeChain({
 
     return (
       <li
-        onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
-        onDrop={isOwner ? () => handleDropAtDisplayIndex(displayGapIndex) : undefined}
-        className="flex justify-center"
+        className={`flex justify-center rounded transition-colors ${
+          isDropTarget ? "bg-duty-purple/10 py-1 ring-2 ring-duty-purple/40" : ""
+        }`}
       >
         {isOpen ? (
           <form
@@ -290,7 +318,7 @@ export function PowerTreeChain({
 
   return (
     <ul className="mt-3 space-y-1.5">
-      <GapInserter displayGapIndex={0} />
+      <GapInserter displayGapIndex={0} isDropTarget={touchDragIndex !== null && touchOverGap === 0} />
       {display.map((node, i) => (
         // Each card and its trailing gap are separate direct children of
         // the <ul> (via this Fragment) rather than both nested inside one
@@ -300,23 +328,44 @@ export function PowerTreeChain({
         // NEXT card got the real gap. Made the "+" look glued to the
         // card above it instead of centered between the two.
         <Fragment key={node.id}>
-          <div className="flex items-start gap-1.5">
-            <div
-              draggable={isOwner}
-              onDragStart={() => setDragId(node.id)}
-              onDragEnd={() => setDragId(null)}
-              // The only real drop targets used to be the thin "+" gap
-              // strips between cards — dropping anywhere on a card itself
-              // (which is what you'd naturally try) did nothing, so
-              // dragging looked broken even though it was technically
-              // wired up. Dropping directly on a card now lands above or
-              // below it depending on which way you dragged (see
-              // handleDropOnCard) instead of always "above," which used to
-              // make a downward drag onto the next card do nothing.
-              onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
-              onDrop={isOwner ? () => handleDropOnCard(i) : undefined}
-              className="min-w-0 flex-1"
-            >
+          <div
+            ref={(el) => {
+              cardRefs.current[i] = el;
+            }}
+            className={`flex items-start gap-1.5 transition-opacity ${
+              touchDragIndex === i ? "opacity-50" : ""
+            }`}
+          >
+            {/* Grip handle — the actual drag surface, via Pointer Events
+                rather than HTML5 drag-and-drop, so this works the same
+                way for a mouse click-and-drag and a finger touch-and-drag
+                (see handlePointerDownOnHandle above). Living the card
+                itself since HTML5 drag on the whole card doesn't fire on
+                touch at all — this is the fix for that, not a variant of
+                it. */}
+            {isOwner && (
+              <button
+                type="button"
+                aria-label="Drag to reorder"
+                title="Drag to reorder"
+                onPointerDown={(e) => handlePointerDownOnHandle(e, i, node.id)}
+                onPointerMove={handlePointerMoveOnHandle}
+                onPointerUp={handlePointerUpOnHandle}
+                onPointerCancel={handlePointerUpOnHandle}
+                style={{ touchAction: "none" }}
+                className="mt-3 flex shrink-0 select-none items-center justify-center rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:cursor-grabbing"
+              >
+                <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor" aria-hidden="true">
+                  <circle cx="4" cy="3" r="1.6" />
+                  <circle cx="10" cy="3" r="1.6" />
+                  <circle cx="4" cy="10" r="1.6" />
+                  <circle cx="10" cy="10" r="1.6" />
+                  <circle cx="4" cy="17" r="1.6" />
+                  <circle cx="10" cy="17" r="1.6" />
+                </svg>
+              </button>
+            )}
+            <div className="min-w-0 flex-1">
               <PowerTreeNodeCard
                 proposalId={proposalId}
                 node={node}
@@ -327,7 +376,7 @@ export function PowerTreeChain({
               />
             </div>
           </div>
-          <GapInserter displayGapIndex={i + 1} />
+          <GapInserter displayGapIndex={i + 1} isDropTarget={touchDragIndex !== null && touchOverGap === i + 1} />
         </Fragment>
       ))}
 

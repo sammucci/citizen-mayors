@@ -112,15 +112,21 @@ export function EditProposalForm({
       )}
 
       {scope === "address" && (
-        <Field label="Address or intersection">
-          <input
-            name="geography_label"
-            required
-            defaultValue={initial.geography_label ?? ""}
-            className="input"
-            placeholder="e.g. Frankford & Girard"
-          />
-        </Field>
+        <>
+          <Field label="Address or intersection">
+            <input
+              name="geography_label"
+              required
+              defaultValue={initial.geography_label ?? ""}
+              className="input"
+              placeholder="e.g. Frankford & Girard"
+            />
+          </Field>
+          <p className="-mt-3 text-xs text-neutral-500">
+            We'll place an exact pin on the map from this automatically — a
+            street address or an intersection both work.
+          </p>
+        </>
       )}
 
       <button

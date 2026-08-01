@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { geocodeAddress } from "@/lib/geocode-address";
 
 // Used at the top of every mutating action (vote, comment, add tags,
 // etc.). Signed-out visitors can browse everything, but any action that
@@ -50,8 +51,11 @@ async function requireUser() {
 // overlap — nearly every split zip in Philadelphia is >50% in one
 // district, so "most of this zip" is a reasonable auto-fill rather than
 // leaving it blank; the person can always correct it by hand.
-// Address/neighborhood don't have a reliable auto-lookup yet (needs real
-// geocoding — see README), so they stay unset for now.
+// Address now HAS real coordinates (see geocodeAddress below), but
+// turning a point into "which council district is this inside" needs a
+// point-in-polygon check against the district boundaries, which is a
+// separate piece of work from just getting a pin on the map — left unset
+// for address/neighborhood for now, same as before.
 async function resolveCouncilDistrict(
   supabase: ReturnType<typeof createClient>,
   formData: FormData,
@@ -114,6 +118,15 @@ export async function createProposal(formData: FormData) {
     geographyLabel
   );
 
+  // Real coordinates for a specific address/intersection, via the Census
+  // geocoder — this is what actually lets an address-scoped proposal show
+  // up on the map at all (before this, only council_district-scope
+  // proposals could plot anywhere, since a centroid was the only location
+  // data that existed). Failing quietly (geocodeAddress never throws) so
+  // a geocoding hiccup never blocks posting a proposal.
+  const geocoded =
+    geographyScope === "address" && geographyLabel ? await geocodeAddress(geographyLabel) : null;
+
   const { data: proposal, error } = await supabase
     .from("proposals")
     .insert({
@@ -126,6 +139,8 @@ export async function createProposal(formData: FormData) {
       geography_scope: geographyScope,
       geography_label: geographyScope === "citywide" ? null : geographyLabel || null,
       council_district: councilDistrict,
+      geocoded_lat: geocoded?.lat ?? null,
+      geocoded_lng: geocoded?.lng ?? null,
       published,
     })
     .select("id")
@@ -293,7 +308,7 @@ export async function updateProposalDetails(formData: FormData) {
 
   const { data: proposal } = await supabase
     .from("proposals")
-    .select("owner_id")
+    .select("owner_id, geography_scope, geography_label, geocoded_lat, geocoded_lng")
     .eq("id", proposalId)
     .single();
   if (proposal?.owner_id !== user.id) {
@@ -308,6 +323,21 @@ export async function updateProposalDetails(formData: FormData) {
     geographyLabel
   );
 
+  // Only hit the geocoder again if the address actually changed (or the
+  // scope just switched TO address, or a previous attempt never found a
+  // match) — re-saving a proposal with the same address every time
+  // someone edits an unrelated field shouldn't re-fire an external API
+  // call for no reason.
+  let geocoded: { lat: number; lng: number } | null = null;
+  if (geographyScope === "address" && geographyLabel) {
+    const addressUnchanged =
+      proposal?.geography_scope === "address" && proposal.geography_label === geographyLabel;
+    geocoded =
+      addressUnchanged && proposal?.geocoded_lat != null && proposal?.geocoded_lng != null
+        ? { lat: proposal.geocoded_lat, lng: proposal.geocoded_lng }
+        : await geocodeAddress(geographyLabel);
+  }
+
   const { error } = await supabase
     .from("proposals")
     .update({
@@ -317,6 +347,8 @@ export async function updateProposalDetails(formData: FormData) {
       geography_scope: geographyScope,
       geography_label: geographyScope === "citywide" ? null : geographyLabel || null,
       council_district: councilDistrict,
+      geocoded_lat: geocoded?.lat ?? null,
+      geocoded_lng: geocoded?.lng ?? null,
     })
     .eq("id", proposalId);
 

@@ -9,6 +9,7 @@ import {
   deleteDecisionMakerLegislation,
 } from "@/app/decision-makers/actions";
 import { COUNCIL_COMMITTEES } from "@/lib/council-committees";
+import { inferRepresents } from "@/lib/decision-maker-represents";
 
 // "vice_chair" stays a valid stored value (a couple of early v77 saves
 // may have used it) so it still displays correctly if it turns up, but
@@ -61,6 +62,7 @@ function formatDate(iso: string | null) {
 // server page itself can stay a plain data-fetch-and-hand-off.
 export function DecisionMakerProfileEditor({
   decisionMakerId,
+  decisionMakerName,
   canEdit,
   isAdmin,
   currentUserId,
@@ -68,6 +70,7 @@ export function DecisionMakerProfileEditor({
   legislation,
 }: {
   decisionMakerId: string;
+  decisionMakerName: string;
   canEdit: boolean;
   isAdmin: boolean;
   currentUserId: string | null;
@@ -75,6 +78,13 @@ export function DecisionMakerProfileEditor({
   legislation: LegislationRow[];
 }) {
   const router = useRouter();
+  // When the seat's own name already answers "who do they represent"
+  // (a district seat, at-large, or the Mayor), that's derived from the
+  // name instead of left as a separate editable field — see
+  // decision-maker-represents.ts for why (Samantha caught that the old
+  // picker let District 3's seat be set to say it represents District 5,
+  // with nothing stopping it).
+  const bakedInRepresents = inferRepresents(decisionMakerName);
   const [editingFields, setEditingFields] = useState(false);
   const [editingShowUp, setEditingShowUp] = useState(false);
   const [editingCareAbout, setEditingCareAbout] = useState(false);
@@ -319,28 +329,40 @@ export function DecisionMakerProfileEditor({
             </div>
             <div>
               <p className="text-xs text-neutral-600">Who they represent</p>
-              <div className="mt-1 flex items-center gap-3">
-                <label className="flex items-center gap-1 text-xs">
-                  <input type="radio" name="represents_scope" value="citywide" defaultChecked={profile.represents_scope === "citywide"} />
-                  Citywide
-                </label>
-                <label className="flex items-center gap-1 text-xs">
-                  <input type="radio" name="represents_scope" value="district" defaultChecked={profile.represents_scope === "district"} />
-                  A district
-                </label>
-                <label className="flex items-center gap-1 text-xs">
-                  <input type="radio" name="represents_scope" value="n/a" defaultChecked={profile.represents_scope === "n/a"} />
-                  N/A
-                </label>
-                <select name="represents_district" defaultValue={profile.represents_district ?? ""} className="input w-auto text-xs">
-                  <option value="">—</option>
-                  {DISTRICTS.map((d) => (
-                    <option key={d} value={d}>
-                      District {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {bakedInRepresents ? (
+                // No picker at all for a seat whose name already says who
+                // it represents — nothing submitted for this field even
+                // gets read; the server derives it from the seat's name
+                // regardless (see decision-maker-represents.ts), so there's
+                // no control here that could ever disagree with it.
+                <p className="mt-1 text-xs text-neutral-500">
+                  {bakedInRepresents.scope === "citywide" ? "Citywide" : `District ${bakedInRepresents.district}`} —
+                  fixed to this seat, not editable
+                </p>
+              ) : (
+                <div className="mt-1 flex items-center gap-3">
+                  <label className="flex items-center gap-1 text-xs">
+                    <input type="radio" name="represents_scope" value="citywide" defaultChecked={profile.represents_scope === "citywide"} />
+                    Citywide
+                  </label>
+                  <label className="flex items-center gap-1 text-xs">
+                    <input type="radio" name="represents_scope" value="district" defaultChecked={profile.represents_scope === "district"} />
+                    A district
+                  </label>
+                  <label className="flex items-center gap-1 text-xs">
+                    <input type="radio" name="represents_scope" value="n/a" defaultChecked={profile.represents_scope === "n/a"} />
+                    N/A
+                  </label>
+                  <select name="represents_district" defaultValue={profile.represents_district ?? ""} className="input w-auto text-xs">
+                    <option value="">—</option>
+                    {DISTRICTS.map((d) => (
+                      <option key={d} value={d}>
+                        District {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <button className="rounded bg-duty-purple px-3 py-1 text-xs font-medium text-white">Save</button>

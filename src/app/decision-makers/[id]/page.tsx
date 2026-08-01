@@ -211,6 +211,7 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
         {isElectedOfficial ? (
           <DecisionMakerProfileEditor
             decisionMakerId={decisionMaker.id}
+            decisionMakerName={decisionMaker.name}
             canEdit={Boolean(user)}
             isAdmin={isAdmin}
             currentUserId={user?.id ?? null}

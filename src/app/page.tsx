@@ -50,7 +50,7 @@ export default async function HomePage({
   let query = supabase
     .from("proposals")
     .select(
-      `id, title, type, summary, geography_scope, geography_label, council_district, created_at, image_url, image_position_x, image_position_y,
+      `id, title, type, summary, geography_scope, geography_label, council_district, geocoded_lat, geocoded_lng, created_at, image_url, image_position_x, image_position_y,
        categories!inner ( slug, label, color ),
        proposal_tags ( tags ( slug, label ) ),
        reactions ( value )`
@@ -84,12 +84,15 @@ export default async function HomePage({
       )
     : proposals ?? [];
 
-  // Only proposals with a council-district point actually plot — same
-  // Phase 1 limitation as before (real addresses aren't geocoded yet).
-  // Respects whatever filters are active, so the map and the grid below
-  // always show the same set.
+  // A proposal plots on the map if it has either a council district
+  // (centroid fallback) or real geocoded coordinates (an address that
+  // was successfully matched by the Census geocoder — see
+  // geocode-address.ts). Respects whatever filters are active, so the
+  // map and the grid below always show the same set.
   const onMap = filteredProposals.filter(
-    (p: any) => p.geography_scope === "council_district" && p.council_district
+    (p: any) =>
+      (p.geography_scope === "council_district" && p.council_district) ||
+      (p.geography_scope === "address" && p.geocoded_lat != null && p.geocoded_lng != null)
   );
 
   return (

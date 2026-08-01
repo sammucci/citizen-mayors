@@ -342,8 +342,15 @@ create table public.proposals (
   -- propose something for a district they don't live in. Only set when
   -- geography_scope = 'council_district'. Philadelphia has 10 districts.
   council_district int check (council_district between 1 and 10),
-  geography_point geography(Point, 4326),   -- dropped pin
+  geography_point geography(Point, 4326),   -- dropped pin (future manual-pin feature, unused so far)
   geography_polygon geography(Polygon, 4326), -- drawn area
+  -- Real coordinates for an 'address' scope proposal, filled in
+  -- automatically via the Census geocoder (see geocode-address.ts) when
+  -- the proposal is created or its geography is edited. Plain doubles
+  -- rather than the geography_point column above — see
+  -- migration_proposal_geocoding.sql for why.
+  geocoded_lat double precision,
+  geocoded_lng double precision,
   image_url text, -- optional cover image, stored in the "proposal-images" bucket
   -- Focal point for the cover image crop, as a 0-100 percentage pair fed
   -- into CSS object-position, so owners can drag to keep the important

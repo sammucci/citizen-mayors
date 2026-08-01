@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { inferRepresents } from "@/lib/decision-maker-represents";
 
 // "vice_chair" is still a valid stored value (kept for any rows saved
 // while that option briefly existed in the editor) even though the
@@ -75,10 +76,26 @@ export async function updateDecisionMakerStructuredFields(formData: FormData) {
   const electedDate = (formData.get("elected_date") as string | null) || null;
   const termEndDate = (formData.get("term_end_date") as string | null) || null;
   const nextElectionDate = (formData.get("next_election_date") as string | null) || null;
-  const representsScope = (formData.get("represents_scope") as string | null) || "n/a";
+  let representsScope = (formData.get("represents_scope") as string | null) || "n/a";
   const representsDistrictRaw = formData.get("represents_district") as string | null;
-  const representsDistrict =
+  let representsDistrict =
     representsScope === "district" && representsDistrictRaw ? Number(representsDistrictRaw) : null;
+
+  // For a seat whose name already says who it represents ("Councilmember,
+  // District 3"), that's derived from the name and overrides whatever was
+  // submitted — not just hidden in the editor, but enforced here too, so
+  // this can't drift out of sync with the seat's own title no matter how
+  // the request was made. See decision-maker-represents.ts.
+  const { data: decisionMaker } = await supabase
+    .from("decision_makers")
+    .select("name")
+    .eq("id", decisionMakerId)
+    .maybeSingle();
+  const inferred = decisionMaker ? inferRepresents(decisionMaker.name) : null;
+  if (inferred) {
+    representsScope = inferred.scope;
+    representsDistrict = inferred.district;
+  }
   // Committee rows are added on demand in the editor (see
   // decision-maker-profile-editor.tsx), so there's no fixed number of
   // them to loop over — scan the submitted fields for however many rows
