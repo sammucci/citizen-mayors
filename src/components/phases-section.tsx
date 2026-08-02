@@ -260,7 +260,7 @@ export function PhasesSection({
             </div>
 
             {isOwner && (
-              <div className="mt-3 flex items-center gap-1.5 border-t border-neutral-200 pt-2">
+              <div className="mt-3 flex items-center justify-end gap-1.5 border-t border-neutral-200 pt-2">
                 {/* Icon buttons instead of a row of text links — same
                     icon-plus-hover-tooltip pattern already used for
                     approve (✓) and remove (✕) elsewhere in the app, so

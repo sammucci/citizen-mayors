@@ -769,18 +769,27 @@ export async function addProposalTags(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
-// Anyone signed in can suggest a tag on a proposal they don't own —
-// either an existing one (typed to match, or picked from the datalist
-// the form offers) or a brand-new one. Which review path it takes
-// depends entirely on whether the label matches a real tag, resolved
-// here server-side so it works the same whether the visitor picked from
-// the datalist or just happened to type the exact existing name:
-//   existing tag  -> tag_id set   -> only the proposal owner needs to
-//                                    approve it (see approveTagSuggestion)
-//   brand-new tag -> tag_id null  -> owner approves first, then an
-//                                    admin finalizes it
-// Doesn't touch the real tags/proposal_tags tables itself either way —
-// this only ever logs the pending request.
+// Anyone signed in can suggest a tag — either an existing one (typed to
+// match, or picked from the datalist the form offers) or a brand-new
+// one. Which review path it takes depends on whether the label matches a
+// real tag AND whether the proposal's own owner is the one suggesting it
+// (same trust model as every other crowdsourced-suggestion action in
+// this file — addPhase, addPowerTreeNode, etc. — real bug fix: this one
+// had been requiring the owner to click Approve on their own tag, which
+// nothing else in the app makes you do):
+//   existing tag, owner suggesting it -> attached immediately, no
+//                                         approval step at all
+//   existing tag, someone else        -> tag_id set, pending until the
+//                                         owner approves (see
+//                                         approveTagSuggestion)
+//   brand-new tag, owner suggesting   -> skips straight to
+//                                         owner_approved (an admin still
+//                                         has to finalize a genuinely
+//                                         new tag either way, but the
+//                                         owner doesn't need to approve
+//                                         their own suggestion first)
+//   brand-new tag, someone else       -> pending; owner approves first,
+//                                         then an admin finalizes
 export async function suggestTag(formData: FormData) {
   const { supabase, user } = await requireUser();
 
@@ -794,12 +803,30 @@ export async function suggestTag(formData: FormData) {
     .ilike("label", label)
     .maybeSingle();
 
-  await supabase.from("tag_suggestions").insert({
-    proposal_id: proposalId,
-    suggested_by: user.id,
-    label,
-    tag_id: existingTag?.id ?? null,
-  });
+  const { isOwner } = await isAdminOrProposalOwner(supabase, user.id, proposalId);
+
+  if (isOwner && existingTag) {
+    // Nothing to approve — the owner suggesting a tag that already
+    // exists is exactly the same thing as just adding it directly.
+    await supabase
+      .from("proposal_tags")
+      .upsert({ proposal_id: proposalId, tag_id: existingTag.id }, { onConflict: "proposal_id,tag_id", ignoreDuplicates: true });
+    await supabase.from("tag_suggestions").insert({
+      proposal_id: proposalId,
+      suggested_by: user.id,
+      label,
+      tag_id: existingTag.id,
+      status: "approved",
+    });
+  } else {
+    await supabase.from("tag_suggestions").insert({
+      proposal_id: proposalId,
+      suggested_by: user.id,
+      label,
+      tag_id: existingTag?.id ?? null,
+      status: isOwner ? "owner_approved" : "pending",
+    });
+  }
 
   revalidatePath(`/proposals/${proposalId}`);
 }

@@ -715,31 +715,15 @@ export default async function CommunityDashboardPage({
             ))}
           </div>
         </div>
+        {/* Age range, Race/ethnicity, Gender, and Housing status used to
+            each get their own plain breakdown card right here, AND their
+            own card again further down in "How this compares to
+            Philadelphia" (which shows the exact same member percentage,
+            just alongside the Census one) — flagged as straight-up
+            redundant. Political affiliation has no Census equivalent to
+            compare against, so it's the only one that still belongs up
+            here on its own. */}
         <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-4">
-          <BreakdownList
-            title="Age range"
-            items={ageBreakdown}
-            respondedCount={ageBreakdown.reduce((s, i) => s + i.count, 0)}
-            totalCount={districtProfiles.length}
-          />
-          <BreakdownList
-            title="Race / ethnicity"
-            items={raceBreakdown}
-            respondedCount={raceBreakdown.reduce((s, i) => s + i.count, 0)}
-            totalCount={districtProfiles.length}
-          />
-          <BreakdownList
-            title="Gender"
-            items={genderBreakdown}
-            respondedCount={genderBreakdown.reduce((s, i) => s + i.count, 0)}
-            totalCount={districtProfiles.length}
-          />
-          <BreakdownList
-            title="Housing status"
-            items={housingBreakdown}
-            respondedCount={housingBreakdown.reduce((s, i) => s + i.count, 0)}
-            totalCount={districtProfiles.length}
-          />
           <BreakdownList
             title="Political affiliation"
             items={politicalBreakdown}

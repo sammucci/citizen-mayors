@@ -1020,25 +1020,49 @@ export default async function ProposalPage({
                 this used to render every single available tag as a chip
                 right on the page, which kept getting longer with every
                 tag added. A <details> costs nothing when closed and
-                still lets anyone expand it to browse/click a tag. */}
-            {isOwner && availableTags.length > 0 && (
+                still lets anyone expand it to browse/click a tag.
+                Real bug fix: this used to be owner-only, so a non-owner
+                had no way to actually browse the tag list at all — just
+                a plain text box with a native <input list> datalist
+                behind it, which most browsers don't show anything from
+                until you start typing a match. Now everyone gets the
+                same browsable list; clicking a chip just resolves to a
+                different action depending on who's clicking — the
+                owner's click attaches it directly (nothing to approve),
+                anyone else's click suggests it (same pending path as
+                typing the exact same label into the box below). */}
+            {user && availableTags.length > 0 && (
               <details className="mt-3 border-t border-neutral-100 pt-3">
                 <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-700">
-                  Add a tag ({availableTags.length} available)
+                  {isOwner ? "Add a tag" : "Browse existing tags"} ({availableTags.length} available)
                 </summary>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {availableTags.map((t) => (
-                    <form key={t.id} action={addProposalTags}>
-                      <input type="hidden" name="proposal_id" value={proposal.id} />
-                      <input type="hidden" name="tag_ids" value={t.id} />
-                      <button
-                        className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-[var(--cat-color)] hover:text-[var(--cat-color)]"
-                        style={{ ["--cat-color" as string]: categoryColor } as React.CSSProperties}
-                      >
-                        + {t.label}
-                      </button>
-                    </form>
-                  ))}
+                  {availableTags.map((t) =>
+                    isOwner ? (
+                      <form key={t.id} action={addProposalTags}>
+                        <input type="hidden" name="proposal_id" value={proposal.id} />
+                        <input type="hidden" name="tag_ids" value={t.id} />
+                        <button
+                          className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-[var(--cat-color)] hover:text-[var(--cat-color)]"
+                          style={{ ["--cat-color" as string]: categoryColor } as React.CSSProperties}
+                        >
+                          + {t.label}
+                        </button>
+                      </form>
+                    ) : (
+                      <form key={t.id} action={suggestTag}>
+                        <input type="hidden" name="proposal_id" value={proposal.id} />
+                        <input type="hidden" name="label" value={t.label} />
+                        <button
+                          className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-[var(--cat-color)] hover:text-[var(--cat-color)]"
+                          style={{ ["--cat-color" as string]: categoryColor } as React.CSSProperties}
+                          title="Suggest this tag — the owner just needs to say OK"
+                        >
+                          + {t.label}
+                        </button>
+                      </form>
+                    )
+                  )}
                 </div>
               </details>
             )}

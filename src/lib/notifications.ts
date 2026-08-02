@@ -181,7 +181,7 @@ export async function getNotifications(
     items.push({
       id: `tag-${proposalId}`,
       icon: "tag",
-      text: `"${v.title}" matches your interest in ${v.labels.join(", ")}`,
+      text: `"${v.title}" matches your interest in ${v.labels.join(", ")} — maybe you can add your expertise?`,
       href: `/proposals/${proposalId}`,
     });
   }
