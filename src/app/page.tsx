@@ -140,18 +140,25 @@ export default async function HomePage({
           invisible 3-column grid as the proposal list below
           (lg:grid-cols-3), so column edges line up across the whole page.
           The map takes 2 of the 3 columns, the featured cards stack in
-          the 3rd. The map is deliberately a hard fixed height (~2 stacked
-          featured-card heights, see expandable-map.tsx) rather than
-          dynamically matching whatever height the cards end up — no
-          stretch tug-of-war either direction. items-start keeps the
-          cards column sized to its own content (no dead space in a short
-          card), and the card markup below (h-36 capped image, 3-tag cap
-          + "+N more", 2-line summary clamp) is what actually keeps a
-          card from ever growing past "2 cards tall" in the first place —
-          that's the real fix for the gap that used to show up under the
-          map when a card ran long. Below lg, there's no row to share, so
-          the map gets its own line at its fixed shorter height instead. */}
-      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3 lg:items-start">
+          the 3rd.
+          Tried a hard fixed map height + relying on card content caps
+          (144px image, 3-tag cap, 2-line summary clamp) to keep cards
+          from ever outgrowing it — a long uncapped title, wrapped tags,
+          or a wrapped address line can still add up to more than "2
+          cards tall," which kept leaving a real gap under the map. Gone
+          back to the map actually responding to the cards instead: this
+          row uses the grid's default stretch (map column left alone, no
+          self-start/self-stretch override), and only the CARDS column
+          opts out with self-start so a short card still doesn't get
+          pulled tall with dead space at ITS bottom — same bug this
+          fixed the first time around. expandable-map.tsx's wrapper is
+          min-height, not a hard height, so stretch can grow it past the
+          floor when the cards run longer; PhillyMap's "fill" (h-full)
+          mode is what lets it actually fill however tall that ends up
+          being, so growing taller just shows more map, never a gap.
+          Below lg, there's no row to share, so the map gets its own line
+          at its floor height instead. */}
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           {/* Supabase's loose typing for the embedded categories join infers
               an array shape even though it's actually a single object at
@@ -162,7 +169,7 @@ export default async function HomePage({
               philly-map.tsx. */}
           <ExpandableMap proposals={onMap as any} totalCount={filteredProposals.length} />
         </div>
-        <div className="grid grid-cols-1 gap-5">
+        <div className="grid grid-cols-1 gap-5 self-start">
           {featuredProposals.map((p: any) => renderProposalCard(p))}
         </div>
       </div>

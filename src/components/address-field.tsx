@@ -80,9 +80,23 @@ export function AddressField({
         <p className="mt-1 text-xs text-neutral-400">Checking...</p>
       )}
       {!checking && preview && (
-        <p className="mt-1 text-xs text-neutral-500">
-          📍 Will show as: <span className="font-medium text-neutral-700">{preview}</span>
-        </p>
+        // Clickable, not just informational — one click accepts the
+        // corrected spelling/capitalization into the field itself,
+        // instead of leaving you to notice a mismatch and retype it by
+        // hand. Not live autofill-as-you-type on purpose: rewriting the
+        // field out from under someone mid-keystroke would fight their
+        // cursor and undo their own edits — this only ever replaces the
+        // value on an explicit click. Already matches → clicking again
+        // is a harmless no-op, so no need to hide it once accepted.
+        <button
+          type="button"
+          onClick={() => setValue(preview)}
+          className="mt-1 block text-left text-xs text-neutral-500 hover:text-neutral-700"
+          title="Click to use this corrected version"
+        >
+          📍 Will show as: <span className="font-medium text-neutral-700 underline decoration-dotted">{preview}</span>
+          {value.trim() !== preview && <span className="ml-1 text-neutral-400">(click to use this)</span>}
+        </button>
       )}
       {!checking && noMatch && (
         <p className="mt-1 text-xs text-neutral-400">

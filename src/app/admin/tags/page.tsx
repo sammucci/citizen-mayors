@@ -8,6 +8,8 @@ import { AddVolunteerCategoryForm } from "@/components/add-volunteer-category-fo
 import { AddVolunteerCategoryGroupForm } from "@/components/add-volunteer-category-group-form";
 import { VolunteerCategoryRow } from "@/components/volunteer-category-row";
 import { VolunteerCategoryGroupRow } from "@/components/volunteer-category-group-row";
+import { AddPopulationCategoryForm } from "@/components/add-population-category-form";
+import { PopulationCategoryRow } from "@/components/population-category-row";
 import { resolveOrphanedVolunteerCategory } from "@/app/admin/actions";
 import { approveTagSuggestion, rejectTagSuggestion } from "@/app/proposals/actions";
 
@@ -56,6 +58,7 @@ export default async function TagsAdminPage() {
     { data: volunteerCategories },
     { data: volunteerGroups },
     { data: logCategoryRows },
+    { data: populationCategories },
   ] = await Promise.all([
     supabase.from("tags").select("id, label, group_id, proposal_tags ( proposal_id )").order("label"),
     supabase.from("tag_groups").select("id, label").order("label"),
@@ -74,6 +77,7 @@ export default async function TagsAdminPage() {
     supabase.from("volunteer_categories").select("id, label, group_id").order("label"),
     supabase.from("volunteer_category_groups").select("id, label").order("label"),
     supabase.from("civic_logs").select("category").not("category", "is", null),
+    supabase.from("population_categories").select("id, label").order("label"),
   ]);
 
   const groupOptions = (volunteerGroups ?? []).map((g: any) => ({ id: String(g.id), label: g.label }));
@@ -428,6 +432,34 @@ export default async function TagsAdminPage() {
             </details>
           </div>
         )}
+      </div>
+
+      {/* ------------------------------------------------------------ */}
+      <div className="mt-8 border-t border-neutral-200 pt-6">
+        <h2 className="text-sm font-semibold text-neutral-700">Who it was for</h2>
+        <p className="mt-0.5 text-xs text-neutral-500">
+          The "who it was for" facet on volunteer hours (Youth, Seniors, Immigrants &
+          Refugees, ...) — independent of the "what you did" categories above.
+          Deliberately admin-only and never grows from what someone types while
+          logging hours: the whole point of splitting this out onto its own axis was
+          to stop the "where does Tutoring go — Youth, or Seniors?" problem, and that
+          only works if this list stays small and curated instead of sprawling the
+          same way tags do. Renaming here updates every past log entry that used the
+          old text.
+        </p>
+
+        <div className="mt-4">
+          <AddPopulationCategoryForm />
+        </div>
+
+        <ul className="mt-4 space-y-2">
+          {(populationCategories ?? []).map((c: any) => (
+            <PopulationCategoryRow key={c.id} id={String(c.id)} label={c.label} />
+          ))}
+          {(populationCategories ?? []).length === 0 && (
+            <p className="text-sm text-neutral-500">No categories yet.</p>
+          )}
+        </ul>
       </div>
     </div>
   );

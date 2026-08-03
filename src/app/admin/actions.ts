@@ -539,6 +539,81 @@ export async function deleteVolunteerCategory(formData: FormData): Promise<{ err
   return {};
 }
 
+// The "who it was for" registry (Youth, Seniors, Immigrants & Refugees,
+// ...) — deliberately admin-only add/rename/delete, unlike
+// volunteer_categories above. The whole point of splitting this out as
+// its own axis (see migration_population_served_and_topic_colors.sql)
+// was to stop taxonomy sprawl on the "what you did" side, so this list
+// isn't allowed to grow from what people type the same way. Same
+// no-foreign-key shape as volunteer categories though — civic_logs
+// stores population_served as plain text, so renaming/deleting here
+// never orphans or breaks a past log entry on its own; rename explicitly
+// carries every past log forward to the new label, same as
+// renameVolunteerCategory does.
+export async function addPopulationCategoryAdmin(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Give it a name first." };
+
+  const { data: existing } = await supabase
+    .from("population_categories")
+    .select("id")
+    .ilike("label", label)
+    .maybeSingle();
+  if (existing) return { error: "That category already exists." };
+
+  const { error } = await supabase.from("population_categories").insert({ label });
+  if (error) return { error: "Something went wrong adding that category." };
+
+  revalidatePath("/admin/tags");
+  return {};
+}
+
+export async function renamePopulationCategory(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Category name can't be empty." };
+
+  const { data: current } = await supabase
+    .from("population_categories")
+    .select("label")
+    .eq("id", id)
+    .maybeSingle();
+  const oldLabel = current?.label ?? null;
+
+  const { error } = await supabase.from("population_categories").update({ label }).eq("id", id);
+  if (error) {
+    return {
+      error: /duplicate|unique/i.test(error.message)
+        ? "That name's already used by another category."
+        : "Something went wrong renaming that category.",
+    };
+  }
+
+  if (oldLabel && oldLabel !== label) {
+    await supabase.from("civic_logs").update({ population_served: label }).eq("population_served", oldLabel);
+  }
+
+  revalidatePath("/admin/tags");
+  revalidatePath("/profile");
+  revalidatePath("/community-dashboard");
+  return {};
+}
+
+export async function deletePopulationCategory(formData: FormData): Promise<{ error?: string }> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const { error } = await supabase.from("population_categories").delete().eq("id", id);
+  if (error) return { error: "Something went wrong deleting that category." };
+
+  revalidatePath("/admin/tags");
+  return {};
+}
+
 // Groups (Environmental, Animals, Social Impact, ...) are a small,
 // curated list Samantha manages herself — unlike volunteer_categories,
 // this list never grows on its own from what people type. Assigning a

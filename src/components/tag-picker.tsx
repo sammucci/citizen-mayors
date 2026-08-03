@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { suggestTag } from "@/app/proposals/actions";
+import { MAX_TAGS_PER_PROPOSAL } from "@/lib/proposal-limits";
 
 type TagOption = { id: number; label: string };
 
@@ -20,16 +21,23 @@ export function TagPicker({
   proposalId,
   availableTags,
   isOwner,
+  currentTagCount,
 }: {
   proposalId: string;
   availableTags: TagOption[];
   isOwner: boolean;
+  // Total tags already on this proposal (approved AND pending — same
+  // count suggestTag itself checks server-side), so the cap can be
+  // shown proactively instead of only ever surfacing as a rejection
+  // after someone's already tried to add a 11th.
+  currentTagCount: number;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const atCap = currentTagCount >= MAX_TAGS_PER_PROPOSAL;
 
   const trimmed = query.trim();
   const matches = useMemo(() => {
@@ -60,7 +68,17 @@ export function TagPicker({
 
   return (
     <div className="mt-3 border-t border-neutral-100 pt-3">
-      <p className="text-xs text-neutral-500">Add a tag</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-neutral-500">Add a tag</p>
+        {/* Proactive counter instead of only ever finding out at the cap
+            — shows the same MAX_TAGS_PER_PROPOSAL the server itself
+            enforces (proposal-limits.ts), so this can't drift from what
+            suggestTag actually allows. Turns red once at the cap, same
+            as the error text below would if you tried anyway. */}
+        <p className={`text-[11px] ${atCap ? "font-medium text-duty-red" : "text-neutral-400"}`}>
+          {currentTagCount} of {MAX_TAGS_PER_PROPOSAL} tags used
+        </p>
+      </div>
       <div className="relative mt-2 max-w-xs">
         <input
           value={query}
@@ -76,11 +94,11 @@ export function TagPicker({
               submitLabel(hasExactMatch ? trimmed : matches[0]?.label ?? trimmed);
             }
           }}
-          placeholder="Start typing to find or add a tag..."
-          disabled={submitting}
+          placeholder={atCap ? "Already at the tag limit — remove one first" : "Start typing to find or add a tag..."}
+          disabled={submitting || atCap}
           className="w-full rounded border border-neutral-300 px-2 py-1.5 text-xs disabled:opacity-50"
         />
-        {open && (matches.length > 0 || trimmed) && (
+        {!atCap && open && (matches.length > 0 || trimmed) && (
           <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded border border-neutral-200 bg-white shadow-md">
             {matches.map((t) => (
               <button
@@ -108,6 +126,10 @@ export function TagPicker({
       </div>
       {error ? (
         <p className="mt-1 text-[11px] text-duty-red">{error}</p>
+      ) : atCap ? (
+        <p className="mt-1 text-[11px] text-duty-red">
+          This proposal already has the max of {MAX_TAGS_PER_PROPOSAL} tags — remove one before adding another.
+        </p>
       ) : (
         <p className="mt-1 text-[11px] text-neutral-400">
           {isOwner

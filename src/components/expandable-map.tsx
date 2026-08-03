@@ -11,16 +11,18 @@ import { PhillyMap } from "./philly-map";
 // the exact same map full-size in a modal — so browsing pins in detail
 // is still one click away, not gone.
 //
-// Fixed height (~2 stacked featured-card heights) rather than stretching
-// to match the cards next to it — stretching used to pull the CARDS up
-// to the map's height instead (grid row stretch cuts both ways), which
-// left an ugly empty gap in a short card. The parent grid now opts out
-// of stretch (items-start, see the landing page), so each side just
-// takes its own height instead of matching the other. A real height
-// (not just min-height) here, rather than relying on stretch to make it
-// definite, is what lets PhillyMap's "fill" (h-full) sizing resolve
-// cleanly instead of collapsing — a percentage height only resolves
-// against a parent with a definite height.
+// Min-height (a floor of ~2 stacked featured-card heights), not a hard
+// fixed height — the map is meant to grow taller when the cards next to
+// it run longer than that floor, not sit at a fixed size and leave a gap
+// below it. The landing page's grid row uses default stretch for this
+// column (only the CARDS column opts out, with self-start, so a short
+// card doesn't get pulled tall with dead space at ITS bottom — that was
+// the original version of this same bug, just on the other side). Grid
+// stretch gives this wrapper a real, definite pixel height each render
+// (whatever the row ends up being), which is what lets PhillyMap's
+// "fill" (h-full) sizing resolve cleanly — a percentage height only
+// resolves against a parent with a definite height, and min-height alone
+// wouldn't provide that on its own.
 export function ExpandableMap({
   proposals,
   totalCount,
@@ -49,7 +51,7 @@ export function ExpandableMap({
           flush against the card edge. Border is brand purple now instead
           of neutral/white — a plain white border still blended into the
           cream background. */}
-      <div className="h-[420px] rounded-lg border-2 border-duty-purple bg-white p-2 shadow-sm lg:h-[520px]">
+      <div className="h-full min-h-[420px] rounded-lg border-2 border-duty-purple bg-white p-2 shadow-sm lg:min-h-[520px]">
         <div className="relative h-full">
           <PhillyMap proposals={proposals} totalCount={totalCount} fill />
           <button

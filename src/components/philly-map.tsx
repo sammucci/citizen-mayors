@@ -2,8 +2,34 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { MapContainer, TileLayer, GeoJSON, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, GeoJSON, CircleMarker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+
+// Leaflet measures its container's pixel size once at mount, then only
+// re-checks on the browser's own window "resize" event — it has no way
+// to know when the container gets taller for any OTHER reason, like a
+// CSS grid row growing because a sibling card's cover image finished
+// loading after the map already mounted (the exact case on the landing
+// page's shared map/cards row, see expandable-map.tsx's "fill" mode).
+// Without this, the map's actual rendered tiles stay locked at whatever
+// size was first measured, leaving real blank space at the bottom of a
+// container that grew afterward — a gap inside the map itself, not just
+// a layout mismatch beside it. A ResizeObserver on the map's own DOM
+// element catches every kind of resize, not just the window's, and
+// invalidateSize() tells Leaflet to re-measure and redraw to actually
+// fill however big it now is.
+function MapResizeHandler() {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [map]);
+  return null;
+}
 
 type Proposal = {
   id: string;
@@ -163,6 +189,7 @@ export function PhillyMap({
           subdomains="abcd"
           maxZoom={19}
         />
+        <MapResizeHandler />
         <GeoJSON data={districts} style={{ color: "#6C3FD1", weight: 1.5, fillOpacity: 0.04 }} />
         {Array.from(byDistrict.entries()).flatMap(([district, ps]) => {
           const centroid = centroids[String(district)];

@@ -1025,7 +1025,12 @@ export default async function ProposalPage({
                 this one control covers every case without the UI having
                 to branch. */}
             {user && availableTags.length > 0 && (
-              <TagPicker proposalId={proposal.id} availableTags={availableTags} isOwner={isOwner} />
+              <TagPicker
+                proposalId={proposal.id}
+                availableTags={availableTags}
+                isOwner={isOwner}
+                currentTagCount={appliedTagIds.size}
+              />
             )}
           </div>
         </div>

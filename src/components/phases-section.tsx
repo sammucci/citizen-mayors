@@ -161,18 +161,31 @@ export function PhasesSection({
       {/* Numbered progress bar — click a number, or use ‹ › above, to
           jump to that phase. min-w per segment plus overflow-x-auto
           keeps this readable instead of squeezing every number down to
-          nothing once there are more than a handful of phases. */}
-      <div className="mt-4 overflow-x-auto pb-1">
+          nothing once there are more than a handful of phases.
+          py-1 (not just pb-1) matters more than it looks like it should:
+          setting overflow-x to auto makes the browser compute overflow-y
+          as auto too (can't have scroll on only one axis), so this div
+          clips anything that paints outside a step's own border box —
+          which is exactly what the selected+done ring (ring-2, a
+          box-shadow, not a real border) and the anchor's dashed border
+          do. With no top padding, that top sliver of the ring/border was
+          getting clipped flush against this container's own top edge. */}
+      <div className="mt-4 overflow-x-auto py-1">
         <div className="flex gap-1">
           {steps.map((s, i) => {
             const isDone = s.phase?.progress === "done";
             // Step 1 has no progress field to be "done" — a decision
             // chain can always grow, so it only ever gets a dashed
             // outline once it has at least one entry, never the solid
-            // green fill real phases get when actually finished. Applied
-            // as a border on top of whatever fill the step already has
-            // (selected/unselected), not instead of it.
+            // green fill real phases get when actually finished. A real
+            // phase marked "in progress" is the same underlying idea —
+            // started, not finished — so it gets the identical dashed
+            // treatment instead of a third distinct visual language.
+            // Applied as a border on top of whatever fill the step
+            // already has (selected/unselected), not instead of it.
             const isAnchorStarted = s.id === "anchor" && anchorStarted;
+            const isInProgress = s.phase?.progress === "in_progress";
+            const showsStartedBorder = isAnchorStarted || isInProgress;
             return (
               <div key={s.id} className="min-w-[64px] flex-1">
                 <button
@@ -180,7 +193,7 @@ export function PhasesSection({
                   onClick={() => goTo(i)}
                   className={`w-full rounded-md py-2 text-xs font-bold transition ${
                     isDone && i === selectedIndex ? "ring-2 ring-offset-1" : ""
-                  } ${isAnchorStarted ? "border-2 border-dashed border-green-600" : ""}`}
+                  } ${showsStartedBorder ? "border-2 border-dashed border-green-600" : ""}`}
                   style={
                     isDone
                       ? {
@@ -192,7 +205,15 @@ export function PhasesSection({
                       ? { backgroundColor: categoryColor, color: finalTextColor }
                       : { backgroundColor: "#e5e5e5", color: "#737373" }
                   }
-                  title={isAnchorStarted ? `${s.label} — started (${anchorNodeCount} so far)` : isDone ? `${s.label} — done` : s.label}
+                  title={
+                    isAnchorStarted
+                      ? `${s.label} — started (${anchorNodeCount} so far)`
+                      : isInProgress
+                      ? `${s.label} — in progress`
+                      : isDone
+                      ? `${s.label} — done`
+                      : s.label
+                  }
                 >
                   {/* Two absolute-positioning attempts (anchored to the
                       whole button's corner, then to a span around just
