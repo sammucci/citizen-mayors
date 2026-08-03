@@ -232,11 +232,12 @@ export default async function ProfilePage() {
     .eq("user_id", user.id)
     .order("occurred_on", { ascending: false });
 
-  const { data: volunteerCategoryRows } = await supabase
-    .from("volunteer_categories")
-    .select("label")
-    .order("label");
+  const [{ data: volunteerCategoryRows }, { data: populationCategoryRows }] = await Promise.all([
+    supabase.from("volunteer_categories").select("label").order("label"),
+    supabase.from("population_categories").select("label").order("label"),
+  ]);
   const volunteerCategories = (volunteerCategoryRows ?? []).map((c: any) => c.label);
+  const populationCategories = (populationCategoryRows ?? []).map((c: any) => c.label);
 
   const civicLogs: CivicLog[] = (civicLogsRaw ?? []).map((l: any) => ({
     id: l.id,
@@ -249,6 +250,7 @@ export default async function ProfilePage() {
     contactMethod: l.contact_method,
     hours: l.hours,
     category: l.category,
+    populationServed: l.population_served,
     note: l.note,
     status: l.status,
   }));
@@ -447,6 +449,7 @@ export default async function ProfilePage() {
         details={civicDetails}
         categoryColor="#6C3FD1"
         volunteerCategories={volunteerCategories}
+        populationCategories={populationCategories}
         displayName={profile?.display_name || "A resident"}
       />
 

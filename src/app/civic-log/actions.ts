@@ -49,6 +49,7 @@ function readFields(formData: FormData) {
     contactMethod: String(formData.get("contact_method") ?? "").trim(),
     hoursRaw: String(formData.get("hours") ?? "").trim(),
     category: String(formData.get("category") ?? "").trim(),
+    populationServed: String(formData.get("population_served") ?? "").trim(),
   };
 }
 
@@ -68,6 +69,10 @@ function buildRow(f: ReturnType<typeof readFields>, status: "draft" | "published
     contact_method: f.logType === "contacted_official" && f.contactMethod ? f.contactMethod : null,
     hours: f.logType === "volunteer_hours" && f.hoursRaw ? Number(f.hoursRaw) : null,
     category: f.logType === "volunteer_hours" && f.category ? f.category : null,
+    // Independent of category — optional either way, so logging plain
+    // Environmental Conservation hours with no specific population in
+    // mind is still perfectly fine to leave blank.
+    population_served: f.logType === "volunteer_hours" && f.populationServed ? f.populationServed : null,
     note: f.note || null,
     status,
   };

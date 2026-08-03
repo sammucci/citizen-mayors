@@ -82,6 +82,12 @@ create table public.categories (
 create table public.tag_groups (
   id serial primary key,
   label text unique not null,
+  -- Same idea as categories.color — each topic gets its own accent so
+  -- "Proposals by topic" on the community dashboard can color-code each
+  -- bar instead of every one of them being the same flat purple. Nullable
+  -- (falls back to a neutral grey bar) since a brand-new topic starts
+  -- without one until it's set on the admin page.
+  color text,
   created_at timestamptz not null default now()
 );
 
@@ -317,6 +323,25 @@ create table public.volunteer_categories (
   -- whenever she gets to it, rather than asking the person mid-form to
   -- pick from a list of groups they've never seen.
   group_id int references public.volunteer_category_groups(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- "What you did" (volunteer_categories above) and "who it was for" used
+-- to be forced into the same single field — tutoring someone's kids and
+-- tutoring an ESL class for seniors had no way to both be "Tutoring,"
+-- since picking a population-flavored category (Children & Youth, Senior
+-- Citizens) instead of the activity meant losing the activity, and vice
+-- versa. This is the second, independent, optional field: who the hours
+-- actually served, separate from what the activity was.
+--
+-- Deliberately NOT "grows as you type" like volunteer_categories — the
+-- whole point of splitting this out is to stop taxonomy sprawl, so this
+-- stays a small, fixed, admin-only list (same shape as `categories` and
+-- `tag_groups`: public read, admin add/update/delete, nobody else can
+-- insert a new one just by typing it while logging hours).
+create table public.population_categories (
+  id serial primary key,
+  label text unique not null,
   created_at timestamptz not null default now()
 );
 
@@ -685,6 +710,7 @@ alter table public.grants enable row level security;
 alter table public.proposal_grants enable row level security;
 alter table public.volunteer_categories enable row level security;
 alter table public.volunteer_category_groups enable row level security;
+alter table public.population_categories enable row level security;
 alter table public.proposals enable row level security;
 alter table public.proposal_tags enable row level security;
 alter table public.proposal_versions enable row level security;
@@ -724,6 +750,16 @@ create policy "admin add volunteer category groups" on public.volunteer_category
 create policy "admin updates volunteer category groups" on public.volunteer_category_groups for update
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 create policy "admin deletes volunteer category groups" on public.volunteer_category_groups for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+-- Admin-only in every direction, unlike volunteer_categories above — this
+-- list is meant to stay small and deliberate, not grow from what people
+-- type while logging hours (see population_categories' table comment).
+create policy "public read population categories" on public.population_categories for select using (true);
+create policy "admin add population categories" on public.population_categories for insert
+  with check (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin updates population categories" on public.population_categories for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+create policy "admin deletes population categories" on public.population_categories for delete
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 -- Owner-only in every direction, on purpose — which tags someone follows
 -- says something about what they're interested in/expert on, and unlike
@@ -1119,7 +1155,8 @@ create table public.civic_logs (
   contact_method text check (contact_method is null or contact_method in ('phone', 'email', 'letter', 'in_person')),
   -- volunteer_hours only:
   hours numeric,
-  category text,
+  category text, -- what you did (Tutoring, Environmental Conservation, ...)
+  population_served text, -- who it was for, independent of category (Youth, Seniors, ...) — see population_categories above
   -- any type, optional:
   note text,
   -- 'draft' = auto-saved when the add-a-log window was closed before

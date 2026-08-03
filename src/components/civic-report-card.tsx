@@ -9,6 +9,7 @@ import {
   updateDraftCivicLog,
 } from "@/app/civic-log/actions";
 import { VolunteerCategoryField } from "@/components/volunteer-category-field";
+import { PopulationServedField } from "@/components/population-served-field";
 import { CivicReportCardExport } from "@/components/civic-report-card-export";
 import { StatIcon, type StatIconName } from "@/components/stat-icons";
 import { brightnessOf, darken } from "@/lib/color-brightness";
@@ -59,6 +60,7 @@ export type CivicLog = {
   contactMethod: string | null;
   hours: number | null;
   category: string | null;
+  populationServed: string | null;
   note: string | null;
   status: "draft" | "published";
 };
@@ -101,6 +103,7 @@ export function CivicReportCard({
   details,
   categoryColor,
   volunteerCategories,
+  populationCategories,
   displayName,
 }: {
   stats: CivicStats;
@@ -108,6 +111,7 @@ export function CivicReportCard({
   details: CivicDetails;
   categoryColor: string;
   volunteerCategories: string[];
+  populationCategories: string[];
   displayName: string;
 }) {
   const [modalMode, setModalMode] = useState<null | "new" | CivicLog>(null);
@@ -298,6 +302,7 @@ export function CivicReportCard({
           initialLogType={modalMode === "new" ? pendingNewType : null}
           categoryColor={categoryColor}
           volunteerCategories={volunteerCategories}
+          populationCategories={populationCategories}
           onDirty={() => {
             dirtyRef.current = true;
           }}
@@ -455,6 +460,7 @@ function LogTypeDetailList({ logs, onLogNow }: { logs: CivicLog[]; onLogNow: () 
           </p>
           <p className="text-xs text-neutral-500">
             {formatDate(log.occurredOn)}
+            {log.logType === "volunteer_hours" && log.populationServed ? ` · For ${log.populationServed}` : ""}
             {log.logType === "community_meeting" && log.organization ? ` · Hosted by ${log.organization}` : ""}
             {log.logType === "contacted_official" && log.organization ? ` · ${log.organization}` : ""}
             {log.logType === "contacted_official" && log.contactMethod
@@ -500,6 +506,9 @@ function LogRow({ log, onEdit }: { log: CivicLog; onEdit: () => void }) {
             ? ` · ${CONTACT_METHOD_LABEL[log.contactMethod] ?? log.contactMethod}`
             : ""}
         </p>
+        {log.logType === "volunteer_hours" && log.populationServed && (
+          <p className="mt-0.5 text-neutral-500">For {log.populationServed}</p>
+        )}
         {log.logType === "community_meeting" && log.organization && (
           <p className="mt-0.5 text-neutral-500">Hosted by {log.organization}</p>
         )}
@@ -613,6 +622,7 @@ function AddLogModal({
   initialLogType,
   categoryColor,
   volunteerCategories,
+  populationCategories,
   onDirty,
   onClose,
   isDirty,
@@ -621,6 +631,7 @@ function AddLogModal({
   initialLogType?: CivicLog["logType"] | null;
   categoryColor: string;
   volunteerCategories: string[];
+  populationCategories: string[];
   onDirty: () => void;
   onClose: () => void;
   isDirty: () => boolean;
@@ -852,11 +863,22 @@ function AddLogModal({
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs text-neutral-500">
-                  Category (optional) — e.g. Environment, Youth, Food security
+                  What you did (optional) — e.g. Tutoring, Environmental Conservation, Food security
                 </span>
                 <VolunteerCategoryField
                   categories={volunteerCategories}
                   defaultValue={existing?.category ?? ""}
+                />
+              </label>
+              {/* Independent of "what you did" above — tutoring someone's
+                  kids and tutoring an ESL class for seniors can both just
+                  be "Tutoring" now, with who it was for captured here
+                  instead of forcing a choice between the two. */}
+              <label className="block">
+                <span className="mb-1 block text-xs text-neutral-500">Who it was for (optional)</span>
+                <PopulationServedField
+                  categories={populationCategories}
+                  defaultValue={existing?.populationServed ?? ""}
                 />
               </label>
             </>

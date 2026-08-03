@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { geocodeAddress, titleCaseAddress } from "@/lib/geocode-address";
 import { canonicalizeNeighborhoodName, geocodeNeighborhood } from "@/lib/geocode-neighborhood";
+import { MAX_TAGS_PER_PROPOSAL } from "@/lib/proposal-limits";
 
 // Used at the top of every mutating action (vote, comment, add tags,
 // etc.). Signed-out visitors can browse everything, but any action that
@@ -770,13 +771,6 @@ export async function flagProposal(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
-// A proposal covered in tags stops meaning anything — the point of a tag
-// is to say "this is really about X," and that stops being true past a
-// small handful. This is also what keeps a proposal's card from blowing
-// up on the landing page, since the tag row there isn't scrollable or
-// clipped; a proposal genuinely can't carry more than this many at once.
-const MAX_TAGS_PER_PROPOSAL = 8;
-
 async function countProposalTags(
   supabase: ReturnType<typeof createClient>,
   proposalId: string
@@ -1136,6 +1130,12 @@ export async function addPowerTreeNode(formData: FormData) {
   const rawName = String(formData.get("decision_maker_name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "other");
   if (!rawName) throw new Error("Pick or name a decision-maker.");
+  // Same server-side backstop as every other required field here — the
+  // form's own `required` attribute is the real UX, this just makes sure
+  // a role can't slip through empty via a direct submit. Was optional;
+  // Samantha's call to require at least a best guess, since a chain full
+  // of names with no stated role doesn't say what any of them need to do.
+  if (!note) throw new Error("Add a role for this decision-maker — even a best guess is fine.");
 
   let { data: decisionMaker } = await supabase
     .from("decision_makers")

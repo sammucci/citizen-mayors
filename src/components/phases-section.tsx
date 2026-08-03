@@ -156,32 +156,42 @@ export function PhasesSection({
                 <button
                   type="button"
                   onClick={() => goTo(i)}
-                  className="w-full rounded-md py-2 text-xs font-bold transition"
+                  className={`w-full rounded-md py-2 text-xs font-bold transition ${
+                    isDone && i === selectedIndex ? "ring-2 ring-offset-1" : ""
+                  }`}
                   style={
-                    i === selectedIndex
+                    isDone
+                      ? {
+                          backgroundColor: "#16a34a", // green-600 — the whole bar, not just a small badge, so "done" reads at a glance
+                          color: "#ffffff",
+                          ...(i === selectedIndex ? ({ "--tw-ring-color": categoryColor } as React.CSSProperties) : {}),
+                        }
+                      : i === selectedIndex
                       ? { backgroundColor: categoryColor, color: finalTextColor }
                       : { backgroundColor: "#e5e5e5", color: "#737373" }
                   }
                   title={isDone ? `${s.label} — done` : s.label}
                 >
-                  {/* The badge used to anchor to the corner of the WHOLE
-                      button, which is fine for a narrow segment but
-                      drifts way off from the actual number once there
-                      are only a couple of steps and each segment
-                      stretches wide — this inner span is sized to just
-                      the digit, so the badge sits right next to "2"
-                      instead of at the far edge of a wide pink bar. */}
-                  <span className="relative inline-block">
-                    {i + 1}
-                    {isDone && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute -right-3 -top-2 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-green-600 text-[9px] font-bold leading-none text-white"
-                      >
-                        ✓
-                      </span>
-                    )}
-                  </span>
+                  {/* Two absolute-positioning attempts (anchored to the
+                      whole button's corner, then to a span around just
+                      the digit) both drifted away from "2" at different
+                      segment widths — a button centers its own text, so
+                      neither corner was ever reliably NEAR the digit
+                      itself. Plain inline flow next to the number sits
+                      wherever the number sits, no matter how wide this
+                      segment stretches, so it can't drift. Now that the
+                      whole segment turns green when done, the badge
+                      flips to a white circle with a green check instead
+                      of the other way around, so it still stands out. */}
+                  {i + 1}
+                  {isDone && (
+                    <span
+                      aria-hidden="true"
+                      className="ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white align-middle text-[8px] font-bold leading-none text-green-600"
+                    >
+                      ✓
+                    </span>
+                  )}
                 </button>
               </div>
             );

@@ -187,11 +187,17 @@ export function DecisionMakerField({
       {showRole && (
         <div>
           <label className="block text-xs text-neutral-500">
-            Role in decision-making process (optional)
+            Role in decision-making process
           </label>
+          {/* Was optional — Samantha's call to make this required: if
+              you're adding someone to the chain, you should have to say
+              why they're on it, even if it's just your best guess. A
+              chain full of names with no stated role tells you who but
+              not what they'd actually need to do. */}
           <input
             name="note"
-            placeholder="e.g. final sign-off"
+            required
+            placeholder="e.g. final sign-off — not sure? take your best guess"
             className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
           />
         </div>

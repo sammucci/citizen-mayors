@@ -112,8 +112,8 @@ export default async function HomePage({
     <div>
       <h1 className="text-2xl font-semibold">If I were mayor...</h1>
       <p className="mt-2 text-neutral-600">
-        Propose a policy or project for Philadelphia, and help shape everyone
-        else&apos;s.
+        What would you do if you were mayor? Propose a policy or project for
+        Philadelphia, and help shape everyone else&apos;s!
       </p>
 
       {/* The real, prominent call to action — the header's "New
