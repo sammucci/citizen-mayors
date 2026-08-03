@@ -24,8 +24,17 @@ export function canonicalizeNeighborhoodName(raw: string): string {
 // actually gets a neighborhood-scope proposal onto the map at all, which
 // it couldn't do before (the neighborhood field was always just a name
 // with no coordinates attached anywhere in the app).
-export function geocodeNeighborhood(canonicalName: string): { lat: number; lng: number } | null {
+// `label: null` always — a neighborhood centroid isn't a "matched
+// address" the way the Census geocoder returns one, there's nothing to
+// prefer over the typed name. Shaped to match geocodeAddress's
+// GeocodedPoint exactly (same three keys) so that in actions.ts, where a
+// proposal's geocoded result can come from either function depending on
+// its geography_scope, TypeScript sees one consistent type instead of a
+// union where `.label` only exists on one branch — that mismatch is
+// exactly what broke the last two production builds (Vercel caught it,
+// a local `npm run build` would have too).
+export function geocodeNeighborhood(canonicalName: string): { lat: number; lng: number; label: null } | null {
   const centroid = PHILLY_NEIGHBORHOOD_CENTROIDS[canonicalName];
   if (!centroid) return null;
-  return { lat: centroid[0], lng: centroid[1] };
+  return { lat: centroid[0], lng: centroid[1], label: null };
 }
