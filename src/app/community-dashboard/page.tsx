@@ -57,7 +57,7 @@ const TILE_DESCRIPTIONS: Record<string, string> = {
   proposalsMade: "More people bringing ideas forward, instead of waiting for someone else to.",
   contributedToOthers: "Good ideas get sharper with more eyes on them.",
   commentsMade: "Working through the details in the open is how an idea gets pressure-tested.",
-  decisionMakersEngaged: "Knowing exactly who holds the power to act is the first step to moving something.",
+  decisionMakerReached: "Reaching out is an active practice of accountability, and is the first step to moving something forward.",
   lettersWritten: "Puts an issue in front of people who aren't already paying attention, and builds pressure through local media.",
   contactedOfficials: "Direct contact is one of the most reliable ways a resident's voice reaches the person who can act.",
   meetingsAttended: "Local democracy runs on people actually being in the room.",
@@ -418,7 +418,20 @@ export default async function CommunityDashboardPage({
       .from("comments")
       .select("id, author_id, proposals ( owner_id )")
       .eq("is_suggested_edit", true),
-    supabase.from("power_tree_node_updates").select("proposal_power_tree_nodes ( decision_maker_id )"),
+    // Real bug fix: this used to count ANY note left on a decision-chain
+    // node, whether or not it actually claimed contact happened — so a
+    // decision-maker with nothing but "not sure how to reach them yet"
+    // logged against them still counted as "engaged." talked_to exists
+    // on this exact table specifically to separate real outreach from
+    // commentary (see its column comment in schema.sql); this filters on
+    // it now, and pulls proposal_id instead of decision_maker_id since
+    // the stat itself changed from "how many people, citywide" to "how
+    // many projects" (see the comment by decisionMakerReachedCount below
+    // for why).
+    supabase
+      .from("power_tree_node_updates")
+      .select("proposal_power_tree_nodes ( proposal_id )")
+      .eq("talked_to", true),
     supabase
       .from("civic_logs")
       .select("log_type, published, hours, category")
@@ -482,9 +495,20 @@ export default async function CommunityDashboardPage({
     (c: any) => c.proposals?.owner_id && c.proposals.owner_id !== c.author_id
   ).length;
 
-  const decisionMakersEngaged = new Set(
+  // Renamed and re-scoped from "Decision-makers engaged" (a count of
+  // distinct people, citywide, who'd had ANY note left against them) to
+  // this — a count of distinct PROPOSALS with a confirmed real
+  // conversation logged. Two reasons: the old version double-counted as
+  // "engagement" a note that never claimed contact happened at all (see
+  // the query above), and even fixed, a citywide people-count still read
+  // as the same thing as "Contacted an elected official" on the card
+  // next to it. This one is unambiguously different: it's about
+  // proposals that have actually followed through with someone on their
+  // own decision chain, not a personal action log entry that isn't tied
+  // to any specific project.
+  const decisionMakerReachedCount = new Set(
     (powerTreeUpdates ?? [])
-      .map((u: any) => u.proposal_power_tree_nodes?.decision_maker_id)
+      .map((u: any) => u.proposal_power_tree_nodes?.proposal_id)
       .filter(Boolean)
   ).size;
 
@@ -610,12 +634,12 @@ export default async function CommunityDashboardPage({
             description: TILE_DESCRIPTIONS.commentsMade,
           },
           {
-            key: "decisionMakersEngaged",
+            key: "decisionMakerReached",
             icon: "decisionMakersEngaged",
-            label: "Decision-makers engaged",
-            value: decisionMakersEngaged,
+            label: "Projects that reached a decision-maker",
+            value: decisionMakerReachedCount,
             color: STAT_COLORS.decisionMakers,
-            description: TILE_DESCRIPTIONS.decisionMakersEngaged,
+            description: TILE_DESCRIPTIONS.decisionMakerReached,
           },
           {
             key: "lettersWritten",

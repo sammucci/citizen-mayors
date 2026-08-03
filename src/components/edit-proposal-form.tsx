@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { updateProposalDetails } from "@/app/proposals/actions";
 import { NeighborhoodField } from "@/components/neighborhood-field";
+import { AddressField } from "@/components/address-field";
 import { readableTextColor } from "@/lib/readable-text-color";
 import { SelectField } from "@/components/select-field";
 
@@ -114,11 +115,9 @@ export function EditProposalForm({
       {scope === "address" && (
         <>
           <Field label="Address or intersection">
-            <input
+            <AddressField
               name="geography_label"
-              required
               defaultValue={initial.geography_label ?? ""}
-              className="input"
               placeholder="e.g. Frankford & Girard"
             />
           </Field>

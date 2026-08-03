@@ -163,7 +163,16 @@ export function CivicReportCard({
           here is opening the actual detail list (your proposals, your
           logs), not a static "why this matters" sentence, so this keeps
           its modal instead of adopting the flip mechanic too. */}
-      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      {/* items-start — without it, CSS grid's default row-stretch makes
+          every card in a row match the height of its tallest neighbor.
+          "Letters written to the editor" is taller than its row-mates
+          because it's the only one of the three with a sublabel ("1
+          published"), which was stretching "People you've talked with"
+          and "Decision-makers engaged" to match, leaving dead empty
+          space at the bottom of both — the "something weird" in that
+          row. Same fix already applied to the landing page's map/card
+          row earlier this session. */}
+      <div className="mt-3 grid grid-cols-2 items-start gap-2.5 sm:grid-cols-3">
         <StatTile
           label="Proposals made"
           value={stats.proposalsMade}

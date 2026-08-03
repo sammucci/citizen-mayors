@@ -152,7 +152,7 @@ export function PhasesSection({
           {steps.map((s, i) => {
             const isDone = s.phase?.progress === "done";
             return (
-              <div key={s.id} className="relative min-w-[64px] flex-1">
+              <div key={s.id} className="min-w-[64px] flex-1">
                 <button
                   type="button"
                   onClick={() => goTo(i)}
@@ -164,20 +164,25 @@ export function PhasesSection({
                   }
                   title={isDone ? `${s.label} — done` : s.label}
                 >
-                  {i + 1}
-                </button>
-                {/* Only real signifier of progress that lives up here in
-                    the bar itself — a small green check badge, so you can
-                    tell what's actually finished at a glance without
-                    having to click into every step to check. */}
-                {isDone && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-green-600 text-[9px] font-bold leading-none text-white"
-                  >
-                    ✓
+                  {/* The badge used to anchor to the corner of the WHOLE
+                      button, which is fine for a narrow segment but
+                      drifts way off from the actual number once there
+                      are only a couple of steps and each segment
+                      stretches wide — this inner span is sized to just
+                      the digit, so the badge sits right next to "2"
+                      instead of at the far edge of a wide pink bar. */}
+                  <span className="relative inline-block">
+                    {i + 1}
+                    {isDone && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute -right-3 -top-2 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-green-600 text-[9px] font-bold leading-none text-white"
+                      >
+                        ✓
+                      </span>
+                    )}
                   </span>
-                )}
+                </button>
               </div>
             );
           })}
