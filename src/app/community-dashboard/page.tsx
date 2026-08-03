@@ -34,9 +34,9 @@ const STAT_COLORS = {
   proposals: "#8358D3", // Public Safety
   contributed: "#4069D9", // General Government Operations
   comments: "#F86767", // Public Employment & Benefits
-  decisionMakers: "#FF74A5", // Infrastructure and Sanitation
-  letters: "#6BAB68", // Culture and Leisure
-  contactedOfficials: "#FF881A", // Education and Subsidies
+  decisionMakers: "#FFAFCB", // Infrastructure and Sanitation
+  letters: "#87D183", // Culture and Leisure
+  contactedOfficials: "#FFA550", // Education and Subsidies
   meetings: "#FBE968", // Governance and Civic Process (the yellow)
   volunteerHours: "#8358D3", // repeats Public Safety's purple
   testimony: "#4069D9", // repeats General Government's blue

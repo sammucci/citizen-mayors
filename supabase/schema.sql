@@ -617,9 +617,9 @@ insert into public.categories (slug, label, description, requires_budget, sort_o
   ('public_safety', 'Public Safety', 'Police, fire, prisons, and criminal justice.', true, 1, '#8358D3'),
   ('benefits_pensions', 'Public Employment & Benefits', 'City jobs and salaries, plus employee retirement and health care benefits.', true, 2, '#F86767'),
   ('general_government', 'General Government Operations', 'Administration, internal tech, legal, fleet, and facilities.', true, 3, '#4069D9'),
-  ('infrastructure_sanitation', 'Infrastructure and Sanitation', 'Streets, cleaning, and transit support.', true, 4, '#FF74A5'),
-  ('culture_leisure', 'Culture and Leisure', 'Parks, recreation, libraries, and arts.', true, 5, '#6BAB68'),
-  ('education_subsidies', 'Education and Subsidies', 'Support for the school district and community college.', true, 6, '#FF881A'),
+  ('infrastructure_sanitation', 'Infrastructure and Sanitation', 'Streets, cleaning, and transit support.', true, 4, '#FFAFCB'),
+  ('culture_leisure', 'Culture and Leisure', 'Parks, recreation, libraries, and arts.', true, 5, '#87D183'),
+  ('education_subsidies', 'Education and Subsidies', 'Support for the school district and community college.', true, 6, '#FFA550'),
   ('governance_process', 'Governance and Civic Process', 'Structural/procedural proposals with no direct budget line — term limits, election rules, redistricting, ethics rules, charter changes.', false, 7, '#FBE968');
 
 insert into public.tags (slug, label) values
