@@ -771,29 +771,6 @@ export default async function CommunityDashboardPage({
           />
         </div>
 
-        <div className="mt-5">
-          <InfoHeading
-            className="text-xs font-semibold text-neutral-700"
-            tooltip={`Ranked by group (citywide, not affected by the district filter above) — individual tags people pick from in "Add a log" roll up to whichever group they've been assigned to on the admin page; anything not yet assigned shows as "Ungrouped."`}
-          >
-            Volunteer hours by category
-          </InfoHeading>
-          <HoursByCategory
-            rows={logs.filter((l: any) => l.log_type === "volunteer_hours")}
-            categoryToGroup={categoryToGroup}
-          />
-        </div>
-
-        <div className="mt-5">
-          <InfoHeading
-            className="text-xs font-semibold text-neutral-700"
-            tooltip="Citywide, not affected by the district filter above. Only published proposals count, and only tags that have been assigned to a topic on the admin page — an individual tag with no topic doesn't show up here on its own."
-          >
-            Proposals by topic
-          </InfoHeading>
-          <ProposalsByTopic items={proposalsByTopic} />
-        </div>
-
         {/* Real comparison now, not a placeholder: Philadelphia's actual
             2020-2024 ACS population data (refreshed in v60 from the prior
             2022 vintage), joined to council districts the
@@ -813,9 +790,9 @@ export default async function CommunityDashboardPage({
         <div className="mt-5 rounded-md border border-neutral-200 bg-white p-4">
           <InfoHeading
             className="text-sm font-semibold text-neutral-800"
-            tooltip={`Real 2020-2024 Census (ACS5) data by council district, not an estimate. ${
+            tooltip={`Real 2020-2024 Census (ACS5) data by council district. ${
               selectedDistrict ? `Comparing District ${selectedDistrict} only.` : "Citywide comparison."
-            } Race/ethnicity and gender categories don't map 1:1 to the options above — see each column's own info icon for specifics.`}
+            }`}
           >
             How this compares to Philadelphia
           </InfoHeading>
@@ -830,7 +807,7 @@ export default async function CommunityDashboardPage({
             />
             <CensusComparisonSection
               title="Gender (vs. Census sex)"
-              tooltip={`Sex and gender aren't the same thing. The Census only collects "sex" (male/female) — it has no gender-identity category at all. "Woman"/"Man" are shown here matched against "Female"/"Male" as the closest available comparison, not a claim they mean the same thing. "Non-binary" and "Other" are real answers people gave here; they show 0% on the Census side because ACS simply doesn't ask that question, not because the number is actually zero.`}
+              tooltip={`The Census only collects "sex" (male/female) — it has no gender-identity category. "Woman"/"Man" are shown here matched against "Female"/"Male" as the closest available comparison. "Non-binary" and "Other" are real answers people gave here; they show 0% on the Census side because ACS simply doesn't ask that question, not because the number is actually zero.`}
               memberItems={regroup(genderBreakdown, remapGenderForComparison)}
               censusItems={
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.gender : citywideCensusStats().gender) ?? []
@@ -846,7 +823,7 @@ export default async function CommunityDashboardPage({
             />
             <CensusComparisonSection
               title="Age"
-              tooltip="ACS age brackets summed to match the same six ranges residents choose from on their profile (18-24 through 65+). Under-18 residents aren't counted on either side, since the profile doesn't collect ages below 18 either."
+              tooltip="ACS age brackets summed to match the same six ranges residents choose from on their profile (18-24 through 65+). Under-18 residents now have their own option on the profile (see the Under 18 change this version), but aren't part of this particular comparison — ACS's own under-18 age data isn't pulled into this chart yet."
               memberItems={ageBreakdown.map((i) => ({ label: i.label, count: i.count }))}
               censusItems={
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.age : citywideCensusStats().age) ?? []
@@ -856,6 +833,28 @@ export default async function CommunityDashboardPage({
           <div className="mt-5 flex justify-end border-t border-neutral-100 pt-3">
             <ComparisonKey />
           </div>
+        </div>
+
+        {/* Moved below the demographic/Census comparison above — these
+            two are always citywide regardless of the district filter
+            (unlike everything above), so grouping them with the other
+            district-filterable sections was misleading about what does
+            and doesn't respond to the D1/D2/.../Citywide picker at the
+            top. "Citywide" is now baked into each heading directly
+            instead of living behind a hover tooltip, so it doesn't need
+            an info icon anymore either — nothing left to hover for once
+            the heading just says it outright. */}
+        <div className="mt-5">
+          <p className="text-xs font-semibold text-neutral-700">Volunteer hours by category, Citywide</p>
+          <HoursByCategory
+            rows={logs.filter((l: any) => l.log_type === "volunteer_hours")}
+            categoryToGroup={categoryToGroup}
+          />
+        </div>
+
+        <div className="mt-5">
+          <p className="text-xs font-semibold text-neutral-700">Proposals by topic, Citywide</p>
+          <ProposalsByTopic items={proposalsByTopic} />
         </div>
       </div>
     </div>

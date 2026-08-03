@@ -219,6 +219,16 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
           </span>
           <SelectField name="age_range" defaultValue={profile?.age_range ?? ""}>
             <option value="">Prefer not to say</option>
+            {/* Nothing on signup restricts this platform to adults —
+                there's no age-gate anywhere in the app, so a high
+                schooler or other under-18 resident can (and likely
+                does) have an account. Without this option, the closest
+                thing they could pick was "18-24," which just isn't
+                true. Doesn't feed into the Census age comparison chart
+                (ACS's own under-18 bucket isn't pulled into this app's
+                data yet — a real follow-up, not a quick add), but it's
+                now at least accurately self-reported here. */}
+            <option value="under-18">Under 18</option>
             <option value="18-24">18–24</option>
             <option value="25-34">25–34</option>
             <option value="35-44">35–44</option>

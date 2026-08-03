@@ -181,18 +181,12 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
         ← All decision-makers
       </Link>
 
-      <div className="mt-3">
-        <ProfilePhotoControl
-          imageUrl={profile?.photo_url ?? null}
-          fallbackLabel={decisionMaker.name}
-          fieldName="photo"
-          hiddenFields={{ decision_maker_id: decisionMaker.id }}
-          uploadAction={updateDecisionMakerPhoto}
-          removeAction={user ? removeDecisionMakerPhoto : undefined}
-        />
-      </div>
-
-      <div className="mt-2 flex items-start justify-between gap-3">
+      {/* Photo lives in the same header row as the name now, right-aligned
+          and bigger, with the "Represents" box stacked directly beneath
+          it — previously the photo sat alone in its own row above the
+          name, small and off to the left, disconnected from the count
+          box it's now grouped with. */}
+      <div className="mt-3 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">{decisionMaker.name}</h1>
           {/* Some entries are an office, not a person — this is the actual
@@ -211,32 +205,43 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
             {decisionMaker.kind.replace(/_/g, " ")}
           </p>
         </div>
-        {/* Shown even before this is filled in — Samantha couldn't find it
-            at first because it only rendered once "who they represent"
-            had already been set, with no hint that it existed at all.
-            Now it always shows, with a plain state pointing at where to
-            set it (Office details → Edit) when it hasn't been yet. */}
-        {isElectedOfficial && (
-          <div className="shrink-0 rounded-lg bg-duty-purple/10 px-3 py-2 text-right">
-            {representsCount !== null ? (
-              <>
-                <p className="text-lg font-bold text-duty-purple">
-                  {profile?.represents_scope === "citywide" ? "100%" : representsCount}
-                </p>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <ProfilePhotoControl
+            imageUrl={profile?.photo_url ?? null}
+            fallbackLabel={decisionMaker.name}
+            size="lg"
+            fieldName="photo"
+            hiddenFields={{ decision_maker_id: decisionMaker.id }}
+            uploadAction={updateDecisionMakerPhoto}
+            removeAction={user ? removeDecisionMakerPhoto : undefined}
+          />
+          {/* Shown even before this is filled in — Samantha couldn't find it
+              at first because it only rendered once "who they represent"
+              had already been set, with no hint that it existed at all.
+              Now it always shows, with a plain state pointing at where to
+              set it (Office details → Edit) when it hasn't been yet. */}
+          {isElectedOfficial && (
+            <div className="rounded-lg bg-duty-purple/10 px-3 py-2 text-right">
+              {representsCount !== null ? (
+                <>
+                  <p className="text-lg font-bold text-duty-purple">
+                    {profile?.represents_scope === "citywide" ? "100%" : representsCount}
+                  </p>
+                  <p className="text-[11px] text-neutral-500">
+                    Represents{profile?.represents_scope === "citywide" ? "" : ` ${representsCount}`} Citizen Mayor
+                    {representsCount === 1 ? "" : "s"}
+                  </p>
+                </>
+              ) : (
                 <p className="text-[11px] text-neutral-500">
-                  Represents{profile?.represents_scope === "citywide" ? "" : ` ${representsCount}`} Citizen Mayor
-                  {representsCount === 1 ? "" : "s"}
+                  Who they represent
+                  <br />
+                  not set yet
                 </p>
-              </>
-            ) : (
-              <p className="text-[11px] text-neutral-500">
-                Who they represent
-                <br />
-                not set yet
-              </p>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {!user && (

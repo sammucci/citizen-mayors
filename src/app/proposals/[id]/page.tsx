@@ -874,7 +874,7 @@ export default async function ProposalPage({
             <InfoHeading
               as="p"
               className="mt-1 text-sm text-neutral-600"
-              tooltip={`This chain shows who your proposal would move through to get approval. It climbs from "We the people" (you) at the bottom, to the final decision-maker at the top. So where's your idea going next?`}
+              tooltip={`This chain shows who your proposal would move through to get approval. It climbs from "We the people" (you) at the bottom, to the final decision-maker at the top. Where's your idea going next?`}
             >
               The idea starts with you. Now, who does it need to move through?
             </InfoHeading>

@@ -298,10 +298,8 @@ export function PhillyMap({
           </span>
           <div className="pointer-events-none absolute bottom-full left-0 mb-1.5 hidden w-64 rounded-md border border-neutral-200 bg-white p-2.5 text-[11px] leading-snug text-neutral-700 shadow-md group-hover:block group-focus-within:block">
             <span aria-hidden="true">📍</span> Showing {proposals.length} of {totalCount} proposal
-            {totalCount === 1 ? "" : "s"} on the map — a bold pin for an exact address,
-            a lighter one at a neighborhood's or council district's center when that's
-            all we have. The rest ({hiddenCount} located by zip or citywide, or a
-            neighborhood name we don't have a map point for yet) only show up in the
+            {totalCount === 1 ? "" : "s"} on the map. The rest ({hiddenCount} located by zip or
+            citywide, or a neighborhood name we don't have a map point for yet) only show up in the
             list below.
           </div>
         </div>

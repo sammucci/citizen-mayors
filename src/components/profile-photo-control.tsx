@@ -14,6 +14,7 @@ export function ProfilePhotoControl({
   imageUrl,
   fallbackLabel,
   shape = "circle",
+  size = "md",
   fieldName,
   hiddenFields,
   uploadAction,
@@ -24,6 +25,7 @@ export function ProfilePhotoControl({
   imageUrl: string | null;
   fallbackLabel: string;
   shape?: "circle" | "square";
+  size?: "md" | "lg";
   fieldName: string;
   hiddenFields: Record<string, string>;
   uploadAction: (formData: FormData) => Promise<{ error?: string }>;
@@ -36,15 +38,17 @@ export function ProfilePhotoControl({
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const initial = (fallbackLabel || "?").trim().charAt(0).toUpperCase();
   const shapeClass = shape === "circle" ? "rounded-full" : "rounded-lg";
+  const sizeClass = size === "lg" ? "h-24 w-24" : "h-14 w-14";
+  const initialTextClass = size === "lg" ? "text-3xl" : "text-lg";
 
   return (
-    <div className="flex items-center gap-3">
-      <div className={`h-14 w-14 shrink-0 overflow-hidden ${shapeClass} bg-duty-purple/10 text-duty-purple`}>
+    <div className="flex flex-wrap items-center gap-3">
+      <div className={`${sizeClass} shrink-0 overflow-hidden ${shapeClass} bg-duty-purple/10 text-duty-purple`}>
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imageUrl} alt="" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-lg font-semibold">
+          <div className={`flex h-full w-full items-center justify-center font-semibold ${initialTextClass}`}>
             {initial}
           </div>
         )}
