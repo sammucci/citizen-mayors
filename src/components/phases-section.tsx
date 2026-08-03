@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { addPhase, approvePhase, removePhase, reorderPhases, updatePhaseProgress } from "@/app/proposals/actions";
+import { addPhase, approvePhase, removePhase, reorderPhases, updatePhase, updatePhaseProgress } from "@/app/proposals/actions";
 import { readableTextColor } from "@/lib/readable-text-color";
 
 type Phase = {
@@ -43,6 +43,7 @@ export function PhasesSection({
   canContribute,
   recommendedLabels,
   councilPerson,
+  anchorNodeCount,
 }: {
   proposalId: string;
   categoryColor: string;
@@ -51,21 +52,34 @@ export function PhasesSection({
   canContribute: boolean;
   recommendedLabels: string[];
   councilPerson: { id: string; name: string } | null;
+  // How many decision-makers are already in the chain — the only real
+  // signal step 1 has, since it isn't a database row with its own
+  // progress field. Deliberately not a boolean "done": a chain can
+  // always grow, so this only ever unlocks a dashed "started" treatment
+  // (see the stepper below), never the solid "done" fill real phases get.
+  anchorNodeCount: number;
 }) {
   const router = useRouter();
   const finalTextColor = readableTextColor(categoryColor);
+  const anchorStarted = anchorNodeCount > 0;
 
   // Default to whatever phase is actually active — the first one that
   // isn't done yet — not just the last one added. If every phase is
   // already done, fall back to the last one (nothing left to point at).
   // Landing on a finished step by default doesn't tell you what to do
-  // next; landing on the active one does.
+  // next; landing on the active one does. The anchor is deliberately
+  // left out of this — it never reaches a "done" state to skip past, so
+  // it never needs to steal the default spot from a real phase.
   const firstActivePhase = phases.find((p) => p.progress !== "done");
   const [selectedId, setSelectedId] = useState<string>(
     firstActivePhase?.id ?? (phases.length > 0 ? phases[phases.length - 1].id : "anchor")
   );
   const [insertMode, setInsertMode] = useState<"before" | "after" | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editLabel, setEditLabel] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
 
   const steps: Array<{ id: string; label: string; phase: Phase | null }> = [
     { id: "anchor", label: "Map your decision chain", phase: null },
@@ -84,6 +98,7 @@ export function PhasesSection({
     const clamped = Math.max(0, Math.min(steps.length - 1, index));
     setSelectedId(steps[clamped].id);
     setInsertMode(null);
+    setEditing(false);
   }
 
   function persistOrder(newPhases: Phase[]) {
@@ -151,6 +166,13 @@ export function PhasesSection({
         <div className="flex gap-1">
           {steps.map((s, i) => {
             const isDone = s.phase?.progress === "done";
+            // Step 1 has no progress field to be "done" — a decision
+            // chain can always grow, so it only ever gets a dashed
+            // outline once it has at least one entry, never the solid
+            // green fill real phases get when actually finished. Applied
+            // as a border on top of whatever fill the step already has
+            // (selected/unselected), not instead of it.
+            const isAnchorStarted = s.id === "anchor" && anchorStarted;
             return (
               <div key={s.id} className="min-w-[64px] flex-1">
                 <button
@@ -158,7 +180,7 @@ export function PhasesSection({
                   onClick={() => goTo(i)}
                   className={`w-full rounded-md py-2 text-xs font-bold transition ${
                     isDone && i === selectedIndex ? "ring-2 ring-offset-1" : ""
-                  }`}
+                  } ${isAnchorStarted ? "border-2 border-dashed border-green-600" : ""}`}
                   style={
                     isDone
                       ? {
@@ -170,7 +192,7 @@ export function PhasesSection({
                       ? { backgroundColor: categoryColor, color: finalTextColor }
                       : { backgroundColor: "#e5e5e5", color: "#737373" }
                   }
-                  title={isDone ? `${s.label} — done` : s.label}
+                  title={isAnchorStarted ? `${s.label} — started (${anchorNodeCount} so far)` : isDone ? `${s.label} — done` : s.label}
                 >
                   {/* Two absolute-positioning attempts (anchored to the
                       whole button's corner, then to a span around just
@@ -216,15 +238,84 @@ export function PhasesSection({
               description — it&apos;s a live section at the top of this page, waiting for names. Go add them.
               Your community is here to help fill it in.
             </p>
+            {anchorStarted && (
+              // Deliberately not "✓ Done" — a decision chain can always
+              // grow as you learn who else needs to sign off, so this
+              // stays a progress note ("started, N so far"), never a
+              // claim that step 1 is finished. Real completion for the
+              // chain lives at the individual decision-maker level (the
+              // "I talked to them" checkbox on each node), not here.
+              <p className="mt-2 text-xs font-medium text-green-700">
+                ✓ Started — {anchorNodeCount} {anchorNodeCount === 1 ? "decision-maker" : "decision-makers"} mapped
+                so far. This one stays open-ended rather than marked "done," since you can always add more as you
+                learn who else needs to sign off.
+              </p>
+            )}
             <button
               type="button"
               onClick={() => document.getElementById("decision-chain-anchor")?.scrollIntoView({ behavior: "smooth" })}
               className="mt-2 rounded-full px-3 py-1.5 text-xs font-semibold"
               style={{ backgroundColor: categoryColor, color: finalTextColor }}
             >
-              ↑ Go do that first
+              {anchorStarted ? "↑ Go add more" : "↑ Go do that first"}
             </button>
           </>
+        ) : editing ? (
+          // Inline edit form — fixes the gap where a phase, however it
+          // was created (typed fresh, one-click-added from a "common
+          // next steps" suggestion, or approved from someone else's
+          // pending suggestion), had no way to correct a typo or add/
+          // change its note afterward.
+          <form
+            action={async (formData) => {
+              setEditError(null);
+              const result = await updatePhase(formData);
+              if (result?.error) {
+                setEditError(result.error);
+                return;
+              }
+              setEditing(false);
+              router.refresh();
+            }}
+            className="space-y-1.5"
+          >
+            <input type="hidden" name="proposal_id" value={proposalId} />
+            <input type="hidden" name="phase_id" value={selectedPhase.id} />
+            <input
+              name="label"
+              value={editLabel}
+              onChange={(e) => setEditLabel(e.target.value)}
+              autoFocus
+              required
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-sm font-semibold"
+            />
+            <input
+              name="note"
+              value={editNote}
+              onChange={(e) => setEditNote(e.target.value)}
+              placeholder="Optional note — why this step, or how to do it"
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+            />
+            <div className="flex gap-1.5">
+              <button
+                className="rounded px-2 py-1 text-xs font-medium"
+                style={{ backgroundColor: categoryColor, color: finalTextColor }}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setEditError(null);
+                }}
+                className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-white"
+              >
+                Cancel
+              </button>
+            </div>
+            {editError && <p className="text-xs text-duty-red">{editError}</p>}
+          </form>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -234,6 +325,22 @@ export function PhasesSection({
                 </span>
               )}
               <h3 className="text-base font-semibold text-neutral-800">{selectedPhase.label}</h3>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditLabel(selectedPhase.label);
+                    setEditNote(selectedPhase.note ?? "");
+                    setEditError(null);
+                    setEditing(true);
+                  }}
+                  title="Edit this phase"
+                  aria-label="Edit this phase"
+                  className="text-xs text-neutral-400 hover:text-neutral-600"
+                >
+                  ✎
+                </button>
+              )}
             </div>
             {selectedPhase.status === "pending" ? (
               <p className="mt-0.5 text-xs text-neutral-500">Suggested by {selectedPhase.addedByName}</p>

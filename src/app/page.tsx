@@ -140,14 +140,17 @@ export default async function HomePage({
           invisible 3-column grid as the proposal list below
           (lg:grid-cols-3), so column edges line up across the whole page.
           The map takes 2 of the 3 columns, the featured cards stack in
-          the 3rd. Grid rows stretch their items to equal height by
-          default, and the map fills that stretched height (see
-          expandable-map.tsx' "fill" mode) so it matches however tall the
-          two featured cards end up being — with a min-height floor so it
-          still reads as "at least 2 cards tall" even when there's only
-          one short card (or none) next to it. Below lg, there's no row
-          to share, so the map gets its own line at a fixed shorter
-          height instead. */}
+          the 3rd. The map is deliberately a hard fixed height (~2 stacked
+          featured-card heights, see expandable-map.tsx) rather than
+          dynamically matching whatever height the cards end up — no
+          stretch tug-of-war either direction. items-start keeps the
+          cards column sized to its own content (no dead space in a short
+          card), and the card markup below (h-36 capped image, 3-tag cap
+          + "+N more", 2-line summary clamp) is what actually keeps a
+          card from ever growing past "2 cards tall" in the first place —
+          that's the real fix for the gap that used to show up under the
+          map when a card ran long. Below lg, there's no row to share, so
+          the map gets its own line at its fixed shorter height instead. */}
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3 lg:items-start">
         <div className="lg:col-span-2">
           {/* Supabase's loose typing for the embedded categories join infers

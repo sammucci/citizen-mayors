@@ -1045,6 +1045,14 @@ export default async function ProposalPage({
           canContribute={Boolean(user)}
           recommendedLabels={recommendedPhaseLabels}
           councilPerson={councilPerson}
+          // "Map your decision chain" isn't a real phase row, so it has no
+          // progress field to read — this is what actually connects it to
+          // real data instead of just sitting there inert. Deliberately a
+          // COUNT, not a done/not-done flag: a chain can always grow, so
+          // step 1 gets a dashed "started" treatment once it has at least
+          // one entry, never a solid "done" fill like a real phase — see
+          // phases-section.tsx for why that distinction matters.
+          anchorNodeCount={(powerTreeNodes ?? []).length}
           phases={(proposalPhases ?? []).map((p: any) => ({
             id: p.id,
             label: p.label,

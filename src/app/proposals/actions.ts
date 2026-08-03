@@ -1484,6 +1484,40 @@ export async function removePhase(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
+// Owner-only: edits a phase's label/note in place. Needed regardless of
+// how the phase was created — typed in fresh, one-click-added from a
+// "common next steps" suggestion (which only ever sends a label, no
+// note), or approved from someone else's suggestion — none of those
+// paths left any way to fix a typo or fill in a note afterward. Same
+// permission model as remove/approve/progress above.
+export async function updatePhase(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const phaseId = String(formData.get("phase_id"));
+  const label = String(formData.get("label") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  if (!label) return { error: "A phase needs at least a short label." };
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    return { error: "Only the proposal owner can edit its phases." };
+  }
+
+  const { error } = await supabase
+    .from("proposal_phases")
+    .update({ label, note: note || null, updated_at: new Date().toISOString() })
+    .eq("id", phaseId);
+  if (error) return { error: "Something went wrong saving that phase." };
+
+  revalidatePath(`/proposals/${proposalId}`);
+  return {};
+}
+
 // Owner-only: moves a phase between not_started / in_progress / done —
 // a visual, motivating progress marker, same spirit as the chain's
 // completed toggle, just three states instead of two since "in
