@@ -42,13 +42,14 @@ export type DistrictCensusStats = {
 };
 
 // Age brackets pulled separately from ACS5 table B01001 ("Sex by Age"),
-// summed male+female per bracket, then combined into the same six
-// brackets residents choose from on their own profile (see the
-// age_range options in profile-info-card.tsx: 18-24, 25-34, 35-44,
-// 45-54, 55-64, 65+ — under-18 isn't collected there, so it's left out
-// here too for a clean side-by-side comparison). Same tract-centroid-
-// to-district join described above, just a second pass over a
-// different table.
+// summed male+female per bracket, then combined into the same seven
+// brackets residents can choose from on their own profile (18-24
+// through 65+, plus Under 18 — added in the same version "Under 18"
+// became a real profile option). Under 18 = B01001_003E through 006E
+// (male, ages 0-17) + 027E through 030E (female, ages 0-17), same
+// tract-centroid-to-district join described above, just a second pull
+// against the same table for the four additional variables on each
+// side.
 
 export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> = {
   1: {
@@ -69,6 +70,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 40655 },
     ],
     age: [
+      { label: "Under 18", count: 23097 },
       { label: "18-24", count: 10546 },
       { label: "25-34", count: 40161 },
       { label: "35-44", count: 27474 },
@@ -95,6 +97,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 36313 },
     ],
     age: [
+      { label: "Under 18", count: 28625 },
       { label: "18-24", count: 12021 },
       { label: "25-34", count: 38881 },
       { label: "35-44", count: 23780 },
@@ -121,6 +124,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 41421 },
     ],
     age: [
+      { label: "Under 18", count: 26803 },
       { label: "18-24", count: 31252 },
       { label: "25-34", count: 29746 },
       { label: "35-44", count: 15691 },
@@ -147,6 +151,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 35898 },
     ],
     age: [
+      { label: "Under 18", count: 29804 },
       { label: "18-24", count: 16120 },
       { label: "25-34", count: 33591 },
       { label: "35-44", count: 20443 },
@@ -173,6 +178,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 47105 },
     ],
     age: [
+      { label: "Under 18", count: 28870 },
       { label: "18-24", count: 24736 },
       { label: "25-34", count: 36608 },
       { label: "35-44", count: 20191 },
@@ -199,6 +205,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 21005 },
     ],
     age: [
+      { label: "Under 18", count: 35646 },
       { label: "18-24", count: 10251 },
       { label: "25-34", count: 21698 },
       { label: "35-44", count: 20983 },
@@ -225,6 +232,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 24280 },
     ],
     age: [
+      { label: "Under 18", count: 46124 },
       { label: "18-24", count: 14003 },
       { label: "25-34", count: 24827 },
       { label: "35-44", count: 20820 },
@@ -251,6 +259,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 34081 },
     ],
     age: [
+      { label: "Under 18", count: 36288 },
       { label: "18-24", count: 14015 },
       { label: "25-34", count: 22423 },
       { label: "35-44", count: 19833 },
@@ -277,6 +286,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 22701 },
     ],
     age: [
+      { label: "Under 18", count: 43451 },
       { label: "18-24", count: 13131 },
       { label: "25-34", count: 24788 },
       { label: "35-44", count: 21776 },
@@ -303,6 +313,7 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "Renter", count: 24064 },
     ],
     age: [
+      { label: "Under 18", count: 36091 },
       { label: "18-24", count: 8666 },
       { label: "25-34", count: 22846 },
       { label: "35-44", count: 21094 },

@@ -224,10 +224,9 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
                 schooler or other under-18 resident can (and likely
                 does) have an account. Without this option, the closest
                 thing they could pick was "18-24," which just isn't
-                true. Doesn't feed into the Census age comparison chart
-                (ACS's own under-18 bucket isn't pulled into this app's
-                data yet — a real follow-up, not a quick add), but it's
-                now at least accurately self-reported here. */}
+                true. Now feeds the Census age comparison chart too —
+                see census-district-demographics.ts's "Under 18" bucket
+                (real ACS data, not an estimate). */}
             <option value="under-18">Under 18</option>
             <option value="18-24">18–24</option>
             <option value="25-34">25–34</option>

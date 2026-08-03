@@ -303,6 +303,17 @@ function remapRaceForComparison(label: string): string {
   }
   return label;
 }
+// Same idea as the two remaps above, just for age: the age_range
+// column stores the profile form's raw option value ("under-18"), not
+// the display label ("Under 18") the Census-side data and every other
+// age bucket use — without this, a member who picked "Under 18" would
+// show up as its own oddly-cased, unmatched row instead of lining up
+// with the real Census bucket now that one exists (see
+// census-district-demographics.ts).
+function remapAgeForComparison(label: string): string {
+  if (label === "under-18") return "Under 18";
+  return label;
+}
 
 function regroup(items: { label: string; count: number }[], remap: (label: string) => string) {
   const totals = new Map<string, number>();
@@ -780,9 +791,12 @@ export default async function CommunityDashboardPage({
             category in Census data, "Other" groups several small race
             categories together, "Unhoused" isn't something ACS housing
             tenure can measure). Age was added in a later pass (same
-            tract-to-district join, second ACS table, B01001) — labels
-            match the resident age_range options verbatim so no remap
-            helper is needed there, unlike race/gender. Each row shows
+            tract-to-district join, second ACS table, B01001), now
+            including a real "Under 18" bucket (added the same version
+            "Under 18" became a real profile option) — remapAgeForComparison
+            just translates the profile form's raw "under-18" value to
+            the same "Under 18" display label the Census side uses.
+            Each row shows
             the two bare percentages (purple = here, grey = Philly)
             instead of repeating "here"/"Philly" as text on every line —
             the one-time Key at the bottom of the card explains the
@@ -823,8 +837,8 @@ export default async function CommunityDashboardPage({
             />
             <CensusComparisonSection
               title="Age"
-              tooltip="ACS age brackets summed to match the same six ranges residents choose from on their profile (18-24 through 65+). Under-18 residents now have their own option on the profile (see the Under 18 change this version), but aren't part of this particular comparison — ACS's own under-18 age data isn't pulled into this chart yet."
-              memberItems={ageBreakdown.map((i) => ({ label: i.label, count: i.count }))}
+              tooltip='ACS age brackets summed to match the same seven ranges residents can choose from on their profile (Under 18 through 65+). Under-18 counts real Census data too now — ages 0-17 from the same B01001 table, joined the same tract-to-district way as every other bracket.'
+              memberItems={regroup(ageBreakdown, remapAgeForComparison)}
               censusItems={
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.age : citywideCensusStats().age) ?? []
               }
