@@ -2,15 +2,14 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   addComment,
-  addProposalTags,
   advanceVersion,
   approveTagSuggestion,
   flagUnresolved,
   react,
   rejectTagSuggestion,
   removeProposalTag,
-  suggestTag,
 } from "@/app/proposals/actions";
+import { TagPicker } from "@/components/tag-picker";
 import { CollapsibleReplies } from "@/components/collapsible-replies";
 import { CommentBody } from "@/components/comment-body";
 import { CoverImageControl } from "@/components/cover-image-control";
@@ -1016,96 +1015,17 @@ export default async function ProposalPage({
               })}
             </div>
 
-            {/* Collapsed by default — as the shared tag registry grows,
-                this used to render every single available tag as a chip
-                right on the page, which kept getting longer with every
-                tag added. A <details> costs nothing when closed and
-                still lets anyone expand it to browse/click a tag.
-                Real bug fix: this used to be owner-only, so a non-owner
-                had no way to actually browse the tag list at all — just
-                a plain text box with a native <input list> datalist
-                behind it, which most browsers don't show anything from
-                until you start typing a match. Now everyone gets the
-                same browsable list; clicking a chip just resolves to a
-                different action depending on who's clicking — the
-                owner's click attaches it directly (nothing to approve),
-                anyone else's click suggests it (same pending path as
-                typing the exact same label into the box below). */}
+            {/* One combined search-to-add box instead of a separate
+                "browse the whole list" block plus a separate free-text
+                box for the same underlying action — start typing, a
+                match shows up and you click it, or add what you typed as
+                a new tag if nothing matches. suggestTag itself already
+                sorts out attach-directly (owner, existing tag) vs.
+                needs-approval (everyone else, or anything brand new), so
+                this one control covers every case without the UI having
+                to branch. */}
             {user && availableTags.length > 0 && (
-              <details className="mt-3 border-t border-neutral-100 pt-3">
-                <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-700">
-                  {isOwner ? "Add a tag" : "Browse existing tags"} ({availableTags.length} available)
-                </summary>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {availableTags.map((t) =>
-                    isOwner ? (
-                      <form key={t.id} action={addProposalTags}>
-                        <input type="hidden" name="proposal_id" value={proposal.id} />
-                        <input type="hidden" name="tag_ids" value={t.id} />
-                        <button
-                          className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-[var(--cat-color)] hover:text-[var(--cat-color)]"
-                          style={{ ["--cat-color" as string]: categoryColor } as React.CSSProperties}
-                        >
-                          + {t.label}
-                        </button>
-                      </form>
-                    ) : (
-                      <form key={t.id} action={suggestTag}>
-                        <input type="hidden" name="proposal_id" value={proposal.id} />
-                        <input type="hidden" name="label" value={t.label} />
-                        <button
-                          className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-[var(--cat-color)] hover:text-[var(--cat-color)]"
-                          style={{ ["--cat-color" as string]: categoryColor } as React.CSSProperties}
-                          title="Suggest this tag — the owner just needs to say OK"
-                        >
-                          + {t.label}
-                        </button>
-                      </form>
-                    )
-                  )}
-                </div>
-              </details>
-            )}
-
-            {/* Open to anyone signed in, not just the owner — unlike
-                "Add a tag" above, this doesn't touch the real tags list,
-                it just logs a request. The datalist lets a non-owner see
-                and pick from tags that already exist instead of typing
-                blind, but they can just as easily type something brand
-                new — suggestTag itself sorts out which path it takes. */}
-            {user && (
-              <div className="mt-3 border-t border-neutral-100 pt-3">
-                <p className="text-xs text-neutral-500">
-                  {isOwner ? "Don't see the right tag?" : "Select or suggest a tag"}
-                </p>
-                {!isOwner && (
-                  <p className="mt-0.5 text-[11px] text-neutral-400">
-                    Existing tags just need your OK from the proposal owner. A
-                    brand-new one needs the owner's OK first, then an admin's.
-                  </p>
-                )}
-                <ResettableForm
-                  action={suggestTag}
-                  className="mt-2 flex flex-wrap items-center gap-2"
-                >
-                  <input type="hidden" name="proposal_id" value={proposal.id} />
-                  <input
-                    name="label"
-                    required
-                    list="tag-suggestion-options"
-                    placeholder={isOwner ? "Suggest a new tag..." : "Pick an existing tag or suggest a new one..."}
-                    className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
-                  />
-                  <datalist id="tag-suggestion-options">
-                    {availableTags.map((t) => (
-                      <option key={t.id} value={t.label} />
-                    ))}
-                  </datalist>
-                  <button className="shrink-0 rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50">
-                    Suggest
-                  </button>
-                </ResettableForm>
-              </div>
+              <TagPicker proposalId={proposal.id} availableTags={availableTags} isOwner={isOwner} />
             )}
           </div>
         </div>

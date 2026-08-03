@@ -689,9 +689,18 @@ export default async function CommunityDashboardPage({
           >
             Who's showing up
           </InfoHeading>
+          {/* scroll={false} on both — without it, Next's default Link
+              behavior scrolls you back to the top of the page every time
+              you switch districts, since as far as the router's
+              concerned this is a real navigation to a new URL (it has to
+              be: the breakdown numbers come from a district-filtered
+              Supabase query, not something already sitting in the
+              browser to just re-sort like the comments are). This keeps
+              you right where you were scrolled to instead. */}
           <div className="flex flex-wrap gap-1.5">
             <Link
               href="/community-dashboard"
+              scroll={false}
               className={`rounded-full border px-2.5 py-1 text-xs ${
                 !selectedDistrict
                   ? "border-duty-purple bg-duty-purple/10 text-duty-purple"
@@ -704,6 +713,7 @@ export default async function CommunityDashboardPage({
               <Link
                 key={d}
                 href={`/community-dashboard?district=${d}`}
+                scroll={false}
                 className={`rounded-full border px-2.5 py-1 text-xs ${
                   selectedDistrict === d
                     ? "border-duty-purple bg-duty-purple/10 text-duty-purple"

@@ -55,8 +55,14 @@ export function PhasesSection({
   const router = useRouter();
   const finalTextColor = readableTextColor(categoryColor);
 
+  // Default to whatever phase is actually active — the first one that
+  // isn't done yet — not just the last one added. If every phase is
+  // already done, fall back to the last one (nothing left to point at).
+  // Landing on a finished step by default doesn't tell you what to do
+  // next; landing on the active one does.
+  const firstActivePhase = phases.find((p) => p.progress !== "done");
   const [selectedId, setSelectedId] = useState<string>(
-    phases.length > 0 ? phases[phases.length - 1].id : "anchor"
+    firstActivePhase?.id ?? (phases.length > 0 ? phases[phases.length - 1].id : "anchor")
   );
   const [insertMode, setInsertMode] = useState<"before" | "after" | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -143,22 +149,38 @@ export function PhasesSection({
           nothing once there are more than a handful of phases. */}
       <div className="mt-4 overflow-x-auto pb-1">
         <div className="flex gap-1">
-          {steps.map((s, i) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => goTo(i)}
-              className="min-w-[64px] flex-1 rounded-md py-2 text-xs font-bold transition"
-              style={
-                i === selectedIndex
-                  ? { backgroundColor: categoryColor, color: finalTextColor }
-                  : { backgroundColor: "#e5e5e5", color: "#737373" }
-              }
-              title={s.label}
-            >
-              {i + 1}
-            </button>
-          ))}
+          {steps.map((s, i) => {
+            const isDone = s.phase?.progress === "done";
+            return (
+              <div key={s.id} className="relative min-w-[64px] flex-1">
+                <button
+                  type="button"
+                  onClick={() => goTo(i)}
+                  className="w-full rounded-md py-2 text-xs font-bold transition"
+                  style={
+                    i === selectedIndex
+                      ? { backgroundColor: categoryColor, color: finalTextColor }
+                      : { backgroundColor: "#e5e5e5", color: "#737373" }
+                  }
+                  title={isDone ? `${s.label} — done` : s.label}
+                >
+                  {i + 1}
+                </button>
+                {/* Only real signifier of progress that lives up here in
+                    the bar itself — a small green check badge, so you can
+                    tell what's actually finished at a glance without
+                    having to click into every step to check. */}
+                {isDone && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-green-600 text-[9px] font-bold leading-none text-white"
+                  >
+                    ✓
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
         <div className="mt-1 flex gap-1">
           {steps.map((s) => (
@@ -173,21 +195,20 @@ export function PhasesSection({
       <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
         {!selectedPhase ? (
           <>
-            <h3 className="text-base font-semibold text-neutral-800">🗺️ Map your decision chain</h3>
+            <h3 className="text-base font-semibold text-neutral-800">🗺️ Map your decision chain — start here</h3>
             <p className="mt-1 text-sm text-neutral-600">
-              Every project starts here — figuring out who actually has to say yes to make this real.
+              Every project needs this first: who actually has to say yes to make it real. It&apos;s not a
+              description — it&apos;s a live section at the top of this page, waiting for names. Go add them.
+              Your community is here to help fill it in.
             </p>
-            <Link
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                document.getElementById("decision-chain-anchor")?.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="mt-2 inline-block text-xs underline"
-              style={{ color: categoryColor }}
+            <button
+              type="button"
+              onClick={() => document.getElementById("decision-chain-anchor")?.scrollIntoView({ behavior: "smooth" })}
+              className="mt-2 rounded-full px-3 py-1.5 text-xs font-semibold"
+              style={{ backgroundColor: categoryColor, color: finalTextColor }}
             >
-              ↑ See the decision chain above
-            </Link>
+              ↑ Go do that first
+            </button>
           </>
         ) : (
           <>

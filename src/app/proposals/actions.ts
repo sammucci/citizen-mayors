@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { geocodeAddress } from "@/lib/geocode-address";
+import { geocodeAddress, titleCaseAddress } from "@/lib/geocode-address";
 import { canonicalizeNeighborhoodName, geocodeNeighborhood } from "@/lib/geocode-neighborhood";
 
 // Used at the top of every mutating action (vote, comment, add tags,
@@ -141,6 +141,18 @@ export async function createProposal(formData: FormData) {
       ? geocodeNeighborhood(geographyLabel)
       : null;
 
+  // For an address, show what the geocoder actually resolved to instead
+  // of the raw typed text — fixes both stray capitalization ("n mascher
+  // and w colona") and an in-range typo that still matched (the geocoder
+  // matches against real street data, so its version is the correctly
+  // spelled one). No match at all just falls back to a title-cased
+  // version of what was typed — still an improvement, just nothing to
+  // correct a typo against.
+  const displayGeographyLabel =
+    geographyScope === "address" && geographyLabel
+      ? geocoded?.label ?? titleCaseAddress(geographyLabel)
+      : geographyLabel;
+
   const { data: proposal, error } = await supabase
     .from("proposals")
     .insert({
@@ -151,7 +163,7 @@ export async function createProposal(formData: FormData) {
       summary: summary || "",
       body: body || "",
       geography_scope: geographyScope,
-      geography_label: geographyScope === "citywide" ? null : geographyLabel || null,
+      geography_label: geographyScope === "citywide" ? null : displayGeographyLabel || null,
       council_district: councilDistrict,
       geocoded_lat: geocoded?.lat ?? null,
       geocoded_lng: geocoded?.lng ?? null,
@@ -399,9 +411,15 @@ export async function updateProposalDetails(formData: FormData) {
   // call for no reason. Neighborhood centroids are a plain local lookup
   // (no external call), so there's no cost to just recomputing those
   // every time — no need for the same unchanged-shortcut.
-  let geocoded: { lat: number; lng: number } | null = null;
+  let geocoded: { lat: number; lng: number; label?: string | null } | null = null;
+  // Whether re-geocoding actually ran this time — if it didn't (address
+  // unchanged, reusing the saved coordinates), the stored label shouldn't
+  // change either, since there's no fresh matchedAddress to prefer over
+  // whatever's already saved (which, if this proposal was ever saved
+  // since this fix shipped, is already the corrected version anyway).
+  let addressUnchanged = false;
   if (geographyScope === "address" && geographyLabel) {
-    const addressUnchanged =
+    addressUnchanged =
       proposal?.geography_scope === "address" && proposal.geography_label === geographyLabel;
     geocoded =
       addressUnchanged && proposal?.geocoded_lat != null && proposal?.geocoded_lng != null
@@ -411,6 +429,17 @@ export async function updateProposalDetails(formData: FormData) {
     geocoded = geocodeNeighborhood(geographyLabel);
   }
 
+  // Same fix as createProposal: prefer what the geocoder actually
+  // resolved to over the raw typed text, so a stray lowercase intersection
+  // or an in-range typo doesn't stay wrong forever just because it's
+  // being edited rather than newly posted.
+  const displayGeographyLabel =
+    geographyScope === "address" && geographyLabel
+      ? addressUnchanged
+        ? geographyLabel
+        : geocoded?.label ?? titleCaseAddress(geographyLabel)
+      : geographyLabel;
+
   const { error } = await supabase
     .from("proposals")
     .update({
@@ -418,7 +447,7 @@ export async function updateProposalDetails(formData: FormData) {
       type,
       category_id: categoryId,
       geography_scope: geographyScope,
-      geography_label: geographyScope === "citywide" ? null : geographyLabel || null,
+      geography_label: geographyScope === "citywide" ? null : displayGeographyLabel || null,
       council_district: councilDistrict,
       geocoded_lat: geocoded?.lat ?? null,
       geocoded_lng: geocoded?.lng ?? null,
@@ -741,32 +770,22 @@ export async function flagProposal(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
-// Lets the owner tag a proposal further after it's already been posted —
-// the original post form only asked once, with no way back in.
-export async function addProposalTags(formData: FormData) {
-  const { supabase, user } = await requireUser();
+// A proposal covered in tags stops meaning anything — the point of a tag
+// is to say "this is really about X," and that stops being true past a
+// small handful. This is also what keeps a proposal's card from blowing
+// up on the landing page, since the tag row there isn't scrollable or
+// clipped; a proposal genuinely can't carry more than this many at once.
+const MAX_TAGS_PER_PROPOSAL = 8;
 
-  const proposalId = String(formData.get("proposal_id"));
-  const tagIds = formData.getAll("tag_ids").map((v) => Number(v));
-
-  const { data: proposal } = await supabase
-    .from("proposals")
-    .select("owner_id")
-    .eq("id", proposalId)
-    .single();
-  if (proposal?.owner_id !== user.id) {
-    throw new Error("Only the proposal owner can add tags.");
-  }
-  if (tagIds.length === 0) return;
-
-  await supabase
+async function countProposalTags(
+  supabase: ReturnType<typeof createClient>,
+  proposalId: string
+): Promise<number> {
+  const { count } = await supabase
     .from("proposal_tags")
-    .upsert(
-      tagIds.map((tag_id) => ({ proposal_id: proposalId, tag_id })),
-      { onConflict: "proposal_id,tag_id", ignoreDuplicates: true }
-    );
-
-  revalidatePath(`/proposals/${proposalId}`);
+    .select("*", { count: "exact", head: true })
+    .eq("proposal_id", proposalId);
+  return count ?? 0;
 }
 
 // Anyone signed in can suggest a tag — either an existing one (typed to
@@ -790,12 +809,21 @@ export async function addProposalTags(formData: FormData) {
 //                                         their own suggestion first)
 //   brand-new tag, someone else       -> pending; owner approves first,
 //                                         then an admin finalizes
-export async function suggestTag(formData: FormData) {
+export async function suggestTag(formData: FormData): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
   const label = String(formData.get("label") ?? "").trim();
-  if (!label) return;
+  if (!label) return {};
+
+  // Checked up front, before creating anything — a suggestion that can
+  // never actually attach (because the proposal's already full) is more
+  // confusing left pending than just told no right away, whether it's a
+  // brand-new tag or one that already exists.
+  const currentCount = await countProposalTags(supabase, proposalId);
+  if (currentCount >= MAX_TAGS_PER_PROPOSAL) {
+    return { error: `This proposal already has the max of ${MAX_TAGS_PER_PROPOSAL} tags — remove one before adding another.` };
+  }
 
   const { data: existingTag } = await supabase
     .from("tags")
@@ -829,6 +857,7 @@ export async function suggestTag(formData: FormData) {
   }
 
   revalidatePath(`/proposals/${proposalId}`);
+  return {};
 }
 
 // Slugify used both here (creating a brand-new tag on final admin

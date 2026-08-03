@@ -10,7 +10,18 @@
 // Server-only — not imported by any "use client" file, so there's no
 // RSC-boundary risk (see the community-dashboard bug from earlier this
 // project for why that distinction matters).
-export type GeocodedPoint = { lat: number; lng: number };
+// `label` is the Census geocoder's own corrected/canonical version of
+// whatever was typed — not an echo of the input. This is what fixes two
+// things at once: the display used to just be whatever the person typed,
+// verbatim (lowercase, abbreviated, however they happened to type it —
+// "n mascher and w colona"), and a typo in a street name that still
+// happened to match (the geocoder matches against real TIGER street
+// data, not a strict copy of the input) used to stay a typo forever
+// since nothing ever looked at what the geocoder actually resolved it
+// to. Using its matched address instead of the raw input solves both:
+// it's correctly spelled and cased because it's real reference data, not
+// user typing. Only present when a match was actually found.
+export type GeocodedPoint = { lat: number; lng: number; label: string | null };
 
 export async function geocodeAddress(rawAddress: string): Promise<GeocodedPoint | null> {
   const trimmed = rawAddress.trim();
@@ -38,7 +49,7 @@ export async function geocodeAddress(rawAddress: string): Promise<GeocodedPoint 
     const lat = Number(match.coordinates.y);
     const lng = Number(match.coordinates.x);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat, lng };
+    return { lat, lng, label: formatMatchedAddress(match.matchedAddress) };
   } catch {
     // Timed out, network hiccup, or an unexpected response shape — none
     // of that should ever block creating or saving a proposal. Worst
@@ -46,4 +57,35 @@ export async function geocodeAddress(rawAddress: string): Promise<GeocodedPoint 
     // the proposal itself is lost, and saving it again later will retry.
     return null;
   }
+}
+
+// Census returns matched addresses ALL CAPS and with the city/state/zip
+// tacked on ("N MASCHER ST & W COLUMBIA AVE, PHILADELPHIA, PA, 19133") —
+// fine for their own matching purposes, not fine to show next to a 📍 on
+// this site, where Philadelphia is already a given. Strips the city/
+// state/zip and title-cases what's left, word by word (which also
+// happens to be exactly right for street abbreviations like "ST"/"AVE"
+// and directionals like "N"/"W" — capitalize-first-letter-lowercase-rest
+// turns those into "St"/"Ave"/"N"/"W" without needing a lookup table).
+function formatMatchedAddress(matched: unknown): string | null {
+  if (typeof matched !== "string" || !matched.trim()) return null;
+  const withoutCityState = matched.replace(/,?\s*PHILADELPHIA,?\s*PA,?\s*\d{0,5}\s*$/i, "").trim();
+  const source = withoutCityState || matched;
+  return titleCaseAddress(source);
+}
+
+// Shared with the plain-typed-input fallback (no geocode match at all) so
+// capitalization is at least improved even when there's nothing to
+// correct a typo against.
+export function titleCaseAddress(input: string): string {
+  return input
+    .trim()
+    .split(/\s+/)
+    .map((word) =>
+      word
+        .split(/([&/-])/) // keep separators like "&" and "-" as their own tokens, unchanged
+        .map((part) => (/[a-z]/i.test(part) ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part))
+        .join("")
+    )
+    .join(" ");
 }

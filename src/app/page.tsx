@@ -235,12 +235,25 @@ export default async function HomePage({
           </Link>
           <p className="mt-1 line-clamp-2 text-sm text-neutral-600">{p.summary}</p>
 
+          {/* Capped at 3 chips + a "+N more" — a proposal with a lot of
+              tags used to just wrap onto as many lines as it took, which
+              could balloon a single card way past its neighbors' height
+              (and, on the shared map/cards row above, past the map's own
+              fixed height too, leaving a big empty gap beneath it before
+              the next row started). Full tag list is still one click
+              away on the proposal's own page — this is just the compact
+              card. */}
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {p.proposal_tags?.map((pt: any) => (
+            {(p.proposal_tags ?? []).slice(0, 3).map((pt: any) => (
               <span key={pt.tags?.slug} className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
                 #{pt.tags?.label}
               </span>
             ))}
+            {(p.proposal_tags?.length ?? 0) > 3 && (
+              <span className="rounded-full bg-neutral-50 px-2 py-0.5 text-xs text-neutral-400">
+                +{p.proposal_tags.length - 3} more
+              </span>
+            )}
           </div>
 
           <div className="mt-auto flex items-center justify-between pt-3 text-xs text-neutral-500">
