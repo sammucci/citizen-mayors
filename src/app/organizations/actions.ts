@@ -187,3 +187,81 @@ export async function updateOrganizationDescription(formData: FormData) {
 
   revalidatePath(`/organizations/${organizationId}`);
 }
+
+function isNonEmptyFile(value: FormDataEntryValue | null): value is File {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as any).arrayBuffer === "function" &&
+    typeof (value as any).size === "number" &&
+    (value as any).size > 0
+  );
+}
+
+// Same upload shape as updateAvatar / updateDecisionMakerPhoto — fixed
+// path per organization (upsert:true), cache-busted public URL,
+// {error?} return. Wide-open (any signed-in user), matching every other
+// field on this profile.
+export async function updateOrganizationLogo(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const organizationId = String(formData.get("organization_id"));
+
+  const file = formData.get("logo");
+  if (!isNonEmptyFile(file)) {
+    return { error: "Choose an image file first." };
+  }
+
+  const ext = file.name.split(".").pop() || "jpg";
+  const path = `${organizationId}/logo.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("organization-logos")
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) {
+    console.error("updateOrganizationLogo: storage upload failed", uploadError);
+    const msg = uploadError.message ?? "";
+    if (/size|large|payload|413/i.test(msg)) {
+      return { error: "Your image is too big — try a smaller file (under 20MB)." };
+    }
+    return { error: "That image couldn't be uploaded. Try a different file." };
+  }
+
+  const { data: pub } = supabase.storage.from("organization-logos").getPublicUrl(path);
+  const logoUrl = `${pub.publicUrl}?t=${Date.now()}`;
+
+  const { data: existing } = await supabase
+    .from("organization_profiles")
+    .select("logo_url")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  const { error: updateError } = await supabase.from("organization_profiles").upsert({
+    organization_id: organizationId,
+    logo_url: logoUrl,
+    updated_at: new Date().toISOString(),
+  });
+  if (updateError) {
+    console.error("updateOrganizationLogo: saving logo_url failed", updateError);
+    return { error: "Logo uploaded, but saving it to the profile failed. Try again." };
+  }
+
+  await logRevision(supabase, organizationId, "logo", existing?.logo_url ? "had a logo" : null, "added a logo", user.id);
+
+  revalidatePath(`/organizations/${organizationId}`);
+  return {};
+}
+
+export async function removeOrganizationLogo(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const organizationId = String(formData.get("organization_id"));
+
+  const { error } = await supabase
+    .from("organization_profiles")
+    .update({ logo_url: null, updated_at: new Date().toISOString() })
+    .eq("organization_id", organizationId);
+  if (error) return { error: "Something went wrong removing that logo." };
+
+  await logRevision(supabase, organizationId, "logo", "had a logo", null, user.id);
+
+  revalidatePath(`/organizations/${organizationId}`);
+  return {};
+}

@@ -191,9 +191,18 @@ export function PhasesSection({
                 <button
                   type="button"
                   onClick={() => goTo(i)}
-                  className={`w-full rounded-md py-2 text-xs font-bold transition ${
+                  // border-2 is ALWAYS present now, not just when
+                  // showing the dashed "started" treatment — a real
+                  // border adds to a box's rendered height (unlike the
+                  // ring below, which is a box-shadow and doesn't),
+                  // so a step that only sometimes got border-2 was
+                  // sometimes 4px taller than its neighbors. Every step
+                  // now reserves the same 2px border always; it's just
+                  // transparent (invisible, but still taking up space)
+                  // when there's nothing to show.
+                  className={`w-full rounded-md border-2 py-2 text-xs font-bold transition ${
                     isDone && i === selectedIndex ? "ring-2 ring-offset-1" : ""
-                  } ${showsStartedBorder ? "border-2 border-dashed border-green-600" : ""}`}
+                  } ${showsStartedBorder ? "border-dashed border-green-600" : "border-transparent"}`}
                   style={
                     isDone
                       ? {

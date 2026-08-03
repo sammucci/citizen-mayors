@@ -182,12 +182,12 @@ function HoursByCategory({
 // tags never show up here on their own; only tags she's assigned to a
 // topic count toward anything, by design (see the proposalsByTopic
 // computation above for why).
-// Each bar uses that topic's own color (tag_groups.color, set on the
-// admin tags page — same color the proposal cards themselves use),
-// falling back to the flat STAT_COLORS.proposals purple for any topic
-// that hasn't been given one yet, instead of every bar being that same
-// purple regardless of topic.
-function ProposalsByTopic({ items }: { items: { label: string; count: number; color: string | null }[] }) {
+// Reverted the per-topic coloring this briefly had — that used
+// tag_groups.color, but those hex values were ones I invented, not real
+// entries from Samantha's actual brand palette (only categories have
+// real defined colors). Flat STAT_COLORS.proposals for every bar, same
+// as before that change.
+function ProposalsByTopic({ items }: { items: { label: string; count: number }[] }) {
   if (items.length === 0) {
     return (
       <p className="mt-1 text-xs text-neutral-400">
@@ -199,13 +199,13 @@ function ProposalsByTopic({ items }: { items: { label: string; count: number; co
   const max = items[0].count;
   return (
     <ul className="mt-1.5 space-y-1">
-      {items.map(({ label, count, color }) => (
+      {items.map(({ label, count }) => (
         <li key={label} className="flex items-center gap-2 text-xs">
           <span className="w-28 shrink-0 truncate text-neutral-600">{label}</span>
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
             <span
               className="block h-full rounded-full"
-              style={{ width: `${max > 0 ? (count / max) * 100 : 0}%`, backgroundColor: color ?? STAT_COLORS.proposals }}
+              style={{ width: `${max > 0 ? (count / max) * 100 : 0}%`, backgroundColor: STAT_COLORS.proposals }}
             />
           </span>
           <span className="w-20 shrink-0 text-right text-neutral-500">
@@ -460,7 +460,7 @@ export default async function CommunityDashboardPage({
     // query in src/app/page.tsx).
     supabase
       .from("proposal_tags")
-      .select("proposal_id, tags ( group_id, tag_groups ( label, color ) ), proposals!inner ( published )")
+      .select("proposal_id, tags ( group_id, tag_groups ( label ) ), proposals!inner ( published )")
       .eq("proposals.published", true),
     // Each of these does its group-by/count inside Postgres and hands
     // back only {value, count} pairs — never a raw per-person row. Same
@@ -486,22 +486,14 @@ export default async function CommunityDashboardPage({
   // individual tags would swamp the chart, so only curated topics roll
   // up onto the dashboard.
   const proposalIdsByTopic = new Map<string, Set<string>>();
-  const topicColors = new Map<string, string | null>();
   for (const row of proposalTagRows ?? []) {
     const topicLabel = (row as any).tags?.tag_groups?.label;
     if (!topicLabel) continue;
     if (!proposalIdsByTopic.has(topicLabel)) proposalIdsByTopic.set(topicLabel, new Set());
     proposalIdsByTopic.get(topicLabel)!.add((row as any).proposal_id);
-    // Every row for the same topic carries the same color (it's set once
-    // per topic on the admin tags page, not per-tag), so the first one
-    // seen is as good as any — just avoids overwriting with an identical
-    // value on every subsequent row.
-    if (!topicColors.has(topicLabel)) {
-      topicColors.set(topicLabel, (row as any).tags?.tag_groups?.color ?? null);
-    }
   }
   const proposalsByTopic = [...proposalIdsByTopic.entries()]
-    .map(([label, ids]) => ({ label, count: ids.size, color: topicColors.get(label) ?? null }))
+    .map(([label, ids]) => ({ label, count: ids.size }))
     .sort((a, b) => b.count - a.count);
 
   const contributedToOthers = (suggestedEdits ?? []).filter(

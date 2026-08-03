@@ -162,7 +162,28 @@ create table public.decision_maker_profiles (
   party_affiliation text,
   how_they_show_up text not null default '',
   what_they_care_about text not null default '',
+  -- Same server-action + Storage-bucket pattern as proposal cover images
+  -- and profile avatars (see migration_dm_org_photos_and_issue_tags.sql)
+  -- — no focal-point repositioning like proposal covers, just a simple
+  -- circular photo like the avatar gets.
+  photo_url text,
   updated_at timestamptz not null default now()
+);
+
+-- "Issue tags" — reuses the same shared `tags` registry proposals tag
+-- themselves with, so tagging a decision-maker as active on "Housing"
+-- means the same thing everywhere on the site. Existing-tag-only (see
+-- migration_dm_org_photos_and_issue_tags.sql for why there's no
+-- suggest-a-brand-new-tag flow here) and no approval step to attach one
+-- — same "informational lead" trust level as proposal_grants below, not
+-- the higher bar a decision-chain node claiming someone's actual
+-- support needs.
+create table public.decision_maker_tags (
+  decision_maker_id uuid not null references public.decision_makers(id) on delete cascade,
+  tag_id int not null references public.tags(id) on delete cascade,
+  added_by uuid references public.profiles(id),
+  created_at timestamptz not null default now(),
+  primary key (decision_maker_id, tag_id)
 );
 
 -- Structured, one-row-per-bill record of what an elected official has
@@ -232,6 +253,8 @@ create table public.organization_profiles (
   description text not null default '',
   meets_when text,
   meets_where text,
+  -- Same pattern as decision_maker_profiles.photo_url above.
+  logo_url text,
   updated_at timestamptz not null default now()
 );
 
@@ -1004,6 +1027,17 @@ create policy "authenticated add decision maker revisions" on public.decision_ma
 create policy "admin deletes decision maker revisions" on public.decision_maker_revisions
   for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
 
+alter table public.decision_maker_tags enable row level security;
+create policy "public read decision maker tags" on public.decision_maker_tags
+  for select using (true);
+create policy "authenticated add decision maker tags" on public.decision_maker_tags
+  for insert to authenticated with check (auth.uid() = added_by);
+create policy "adder or admin removes decision maker tags" on public.decision_maker_tags
+  for delete using (
+    auth.uid() = added_by
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin)
+  );
+
 -- organizations: same shape as decision_makers — open insert (added_by
 -- must match the inserter), admin-only update/delete of the registry
 -- row itself.
@@ -1209,3 +1243,27 @@ create policy "authenticated upload avatars" on storage.objects for insert
   with check (bucket_id = 'avatars' and auth.role() = 'authenticated');
 create policy "authenticated update own avatars" on storage.objects for update
   using (bucket_id = 'avatars' and auth.role() = 'authenticated');
+
+-- ---------------------------------------------------------------------------
+-- Storage: decision-maker photos + organization logos
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('decision-maker-photos', 'decision-maker-photos', true)
+on conflict (id) do nothing;
+insert into storage.buckets (id, name, public)
+values ('organization-logos', 'organization-logos', true)
+on conflict (id) do nothing;
+
+create policy "public read decision maker photos" on storage.objects for select
+  using (bucket_id = 'decision-maker-photos');
+create policy "authenticated upload decision maker photos" on storage.objects for insert
+  with check (bucket_id = 'decision-maker-photos' and auth.role() = 'authenticated');
+create policy "authenticated update decision maker photos" on storage.objects for update
+  using (bucket_id = 'decision-maker-photos' and auth.role() = 'authenticated');
+
+create policy "public read organization logos" on storage.objects for select
+  using (bucket_id = 'organization-logos');
+create policy "authenticated upload organization logos" on storage.objects for insert
+  with check (bucket_id = 'organization-logos' and auth.role() = 'authenticated');
+create policy "authenticated update organization logos" on storage.objects for update
+  using (bucket_id = 'organization-logos' and auth.role() = 'authenticated');

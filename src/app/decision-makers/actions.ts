@@ -249,3 +249,147 @@ export async function deleteDecisionMakerLegislation(formData: FormData) {
 
   revalidatePath(`/decision-makers/${decisionMakerId}`);
 }
+
+function isNonEmptyFile(value: FormDataEntryValue | null): value is File {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as any).arrayBuffer === "function" &&
+    typeof (value as any).size === "number" &&
+    (value as any).size > 0
+  );
+}
+
+// Same upload shape as updateAvatar (src/app/actions.ts) — fixed path
+// per decision-maker (upsert:true) so re-uploading replaces instead of
+// piling up, cache-busted public URL, {error?} return instead of
+// throwing. Wide-open (any signed-in user), same as every other field
+// on this profile — the revision log is the accountability mechanism,
+// not a narrower upload gate.
+export async function updateDecisionMakerPhoto(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const decisionMakerId = String(formData.get("decision_maker_id"));
+
+  const file = formData.get("photo");
+  if (!isNonEmptyFile(file)) {
+    return { error: "Choose an image file first." };
+  }
+
+  const ext = file.name.split(".").pop() || "jpg";
+  const path = `${decisionMakerId}/photo.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("decision-maker-photos")
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) {
+    console.error("updateDecisionMakerPhoto: storage upload failed", uploadError);
+    const msg = uploadError.message ?? "";
+    if (/size|large|payload|413/i.test(msg)) {
+      return { error: "Your image is too big — try a smaller file (under 20MB)." };
+    }
+    return { error: "That image couldn't be uploaded. Try a different file." };
+  }
+
+  const { data: pub } = supabase.storage.from("decision-maker-photos").getPublicUrl(path);
+  const photoUrl = `${pub.publicUrl}?t=${Date.now()}`;
+
+  const { data: existing } = await supabase
+    .from("decision_maker_profiles")
+    .select("photo_url")
+    .eq("decision_maker_id", decisionMakerId)
+    .maybeSingle();
+
+  const { error: updateError } = await supabase.from("decision_maker_profiles").upsert({
+    decision_maker_id: decisionMakerId,
+    photo_url: photoUrl,
+    updated_at: new Date().toISOString(),
+  });
+  if (updateError) {
+    console.error("updateDecisionMakerPhoto: saving photo_url failed", updateError);
+    return { error: "Photo uploaded, but saving it to the profile failed. Try again." };
+  }
+
+  await logRevision(supabase, decisionMakerId, "photo", existing?.photo_url ? "had a photo" : null, "added a photo", user.id);
+
+  revalidatePath(`/decision-makers/${decisionMakerId}`);
+  return {};
+}
+
+export async function removeDecisionMakerPhoto(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const decisionMakerId = String(formData.get("decision_maker_id"));
+
+  const { error } = await supabase
+    .from("decision_maker_profiles")
+    .update({ photo_url: null, updated_at: new Date().toISOString() })
+    .eq("decision_maker_id", decisionMakerId);
+  if (error) return { error: "Something went wrong removing that photo." };
+
+  await logRevision(supabase, decisionMakerId, "photo", "had a photo", null, user.id);
+
+  revalidatePath(`/decision-makers/${decisionMakerId}`);
+  return {};
+}
+
+// Issue tags — existing-tag-only (see migration_dm_org_photos_and_issue_
+// tags.sql for why there's no "suggest a brand-new tag" flow here: no
+// owner concept on a decision-maker means no first-tier approver for
+// the usual owner-then-admin new-tag flow). Attaching an existing tag
+// needs no approval at all, same trust level as a proposal_grants
+// lead — this is "known to be active on," not a claim of anyone's
+// actual position or support.
+const MAX_ISSUE_TAGS_PER_DECISION_MAKER = 10; // same cap as MAX_TAGS_PER_PROPOSAL, same reasoning (card/list legibility)
+
+export async function attachDecisionMakerTag(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const decisionMakerId = String(formData.get("decision_maker_id"));
+  const tagId = Number(formData.get("tag_id"));
+  if (!tagId) return { error: "Pick a tag first." };
+
+  const { count } = await supabase
+    .from("decision_maker_tags")
+    .select("*", { count: "exact", head: true })
+    .eq("decision_maker_id", decisionMakerId);
+  if ((count ?? 0) >= MAX_ISSUE_TAGS_PER_DECISION_MAKER) {
+    return { error: `Already at the max of ${MAX_ISSUE_TAGS_PER_DECISION_MAKER} issue tags — remove one before adding another.` };
+  }
+
+  const { data: tag } = await supabase.from("tags").select("label").eq("id", tagId).maybeSingle();
+
+  const { error } = await supabase
+    .from("decision_maker_tags")
+    .insert({ decision_maker_id: decisionMakerId, tag_id: tagId, added_by: user.id });
+  if (error) {
+    if (/duplicate|unique/i.test(error.message)) return { error: "That tag's already attached." };
+    return { error: "Something went wrong attaching that tag." };
+  }
+
+  await logRevision(supabase, decisionMakerId, "issue_tag:add", null, tag?.label ?? String(tagId), user.id);
+
+  revalidatePath(`/decision-makers/${decisionMakerId}`);
+  return {};
+}
+
+// Same "you can undo your own work, or a moderator can undo anyone's"
+// shape as deleteDecisionMakerLegislation above.
+export async function removeDecisionMakerTag(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user, isAdmin } = await requireUser();
+  const decisionMakerId = String(formData.get("decision_maker_id"));
+  const tagId = Number(formData.get("tag_id"));
+
+  const { data: row } = await supabase
+    .from("decision_maker_tags")
+    .select("added_by, tags ( label )")
+    .eq("decision_maker_id", decisionMakerId)
+    .eq("tag_id", tagId)
+    .maybeSingle();
+  if (!row) return {};
+  if ((row as any).added_by !== user.id && !isAdmin) {
+    return { error: "Only whoever added this tag, or an admin, can remove it." };
+  }
+
+  await supabase.from("decision_maker_tags").delete().eq("decision_maker_id", decisionMakerId).eq("tag_id", tagId);
+  await logRevision(supabase, decisionMakerId, "issue_tag:remove", (row as any).tags?.label ?? String(tagId), null, user.id);
+
+  revalidatePath(`/decision-makers/${decisionMakerId}`);
+  return {};
+}

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DecisionMakerProfileEditor } from "@/components/decision-maker-profile-editor";
 import { ProposalMiniCardGrid } from "@/components/proposal-mini-card-grid";
+import { ProfilePhotoControl } from "@/components/profile-photo-control";
+import { DecisionMakerTagsSection } from "@/components/decision-maker-tags-section";
+import { updateDecisionMakerPhoto, removeDecisionMakerPhoto } from "@/app/decision-makers/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +90,34 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
         .eq("council_district", profile.represents_district);
       representsCount = count ?? 0;
     }
+  } else {
+    // A photo is worth having even for a department/board (no election-
+    // specific fields apply, but "what does this look like" still does)
+    // — this is the one piece of decision_maker_profiles fetched
+    // regardless of kind, rather than the full profile row above.
+    const { data: photoRow } = await supabase
+      .from("decision_maker_profiles")
+      .select("photo_url")
+      .eq("decision_maker_id", decisionMaker.id)
+      .maybeSingle();
+    profile = photoRow;
   }
+
+  // Issue tags — same shared tags registry proposals use. availableTags
+  // excludes whatever's already attached so the picker below only ever
+  // offers something new to add.
+  const [{ data: allTags }, { data: attachedTagRows }] = await Promise.all([
+    supabase.from("tags").select("id, label").order("label"),
+    supabase
+      .from("decision_maker_tags")
+      .select("tag_id, added_by, tags ( label )")
+      .eq("decision_maker_id", decisionMaker.id),
+  ]);
+  const attachedTagIds = new Set((attachedTagRows ?? []).map((r: any) => r.tag_id));
+  const attachedTags = (attachedTagRows ?? [])
+    .map((r: any) => ({ id: r.tag_id, label: r.tags?.label ?? "?", addedById: r.added_by }))
+    .sort((a: any, b: any) => a.label.localeCompare(b.label));
+  const availableTagsForDecisionMaker = (allTags ?? []).filter((t) => !attachedTagIds.has(t.id));
 
   // Every proposal this decision-maker shows up in — pending or approved,
   // both shown (a pending suggestion is still someone flagging this
@@ -151,6 +181,17 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
         ← All decision-makers
       </Link>
 
+      <div className="mt-3">
+        <ProfilePhotoControl
+          imageUrl={profile?.photo_url ?? null}
+          fallbackLabel={decisionMaker.name}
+          fieldName="photo"
+          hiddenFields={{ decision_maker_id: decisionMaker.id }}
+          uploadAction={updateDecisionMakerPhoto}
+          removeAction={user ? removeDecisionMakerPhoto : undefined}
+        />
+      </div>
+
       <div className="mt-2 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">{decisionMaker.name}</h1>
@@ -206,6 +247,15 @@ export default async function DecisionMakerProfilePage({ params }: { params: { i
           to help fill in or fix anything on this page.
         </p>
       )}
+
+      <DecisionMakerTagsSection
+        decisionMakerId={decisionMaker.id}
+        attachedTags={attachedTags}
+        availableTags={availableTagsForDecisionMaker}
+        canEdit={Boolean(user)}
+        currentUserId={user?.id ?? null}
+        isAdmin={isAdmin}
+      />
 
       <div className="mt-4">
         {isElectedOfficial ? (

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { OrganizationProfileEditor } from "@/components/organization-profile-editor";
+import { ProfilePhotoControl } from "@/components/profile-photo-control";
+import { updateOrganizationLogo, removeOrganizationLogo } from "@/app/organizations/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +61,20 @@ export default async function OrganizationProfilePage({ params }: { params: { id
       <Link href="/organizations" className="text-xs text-neutral-500 underline hover:text-neutral-700">
         ← All organizations
       </Link>
+
+      <div className="mt-3">
+        <ProfilePhotoControl
+          imageUrl={profile?.logo_url ?? null}
+          fallbackLabel={organization.name}
+          shape="square"
+          fieldName="logo"
+          hiddenFields={{ organization_id: organization.id }}
+          uploadAction={updateOrganizationLogo}
+          removeAction={user ? removeOrganizationLogo : undefined}
+          addLabel="Add a logo"
+          changeLabel="Change logo"
+        />
+      </div>
 
       <div className="mt-2 flex items-start justify-between gap-3">
         <div>
