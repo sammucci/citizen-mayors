@@ -75,8 +75,8 @@ export function DecisionMakerTagsSection({
     <div className="mt-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Issue tags</p>
       <p className="mt-0.5 text-xs text-neutral-500">
-        What this decision-maker is known to be active on — picked from the same tags used on
-        proposals.
+        What is this decision-maker known to be active on? (In practice, not in theory.) Picked
+        from the same tags used on proposals.
       </p>
 
       <div className="mt-2 flex flex-wrap gap-1.5">

@@ -62,30 +62,34 @@ export default async function OrganizationProfilePage({ params }: { params: { id
         ← All organizations
       </Link>
 
-      <div className="mt-3">
-        <ProfilePhotoControl
-          imageUrl={profile?.logo_url ?? null}
-          fallbackLabel={organization.name}
-          shape="square"
-          fieldName="logo"
-          hiddenFields={{ organization_id: organization.id }}
-          uploadAction={updateOrganizationLogo}
-          removeAction={user ? removeOrganizationLogo : undefined}
-          addLabel="Add a logo"
-          changeLabel="Change logo"
-        />
-      </div>
-
-      <div className="mt-2 flex items-start justify-between gap-3">
+      {/* Same header layout as a decision-maker's page: logo bigger,
+          right-aligned next to the name, with the "involved" count
+          stacked directly beneath it — one grouped unit instead of the
+          logo sitting alone in its own row above. */}
+      <div className="mt-3 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">{organization.name}</h1>
           <p className="text-xs uppercase tracking-wide text-neutral-400">Civic organization</p>
         </div>
-        <div className="shrink-0 rounded-lg bg-duty-purple/10 px-3 py-2 text-right">
-          <p className="text-lg font-bold text-duty-purple">{servesCount ?? 0}</p>
-          <p className="text-[11px] text-neutral-500">
-            Citizen Mayor{servesCount === 1 ? "" : "s"} involved
-          </p>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <ProfilePhotoControl
+            imageUrl={profile?.logo_url ?? null}
+            fallbackLabel={organization.name}
+            shape="square"
+            size="lg"
+            fieldName="logo"
+            hiddenFields={{ organization_id: organization.id }}
+            uploadAction={updateOrganizationLogo}
+            removeAction={user ? removeOrganizationLogo : undefined}
+            addLabel="Add a logo"
+            changeLabel="Change logo"
+          />
+          <div className="rounded-lg bg-duty-purple/10 px-3 py-2 text-right">
+            <p className="text-lg font-bold text-duty-purple">{servesCount ?? 0}</p>
+            <p className="text-[11px] text-neutral-500">
+              Citizen Mayor{servesCount === 1 ? "" : "s"} involved
+            </p>
+          </div>
         </div>
       </div>
 
