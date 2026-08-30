@@ -108,6 +108,34 @@ export async function updateProfile(formData: FormData): Promise<{ error?: strin
   return {};
 }
 
+// "Report an issue" widget (see feedback-widget.tsx, rendered from the
+// root layout on every page). Deliberately works whether or not you're
+// signed in — no requireUser() here, unlike most of this file — since
+// hitting something confusing shouldn't require an account first.
+// page_path comes from the widget itself (usePathname), not typed.
+export async function submitFeedback(formData: FormData): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const message = String(formData.get("message") ?? "").trim().slice(0, 2000);
+  const pagePath = String(formData.get("page_path") ?? "").trim().slice(0, 500) || null;
+  if (!message) return { error: "Add a short description before sending." };
+
+  const { error } = await supabase.from("site_feedback").insert({
+    message,
+    page_path: pagePath,
+    user_id: user?.id ?? null,
+  });
+  if (error) {
+    console.error("submitFeedback: insert failed", error);
+    return { error: "That didn't send — try again in a moment." };
+  }
+
+  return {};
+}
+
 function isNonEmptyFile(value: FormDataEntryValue | null): value is File {
   return (
     typeof value === "object" &&

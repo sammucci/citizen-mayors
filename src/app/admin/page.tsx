@@ -86,6 +86,14 @@ export default async function AdminHomePage() {
             Clean up typos and duplicates in the shared civic-organization registry.
           </p>
         </li>
+        <li className="rounded-lg border border-neutral-200 bg-white p-4">
+          <Link href="/admin/feedback" className="text-sm font-semibold underline">
+            Feedback
+          </Link>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Reports from the "Report an issue" button — anyone can send one, signed in or not.
+          </p>
+        </li>
       </ul>
     </div>
   );

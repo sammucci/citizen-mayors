@@ -26,6 +26,30 @@ async function requireAdmin() {
   return { supabase, user };
 }
 
+// Toggles the resolved/unresolved flag on a site_feedback row (the
+// "Report an issue" widget's inbox) — no separate "unresolve," a second
+// click just flips it back, same one-button pattern as everything else
+// here that's a binary state.
+export async function toggleFeedbackResolved(formData: FormData) {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  const resolved = formData.get("resolved") === "true";
+
+  await supabase.from("site_feedback").update({ resolved: !resolved }).eq("id", id);
+  revalidatePath("/admin/feedback");
+}
+
+// Deletes a site_feedback row outright — once you've acted on a report
+// (or it turns out to be noise), there's no reason to keep it around.
+export async function deleteFeedback(formData: FormData) {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id"));
+  await supabase.from("site_feedback").delete().eq("id", id);
+  revalidatePath("/admin/feedback");
+}
+
 // approveTagSuggestion and rejectTagSuggestion moved to
 // proposals/actions.ts (v62) — import them from there now. Approving or
 // rejecting a tag suggestion depends on whether the proposal's OWNER or

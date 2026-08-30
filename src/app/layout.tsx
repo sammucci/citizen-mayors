@@ -5,6 +5,7 @@ import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import { UserMenu } from "@/components/user-menu";
 import { NotificationBell } from "@/components/notification-bell";
+import { FeedbackWidget } from "@/components/feedback-widget";
 import { getNotifications } from "@/lib/notifications";
 
 // Was falling back to the browser's default sans-serif (Arial-ish on a
@@ -93,6 +94,7 @@ export default async function RootLayout({
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        <FeedbackWidget />
       </body>
     </html>
   );
