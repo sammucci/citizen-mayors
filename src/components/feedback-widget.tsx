@@ -36,7 +36,7 @@ export function FeedbackWidget() {
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {open && (
-        <div className="mb-2 w-72 rounded-lg border border-neutral-200 bg-white p-3 shadow-lg">
+        <div className="mb-2 w-80 rounded-lg border border-neutral-200 bg-white p-3 shadow-lg">
           {status === "sent" ? (
             <div className="py-2 text-center">
               <p className="text-sm font-semibold text-neutral-800">Thanks — got it.</p>
@@ -66,9 +66,9 @@ export function FeedbackWidget() {
               }}
             >
               <input type="hidden" name="page_path" value={pathname} />
-              <p className="text-sm font-semibold text-neutral-800">Report an issue</p>
+              <p className="text-sm font-semibold text-neutral-800">Report an issue or give feedback</p>
               <p className="mt-0.5 text-xs text-neutral-500">
-                Something confusing or broken? Tell us what happened — no need to be signed in.
+                Something confusing or broken, or just an idea? Tell us — no need to be signed in.
               </p>
               <textarea
                 name="message"
@@ -77,7 +77,7 @@ export function FeedbackWidget() {
                 rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="What were you trying to do, and what happened instead?"
+                placeholder="What were you trying to do, what happened instead, or what's on your mind?"
                 className="mt-2 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
               />
               <div className="mt-2 flex items-center gap-1.5">
@@ -102,12 +102,16 @@ export function FeedbackWidget() {
       )}
 
       {!open && (
+        // Bigger and a bit louder than before (you said you didn't even
+        // notice it) — larger padding/text, plus a speech-bubble icon so
+        // it reads as more than a tiny text label easy to miss in the
+        // corner of the screen.
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-full bg-neutral-800 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-neutral-700"
+          className="flex items-center gap-1.5 rounded-full bg-neutral-800 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-neutral-700"
         >
-          Report an issue
+          💬 Report an issue or give feedback
         </button>
       )}
     </div>

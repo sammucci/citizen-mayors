@@ -185,6 +185,20 @@ export async function createProposal(formData: FormData) {
     change_note: "Initial version.",
   });
 
+  // Posting a proposal is itself a statement of support — the owner
+  // obviously backs their own idea, so "net support" starts at +1
+  // instead of 0. Uses the same `reactions` row every other upvote
+  // uses (see react() below), so this is indistinguishable from the
+  // owner having clicked the upvote button themselves, and they can
+  // still remove it same as anyone else's vote on their own proposal
+  // if they ever want to for some reason.
+  await supabase.from("reactions").insert({
+    user_id: user.id,
+    proposal_id: proposal.id,
+    comment_id: null,
+    value: 1,
+  });
+
   if (tagIds.length > 0) {
     await supabase
       .from("proposal_tags")

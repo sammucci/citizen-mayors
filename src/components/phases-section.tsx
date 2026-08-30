@@ -1,9 +1,9 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { addPhase, approvePhase, removePhase, updatePhase, updatePhaseProgress } from "@/app/proposals/actions";
+import { addPhase, approvePhase, removePhase, reorderPhases, updatePhase, updatePhaseProgress } from "@/app/proposals/actions";
 import { readableTextColor } from "@/lib/readable-text-color";
 import { PetitionSection } from "@/components/petition-section";
 
@@ -117,6 +117,26 @@ export function PhasesSection({
   const [editNote, setEditNote] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Reordering, brought back after being pulled out along with the
+  // confusing ◀ ▶ buttons — this time as a real drag directly on the
+  // numbered segment itself (owner-only), same Pointer Events approach
+  // already used for the decision chain (see power-tree-chain.tsx),
+  // adapted from vertical to horizontal. No visible grip handle added on
+  // purpose — that's one more small thing sitting on an already-busy
+  // stepper; press-and-drag on the number itself, with a plain click
+  // still selecting it, keeps this from adding any new visual chrome.
+  // `dragPhaseId` only ever becomes non-null once the pointer has
+  // actually moved past a small threshold — that's what lets a quick
+  // tap still work as "select this phase" instead of every click
+  // secretly starting a drag.
+  const [dragPhaseId, setDragPhaseId] = useState<string | null>(null);
+  const [dragOverPhaseIndex, setDragOverPhaseIndex] = useState<number | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const dragCandidateIdRef = useRef<string | null>(null);
+  const justDraggedRef = useRef(false);
+  const phaseRefs = useRef<Record<string, HTMLElement | null>>({});
+  const DRAG_THRESHOLD = 6;
+
   const steps: Array<{ id: string; label: string; phase: Phase | null }> = [
     { id: "anchor", label: "Map your decision chain", phase: null },
     ...phases.map((p) => ({ id: p.id, label: p.label, phase: p })),
@@ -160,6 +180,64 @@ export function PhasesSection({
     setInsertAfterId(afterId);
     setInsertLabel(prefillLabel);
     setInsertNote(prefillNote);
+  }
+
+  function persistOrder(newPhases: Phase[]) {
+    const fd = new FormData();
+    fd.set("proposal_id", proposalId);
+    newPhases.forEach((p) => fd.append("phase_id", p.id));
+    reorderPhases(fd).then(() => router.refresh());
+  }
+
+  function handlePhasePointerDown(e: React.PointerEvent, phaseId: string) {
+    if (!isOwner || isInserting) return;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    dragCandidateIdRef.current = phaseId;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function handlePhasePointerMove(e: React.PointerEvent) {
+    if (!dragStartRef.current || !dragCandidateIdRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    if (dragPhaseId === null) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      setDragPhaseId(dragCandidateIdRef.current);
+    }
+    // Nearest real-phase slot by horizontal midpoint — same idea as the
+    // decision chain's vertical version, just measuring X instead of Y
+    // since this stepper is a row, not a column.
+    let idx = phases.length - 1;
+    for (let i = 0; i < phases.length; i++) {
+      const el = phaseRefs.current[phases[i].id];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (e.clientX < rect.left + rect.width / 2) {
+        idx = i;
+        break;
+      }
+    }
+    setDragOverPhaseIndex(idx);
+  }
+
+  function handlePhasePointerUp() {
+    if (dragPhaseId && dragOverPhaseIndex !== null) {
+      const fromIndex = phases.findIndex((p) => p.id === dragPhaseId);
+      if (fromIndex !== -1 && fromIndex !== dragOverPhaseIndex) {
+        const next = [...phases];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(dragOverPhaseIndex, 0, moved);
+        persistOrder(next);
+      }
+      // A click event still fires right after pointerup — this flag is
+      // what stops that click from also re-selecting whatever phase the
+      // drag happened to end over.
+      justDraggedRef.current = true;
+    }
+    dragStartRef.current = null;
+    dragCandidateIdRef.current = null;
+    setDragPhaseId(null);
+    setDragOverPhaseIndex(null);
   }
 
   return (
@@ -225,12 +303,33 @@ export function PhasesSection({
             const isAnchorStarted = s.id === "anchor" && anchorStarted;
             const isInProgress = s.phase?.progress === "in_progress";
             const showsStartedBorder = isAnchorStarted || isInProgress;
+            const isRealPhase = Boolean(s.phase);
+            const isDragging = isRealPhase && dragPhaseId === s.id;
+            const isDropTarget =
+              dragPhaseId !== null &&
+              isRealPhase &&
+              dragOverPhaseIndex !== null &&
+              phases[dragOverPhaseIndex]?.id === s.id &&
+              s.id !== dragPhaseId;
             return (
               <Fragment key={s.id}>
               <div className="min-w-[64px] flex-1">
                 <button
                   type="button"
-                  onClick={() => goTo(i)}
+                  ref={isRealPhase ? (el) => { phaseRefs.current[s.id] = el; } : undefined}
+                  onPointerDown={isRealPhase ? (e) => handlePhasePointerDown(e, s.id) : undefined}
+                  onPointerMove={isRealPhase ? handlePhasePointerMove : undefined}
+                  onPointerUp={isRealPhase ? handlePhasePointerUp : undefined}
+                  onClick={() => {
+                    // A click still fires right after a real drag's
+                    // pointerup — swallow that one click instead of also
+                    // jumping the selection to wherever the drag ended.
+                    if (justDraggedRef.current) {
+                      justDraggedRef.current = false;
+                      return;
+                    }
+                    goTo(i);
+                  }}
                   // border-2 is ALWAYS present now, not just when
                   // showing the dashed "started" treatment — a real
                   // border adds to a box's rendered height (unlike the
@@ -242,18 +341,24 @@ export function PhasesSection({
                   // when there's nothing to show.
                   className={`w-full rounded-md border-2 py-2 text-xs font-bold transition ${
                     isDone && i === selectedIndex ? "ring-2 ring-offset-1" : ""
-                  } ${showsStartedBorder ? "border-dashed border-green-600" : "border-transparent"}`}
-                  style={
-                    isDone
+                  } ${showsStartedBorder ? "border-dashed border-green-600" : "border-transparent"} ${
+                    isDragging ? "opacity-40" : ""
+                  } ${isDropTarget ? "ring-2 ring-offset-1" : ""} ${
+                    isOwner && isRealPhase && !isInserting ? "cursor-grab active:cursor-grabbing" : ""
+                  }`}
+                  style={{
+                    ...(isDone
                       ? {
                           backgroundColor: "#16a34a", // green-600 — the whole bar, not just a small badge, so "done" reads at a glance
                           color: "#ffffff",
-                          ...(i === selectedIndex ? ({ "--tw-ring-color": categoryColor } as React.CSSProperties) : {}),
                         }
                       : i === selectedIndex
                       ? { backgroundColor: categoryColor, color: finalTextColor }
-                      : { backgroundColor: "#e5e5e5", color: "#737373" }
-                  }
+                      : { backgroundColor: "#e5e5e5", color: "#737373" }),
+                    ...((isDone && i === selectedIndex) || isDropTarget
+                      ? ({ "--tw-ring-color": categoryColor } as React.CSSProperties)
+                      : {}),
+                  }}
                   title={
                     isAnchorStarted
                       ? `${s.label} — started (${anchorNodeCount} so far)`
@@ -261,6 +366,8 @@ export function PhasesSection({
                       ? `${s.label} — in progress`
                       : isDone
                       ? `${s.label} — done`
+                      : isOwner && isRealPhase && !isInserting
+                      ? `${s.label} — drag to reorder`
                       : s.label
                   }
                 >

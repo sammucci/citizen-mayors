@@ -251,7 +251,11 @@ export default async function HomePage({
             />
           )}
           {activePetitionProposalIds.has(p.id) && (
-            <span className="absolute right-2 top-4 inline-flex items-center gap-1 rounded-full bg-duty-purple px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
+            // Bigger and brand-red now, not the same purple as the
+            // category pill right below it — this needs to read as an
+            // urgent "act on this" flag at a glance, not blend in as
+            // just another label on the card.
+            <span className="absolute right-2 top-4 inline-flex items-center gap-1 rounded-full bg-duty-red px-2.5 py-1 text-xs font-bold text-white shadow-md">
               📣 Active petition
             </span>
           )}

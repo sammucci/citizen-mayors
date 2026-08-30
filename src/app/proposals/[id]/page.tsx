@@ -580,12 +580,12 @@ export default async function ProposalPage({
                     href={activePetitionPhase?.petition_url || "#phases"}
                     target={activePetitionPhase?.petition_url ? "_blank" : undefined}
                     rel={activePetitionPhase?.petition_url ? "noopener noreferrer" : undefined}
-                    className="mb-2 flex items-center gap-2 rounded-md bg-duty-purple px-3 py-2 text-xs font-bold text-white hover:opacity-90"
+                    className="mb-2 flex items-center justify-center gap-2 rounded-md bg-duty-red px-3 py-2.5 text-center text-sm font-bold text-white hover:opacity-90"
                   >
                     📣{" "}
                     {activePetitionPhase?.petition_url
-                      ? "This project has an active petition — sign it"
-                      : "This project has an active petition — see it below"}
+                      ? "This project has an active petition — click to sign it!"
+                      : "This project has an active petition — click to see it"}
                   </a>
                 )}
                 <span className="text-xs text-neutral-500">📍 {location}</span>
