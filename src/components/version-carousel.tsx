@@ -42,7 +42,17 @@ export function VersionCarousel({
     <>
       {renderMarkdownLite(v.body)}
 
-      {index !== currentIndex && v.change_note && (
+      {/* Real bug: this used to be gated on `index !== currentIndex` —
+          i.e. it only ever showed a version's own change note while
+          looking at an OLDER version, never the current one. That's
+          backwards from what actually happens: you type "what changed
+          and why" when you advance to a new version, that new version
+          immediately becomes the current one, and the note should show
+          right there — not vanish until some later version pushes this
+          one into the past. Version 1 is excluded on purpose (its note
+          is always the auto-generated "Initial version.", not something
+          you actually typed). */}
+      {v.change_note && v.version_number > 1 && (
         <p className="mt-3 text-xs italic text-neutral-500">
           What changed: {v.change_note}
         </p>
