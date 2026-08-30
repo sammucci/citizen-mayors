@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 
-export type NotificationIcon = "comment" | "link" | "approved" | "pending" | "tag";
+export type NotificationIcon = "comment" | "link" | "approved" | "pending" | "tag" | "petition";
 
 export type NotificationItem = {
   id: string;
@@ -41,14 +41,25 @@ export async function getNotifications(
     .maybeSingle();
   const lastSeenAt = profile?.notifications_seen_at ?? new Date(0).toISOString();
 
-  const [{ data: myProposals }, { data: myComments }, { data: myFollowedTags }] = await Promise.all([
-    supabase.from("proposals").select("id").eq("owner_id", userId),
-    supabase.from("comments").select("id").eq("author_id", userId),
-    supabase.from("profile_followed_tags").select("tag_id").eq("profile_id", userId),
-  ]);
+  const [{ data: myProposals }, { data: myComments }, { data: myFollowedTags }, { data: myBackedProposals }] =
+    await Promise.all([
+      supabase.from("proposals").select("id").eq("owner_id", userId),
+      supabase.from("comments").select("id").eq("author_id", userId),
+      supabase.from("profile_followed_tags").select("tag_id").eq("profile_id", userId),
+      // "Backing" a proposal = the same general upvote/downvote reaction
+      // used for the proposal's own "+N net support" count (see react()
+      // in proposals/actions.ts) — value 1, proposal_id set, comment_id
+      // null (a comment vote uses the same table but has no proposal_id
+      // of its own). This is deliberately the ONLY notion of "backing" a
+      // project now — the separate on-platform "back this petition"
+      // counter/button was removed (confusing second support action
+      // right next to this one), and this is what replaces it.
+      supabase.from("reactions").select("proposal_id").eq("user_id", userId).eq("value", 1).not("proposal_id", "is", null),
+    ]);
   const myProposalIds = (myProposals ?? []).map((p: any) => p.id);
   const myCommentIds = (myComments ?? []).map((c: any) => c.id);
   const followedTagIds = (myFollowedTags ?? []).map((t: any) => t.tag_id);
+  const myBackedProposalIds = (myBackedProposals ?? []).map((r: any) => r.proposal_id);
 
   const [
     { data: newCommentsOnMyProposals },
@@ -58,6 +69,7 @@ export async function getNotifications(
     { data: openSuggestionsOnMyProposals },
     { data: pendingLinksOnMyProposals },
     { data: taggedMatches },
+    { data: newPetitionsOnBackedProposals },
   ] = await Promise.all([
     myProposalIds.length > 0
       ? supabase
@@ -133,6 +145,23 @@ export async function getNotifications(
           .in("tag_id", followedTagIds)
           .gt("created_at", lastSeenAt)
       : Promise.resolve({ data: [] as any[] }),
+    // Replaces the old "back this petition" counter/button: instead of a
+    // separate support action, anyone who's already upvoted a proposal
+    // (myBackedProposalIds, above) gets told here once a real petition
+    // link goes live for it. `updated_at` on proposal_phases gets bumped
+    // by setPetitionUrl specifically when the link is saved (see
+    // proposals/actions.ts) — that's the precise "a petition has been
+    // made" moment, not just the phase being marked done. Filtered to
+    // published, not-your-own proposals in JS below, same as the
+    // tag-match alert above.
+    myBackedProposalIds.length > 0
+      ? supabase
+          .from("proposal_phases")
+          .select("id, proposal_id, label, petition_url, updated_at, proposals ( id, title, owner_id, published )")
+          .in("proposal_id", myBackedProposalIds)
+          .not("petition_url", "is", null)
+          .gt("updated_at", lastSeenAt)
+      : Promise.resolve({ data: [] as any[] }),
   ]);
 
   const newCommentsById = new Map<string, { title: string; proposalId: string }>();
@@ -183,6 +212,33 @@ export async function getNotifications(
       icon: "tag",
       text: `"${v.title}" matches your interest in ${v.labels.join(", ")} — maybe you can add your expertise?`,
       href: `/proposals/${proposalId}`,
+    });
+  }
+
+  // "A petition is live for a project you back" — replaces the old
+  // separate "back this petition" counter/button. Matched on label same
+  // as everywhere else in the app (isPetitionPhase in phases-section.tsx)
+  // rather than trusting petition_url alone to mean this is a petition
+  // phase — belt-and-suspenders, since petition_url is only ever set on
+  // one, but the label check is what every other surface relies on.
+  // Grouped by proposal (a proposal could in theory have more than one
+  // petition-labeled phase) and excludes your own proposals — you
+  // already know, you're the one who pasted the link in.
+  const petitionsByProposal = new Map<string, string>();
+  for (const p of (newPetitionsOnBackedProposals ?? []) as any[]) {
+    if (!/petition/i.test(p.label)) continue;
+    const proposal = p.proposals;
+    if (!proposal || !proposal.published || proposal.owner_id === userId) continue;
+    if (!petitionsByProposal.has(proposal.id)) {
+      petitionsByProposal.set(proposal.id, proposal.title ?? "A proposal");
+    }
+  }
+  for (const [proposalId, title] of petitionsByProposal.entries()) {
+    items.push({
+      id: `petition-${proposalId}`,
+      icon: "petition",
+      text: `📣 A petition is now live for "${title}" — you're backing this project`,
+      href: `/proposals/${proposalId}#phases`,
     });
   }
 

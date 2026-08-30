@@ -1,34 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { addPetitionSupport, removePetitionSupport, setPetitionUrl } from "@/app/proposals/actions";
+import { setPetitionUrl } from "@/app/proposals/actions";
 
 // Sidebar box, appears once a proposal has real forward momentum (see
 // proposals/[id]/page.tsx — gated on at least one phase marked "done",
-// i.e. ready to move on to the next stage). Two separate things live
-// here, deliberately not merged into one "petition" concept:
+// i.e. ready to move on to the next stage). Just the drafted petition
+// (title + body composed from the proposal's own text) meant to be
+// copy-pasted into an external platform — NOT a deep link (Change.org's
+// start-a-petition flow has no working URL-based prefill, tested
+// directly: query params like petition_title/petition_letter_body get
+// silently ignored by their form), so a "one-click autofill" would just
+// be a second silent failure wearing a nicer outfit. Copy-paste is the
+// honest version of the same time-saving idea.
 //
-// 1. A drafted petition (title + body composed from the proposal's own
-//    text) meant to be copy-pasted into an external platform. This is
-//    NOT a deep link — Change.org's start-a-petition flow has no
-//    working URL-based prefill (tested directly: query params like
-//    petition_title/petition_letter_body get silently ignored by their
-//    form), so a "one-click autofill" would just be a second silent
-//    failure wearing a nicer outfit. Copy-paste is the honest version
-//    of the same time-saving idea.
-// 2. An on-platform "N Citizen Mayors support this" counter — see
-//    migration_proposal_petition_supporters.sql for why this is
-//    deliberately NOT trying to be the signature-collection system
-//    itself.
+// Used to also have an on-platform "N Citizen Mayors ready to back a
+// petition" counter with its own separate "I'll back this" button —
+// removed per your call: it wasn't adding anything the proposal's own
+// general support vote didn't already cover, and just read as a second,
+// confusing kind of "support" button sitting right next to the real one.
+// What happens now instead: anyone who's upvoted the PROPOSAL itself
+// gets notified (bell) once a real petition link goes live for it — see
+// the new item in lib/notifications.ts. The underlying
+// proposal_petition_supporters table and addPetitionSupport/
+// removePetitionSupport actions are left in place, just unused, in case
+// you want the data or want to revisit this later.
 export function PetitionSection({
   proposalId,
   phaseId,
   title,
   summary,
-  supporterCount,
-  iSupport,
-  canParticipate,
   petitionUrl,
   isOwner,
 }: {
@@ -36,17 +37,12 @@ export function PetitionSection({
   phaseId: string;
   title: string;
   summary: string;
-  supporterCount: number;
-  iSupport: boolean;
-  canParticipate: boolean;
   // The real, live petition link, once the owner's pasted one in — see
   // setPetitionUrl in proposals/actions.ts. Null until then.
   petitionUrl: string | null;
   isOwner: boolean;
 }) {
   const [copied, setCopied] = useState<"title" | "body" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
   const [editingUrl, setEditingUrl] = useState(false);
   const [urlDraft, setUrlDraft] = useState(petitionUrl ?? "");
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -193,52 +189,6 @@ export function PetitionSection({
         Opens Change.org's own petition builder in a new tab — paste the text
         above in once you're there.
       </p>
-
-      <div className="mt-4 flex items-center justify-between border-t border-neutral-100 pt-3">
-        <p className="text-xs text-neutral-600">
-          <span className="font-semibold text-neutral-800">{supporterCount}</span>{" "}
-          Citizen Mayor{supporterCount === 1 ? "" : "s"} {supporterCount === 1 ? "is" : "are"} ready to back a
-          petition on this.
-        </p>
-        {/* Deliberately NOT worded "I support this" — this page already
-            has a general thumbs-up/down vote on the proposal itself
-            ("+N net support"), which measures a different thing
-            (broad sentiment on the idea, reversible either direction,
-            available from day one). This is a narrower, one-way
-            commitment that only exists once there's a petition to back
-            — wording it differently is the whole fix for the exact
-            confusion this label used to invite. */}
-        {canParticipate ? (
-          <form
-            action={async (formData) => {
-              setError(null);
-              setPending(true);
-              const result = iSupport
-                ? await removePetitionSupport(formData)
-                : await addPetitionSupport(formData);
-              setPending(false);
-              if (result?.error) setError(result.error);
-            }}
-          >
-            <input type="hidden" name="proposal_id" value={proposalId} />
-            <button
-              disabled={pending}
-              className={
-                iSupport
-                  ? "rounded-full border border-duty-purple/40 bg-duty-purple/10 px-3 py-1 text-xs font-medium text-duty-purple disabled:opacity-60"
-                  : "rounded-full bg-duty-purple px-3 py-1 text-xs font-medium text-white disabled:opacity-60"
-              }
-            >
-              {iSupport ? "✓ You're backing this petition" : "I'll back this petition"}
-            </button>
-          </form>
-        ) : (
-          <Link href="/login" className="text-xs text-duty-purple underline">
-            Sign in to back this petition
-          </Link>
-        )}
-      </div>
-      {error && <p className="mt-1 text-xs text-duty-red">{error}</p>}
     </div>
   );
 }

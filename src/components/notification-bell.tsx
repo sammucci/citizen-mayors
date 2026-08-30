@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { markNotificationsSeen } from "@/app/actions";
 import type { NotificationItem, NotificationIcon } from "@/lib/notifications";
-import { BellIcon, CommentIcon, LinkIcon, CheckCircleIcon, HourglassIcon, TagIcon } from "@/components/icons";
+import { BellIcon, CommentIcon, LinkIcon, CheckCircleIcon, HourglassIcon, TagIcon, MegaphoneIcon } from "@/components/icons";
 
 const ICONS_BY_TYPE: Record<NotificationIcon, (props: { className?: string }) => React.ReactElement> = {
   comment: CommentIcon,
@@ -13,6 +13,7 @@ const ICONS_BY_TYPE: Record<NotificationIcon, (props: { className?: string }) =>
   approved: CheckCircleIcon,
   pending: HourglassIcon,
   tag: TagIcon,
+  petition: MegaphoneIcon,
 };
 
 function NotificationRow({ item, onNavigate }: { item: NotificationItem; onNavigate: () => void }) {

@@ -229,28 +229,34 @@ export default async function HomePage({
         {/* The color strip now always shows, image or not — it was
             getting replaced entirely by the cover image before,
             which meant cards with an image lost their category
-            color cue at a glance. */}
-        <div
-          className="h-2"
-          style={{ backgroundColor: p.categories?.color ?? "#e5e5e5" }}
-        />
-        {p.image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={p.image_url}
-            alt=""
-            className="h-36 w-full object-cover"
-            style={{
-              objectPosition: `${p.image_position_x ?? 50}% ${p.image_position_y ?? 50}%`,
-            }}
+            color cue at a glance. Wrapped in `relative` so the active-
+            petition badge (below) can sit pinned to its top-right
+            corner — previously it sat in the white text area, right on
+            top of the category pill, which is the actual clutter you
+            flagged. */}
+        <div className="relative">
+          <div
+            className="h-2"
+            style={{ backgroundColor: p.categories?.color ?? "#e5e5e5" }}
           />
-        )}
-        <div className="flex flex-1 flex-col p-4">
+          {p.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={p.image_url}
+              alt=""
+              className="h-36 w-full object-cover"
+              style={{
+                objectPosition: `${p.image_position_x ?? 50}% ${p.image_position_y ?? 50}%`,
+              }}
+            />
+          )}
           {activePetitionProposalIds.has(p.id) && (
-            <span className="mb-2 inline-flex w-fit items-center gap-1 rounded-full bg-duty-purple px-2 py-0.5 text-[11px] font-bold text-white">
+            <span className="absolute right-2 top-4 inline-flex items-center gap-1 rounded-full bg-duty-purple px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
               📣 Active petition
             </span>
           )}
+        </div>
+        <div className="flex flex-1 flex-col p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/?category=${p.categories?.slug ?? ""}`}

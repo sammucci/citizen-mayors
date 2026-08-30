@@ -211,9 +211,9 @@ export default async function ProposalPage({
   // Petition tools live inside whichever phase is actually about a
   // petition (matched on the phase's own label — see phases-section.tsx)
   // rather than as a separate box gated on some unrelated phase being
-  // "done." Only need to fetch supporters at all if such a phase exists.
-  const hasPetitionPhase = (proposalPhases ?? []).some((p) => /petition/i.test(p.label));
-  // Distinct from hasPetitionPhase above — this one's specifically for
+  // "done."
+  //
+  // Distinct from hasActivePetition below — this one's specifically for
   // the "this project has an active petition" banner near the title
   // (and for the homepage filter/badge): a petition phase merely
   // existing isn't "active," it needs to actually be approved and
@@ -223,16 +223,13 @@ export default async function ProposalPage({
     (p) => /petition/i.test(p.label) && p.status === "approved" && p.progress === "done"
   );
   const hasActivePetition = Boolean(activePetitionPhase);
-  const { data: petitionSupporters } = hasPetitionPhase
-    ? await supabase
-        .from("proposal_petition_supporters")
-        .select("user_id")
-        .eq("proposal_id", proposal.id)
-    : { data: null };
-  const petitionSupporterCount = petitionSupporters?.length ?? 0;
-  const iSupportPetition = Boolean(
-    user && (petitionSupporters ?? []).some((s) => s.user_id === user.id)
-  );
+  // Used to also fetch proposal_petition_supporters here for an
+  // on-platform "N Citizen Mayors back this petition" counter + button —
+  // removed per your call (it read as a confusing second "support"
+  // action next to the proposal's own upvote). Anyone who's upvoted the
+  // proposal itself now gets notified via the bell once a real petition
+  // link goes live — see lib/notifications.ts. The table itself is
+  // untouched, just unused here now.
 
   // "Common next steps for proposals like this one" — looks at every
   // OTHER proposal in the same category, tallies how often each approved
@@ -1150,9 +1147,6 @@ export default async function ProposalPage({
           }))}
           proposalTitle={proposal.title}
           proposalSummary={proposal.summary ?? ""}
-          petitionSupporterCount={petitionSupporterCount}
-          iSupportPetition={iSupportPetition}
-          canParticipate={Boolean(user)}
         />
       </div>
     </div>

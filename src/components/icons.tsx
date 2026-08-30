@@ -112,3 +112,25 @@ export function TagIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+// For the "a petition is now live" notification — a proposal you back
+// (upvoted) now has a real, signable petition link. See
+// lib/notifications.ts.
+export function MegaphoneIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 11v2a2 2 0 0 0 2 2h1l3.5 5v-6" />
+      <path d="M9 8 18.5 4a1 1 0 0 1 1.5.87v14.26a1 1 0 0 1-1.5.87L9 16Z" />
+      <path d="M22 9.5a3 3 0 0 1 0 5" />
+    </svg>
+  );
+}

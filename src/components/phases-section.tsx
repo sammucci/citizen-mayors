@@ -3,7 +3,7 @@
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { addPhase, approvePhase, removePhase, reorderPhases, updatePhase, updatePhaseProgress } from "@/app/proposals/actions";
+import { addPhase, approvePhase, removePhase, updatePhase, updatePhaseProgress } from "@/app/proposals/actions";
 import { readableTextColor } from "@/lib/readable-text-color";
 import { PetitionSection } from "@/components/petition-section";
 
@@ -48,9 +48,6 @@ export function PhasesSection({
   anchorNodeCount,
   proposalTitle,
   proposalSummary,
-  petitionSupporterCount,
-  iSupportPetition,
-  canParticipate,
 }: {
   proposalId: string;
   categoryColor: string;
@@ -65,17 +62,15 @@ export function PhasesSection({
   // always grow, so this only ever unlocks a dashed "started" treatment
   // (see the stepper below), never the solid "done" fill real phases get.
   anchorNodeCount: number;
-  // Petition tools (draft text + on-platform backer count) live INSIDE
-  // whichever phase is actually about a petition — not as a separate
-  // sidebar box gated on some unrelated phase being "done". A phase
-  // titled e.g. "Start a petition" or "Circulate a petition" is where
-  // they show up, in that phase's own detail panel, same as everything
-  // else about that phase. See isPetitionPhase below.
+  // Petition tools (draft-and-copy text) live INSIDE whichever phase is
+  // actually about a petition — not as a separate sidebar box gated on
+  // some unrelated phase being "done". A phase titled e.g. "Start a
+  // petition" or "Circulate a petition" is where they show up, in that
+  // phase's own detail panel, same as everything else about that phase.
+  // See isPetitionPhase below. (The on-platform "back this petition"
+  // counter that used to live here is gone — see PetitionSection.)
   proposalTitle: string;
   proposalSummary: string;
-  petitionSupporterCount: number;
-  iSupportPetition: boolean;
-  canParticipate: boolean;
 }) {
   const router = useRouter();
   const finalTextColor = readableTextColor(categoryColor);
@@ -130,10 +125,6 @@ export function PhasesSection({
   if (selectedIndex === -1) selectedIndex = steps.length - 1;
   const selected = steps[selectedIndex];
   const selectedPhase = selected.phase;
-  // Index within the real (non-anchor) phases array — needed for
-  // move-left/right and insert-before/after, which only ever operate on
-  // real phases and their neighbors.
-  const realIndex = selectedPhase ? phases.findIndex((p) => p.id === selectedPhase.id) : -1;
   // Matched on the phase's own label rather than a separate database
   // flag — same lightweight approach as the anchor step already uses.
   // Whatever you named the phase ("Start a petition," "Circulate a
@@ -157,13 +148,6 @@ export function PhasesSection({
     setEditing(false);
   }
 
-  function persistOrder(newPhases: Phase[]) {
-    const fd = new FormData();
-    fd.set("proposal_id", proposalId);
-    newPhases.forEach((p) => fd.append("phase_id", p.id));
-    reorderPhases(fd).then(() => router.refresh());
-  }
-
   // Single entry point for opening the add-phase form, whether from the
   // "+ Add a phase" button or a suggestion chip (which passes a
   // prefill). Deliberately does NOT touch selectedId/goTo anymore —
@@ -176,15 +160,6 @@ export function PhasesSection({
     setInsertAfterId(afterId);
     setInsertLabel(prefillLabel);
     setInsertNote(prefillNote);
-  }
-
-  function moveBy(delta: -1 | 1) {
-    if (realIndex === -1) return;
-    const target = realIndex + delta;
-    if (target < 0 || target >= phases.length) return;
-    const next = [...phases];
-    [next[realIndex], next[target]] = [next[target], next[realIndex]];
-    persistOrder(next);
   }
 
   return (
@@ -526,37 +501,27 @@ export function PhasesSection({
               <p className="mt-2 text-sm text-neutral-700">{selectedPhase.note}</p>
             )}
 
-            {/* Move/Remove — kept with THIS phase's own detail (unlike
+            {/* Remove — kept with THIS phase's own detail (unlike
                 "+ Add a phase," which is a separate, standalone action
                 now living below in the white area), right-aligned so it
-                doesn't pile up under everything else on the left. */}
+                doesn't pile up under everything else on the left.
+                The ◀ ▶ move-earlier/move-later buttons that used to sit
+                here are gone — you flagged them as reading like broken
+                "switch between phases" navigation (they didn't do that;
+                they reordered the phase list), which was a fair
+                misread since they sat right next to the phase title
+                with no clearer explanation than a tooltip. Removed
+                rather than relabeled. Real consequence: there is
+                currently no way to reorder phases at all — say the
+                word if you want that back in some other form (e.g. a
+                drag handle on each stepper segment). */}
             {isOwner && (
-              <div className="mt-3 flex items-center justify-end gap-1.5 border-t border-neutral-200 pt-2">
-                <button
-                  type="button"
-                  onClick={() => moveBy(-1)}
-                  disabled={realIndex <= 0}
-                  title="Move this phase earlier"
-                  aria-label="Move this phase earlier"
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-sm text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  ◀
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveBy(1)}
-                  disabled={realIndex === -1 || realIndex >= phases.length - 1}
-                  title="Move this phase later"
-                  aria-label="Move this phase later"
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-sm text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  ▶
-                </button>
+              <div className="mt-3 flex items-center justify-end border-t border-neutral-200 pt-2">
                 <button
                   type="button"
                   onClick={() => setConfirmingRemove(true)}
                   title="Remove this phase"
-                  className="ml-1 text-xs text-duty-red underline hover:opacity-80"
+                  className="text-xs text-duty-red underline hover:opacity-80"
                 >
                   Remove
                 </button>
@@ -569,9 +534,6 @@ export function PhasesSection({
                 phaseId={selectedPhase.id}
                 title={proposalTitle}
                 summary={proposalSummary}
-                supporterCount={petitionSupporterCount}
-                iSupport={iSupportPetition}
-                canParticipate={canParticipate}
                 petitionUrl={selectedPhase.petitionUrl}
                 isOwner={isOwner}
               />
@@ -622,7 +584,7 @@ export function PhasesSection({
             <button
               type="button"
               onClick={() => openInsert(selectedId)}
-              className="rounded-full px-3 py-1.5 text-xs font-bold"
+              className="block w-full rounded-lg py-2.5 text-center text-sm font-bold"
               style={{ backgroundColor: categoryColor, color: finalTextColor }}
             >
               + Add a phase
