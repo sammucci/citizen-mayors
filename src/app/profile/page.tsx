@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { CivicReportCard, type CivicLog, type CivicStats } from "@/components/civic-report-card";
+import { type CivicLog, type CivicStats } from "@/components/civic-report-card";
 import { ProfileInfoCard } from "@/components/profile-info-card";
 import { ProposalMiniCardGrid } from "@/components/proposal-mini-card-grid";
-import { MyOrganizationsSection } from "@/components/my-organizations-section";
-import { FollowedTagsSection } from "@/components/followed-tags-section";
+import { ProfileTabbedSections } from "@/components/profile-tabbed-sections";
 import { statusColorClasses } from "@/lib/status-colors";
 import { HourglassIcon } from "@/components/icons";
 
@@ -445,19 +444,23 @@ export default async function ProfilePage() {
 
       <ProfileInfoCard profile={fullProfile} />
 
-      <CivicReportCard
-        stats={civicStats}
-        logs={civicLogs}
-        details={civicDetails}
+      {/* Was three separately-stacked sections (report card, civic
+          groups, expertise & interests) — Samantha's ask to bring the
+          proposal page's "filing tab" motif here too, as a single
+          three-tab folder instead of a long scroll of unrelated-looking
+          blocks. See profile-tabbed-sections.tsx. */}
+      <ProfileTabbedSections
+        civicStats={civicStats}
+        civicLogs={civicLogs}
+        civicDetails={civicDetails}
         categoryColor="#6C3FD1"
         volunteerCategories={volunteerCategories}
         populationCategories={populationCategories}
         displayName={profile?.display_name || "A resident"}
+        myOrganizations={myOrganizations}
+        allOrganizationNames={allOrganizationNames}
+        tagGroups={tagGroups}
       />
-
-      <MyOrganizationsSection myOrganizations={myOrganizations} allOrganizationNames={allOrganizationNames} />
-
-      <FollowedTagsSection tagGroups={tagGroups} />
 
       <div>
         <h2 className="text-lg font-semibold">Your proposals</h2>
