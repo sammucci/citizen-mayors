@@ -188,7 +188,15 @@ export function PowerTreeNodeCard({
           {showBadgeRow ? (
             <>
               <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                {/* Was flex-wrap — with just the grip + a longer badge
+                    like "🏁 Final decision-maker", a narrower card
+                    wrapped the badge onto its own line, leaving the grip
+                    stranded above it instead of next to it. Nowrap keeps
+                    them on the same row and vertically centered together
+                    always; these are short, fixed-width badges, not
+                    running text, so there's nothing here that actually
+                    needs to wrap. */}
+                <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
                   {isOwner && (
                     <span
                       {...dragHandleProps}

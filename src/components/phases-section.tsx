@@ -314,7 +314,7 @@ export function PhasesSection({
             const showsDragHandle = isOwner && isRealPhase && !isInserting;
             return (
               <Fragment key={s.id}>
-              <div className="min-w-[64px] flex-1">
+              <div className="relative min-w-[64px] flex-1">
                 <button
                   type="button"
                   ref={isRealPhase ? (el) => { phaseRefs.current[s.id] = el; } : undefined}
@@ -392,18 +392,21 @@ export function PhasesSection({
                       ✓
                     </span>
                   )}
-                  {/* You said the drag itself was undiscoverable, then
-                      that the fix (a separate circle badge floating on
-                      the corner) stood out too much — bars everywhere
-                      else don't have odd extra shapes hanging off them.
-                      This sits inline in the same row as the number
-                      itself, same color family as the bar's own text,
-                      just a shade lower opacity — reads as "this bar has
-                      a grip," not as its own separate element. */}
+                  {/* Matches the decision chain's own grip handle
+                      (power-tree-node-card.tsx: cursor-grab, select-none,
+                      text-sm, plain ⠿, no badge/circle/border) instead of
+                      inventing a separate style here — same gesture,
+                      should look like the same control. Positioned at
+                      the right edge of the bar (not inline with the
+                      centered number) and a touch bigger than the first
+                      attempt so it reads clearly at that spot. Inherits
+                      the button's own text color via CSS inheritance,
+                      same as the chain's version does. */}
                   {showsDragHandle && (
                     <span
                       aria-hidden="true"
-                      className="ml-1 align-middle text-[10px] leading-none opacity-50"
+                      title="Drag to reorder"
+                      className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 cursor-grab select-none text-sm"
                     >
                       ⠿
                     </span>
