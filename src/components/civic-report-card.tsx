@@ -290,13 +290,18 @@ export function CivicReportCard({
           icon="decisionMakersEngaged"
           onClick={() => setDetailKey("decisionMakersEngaged")}
         />
+        {/* Testimony given and Letters written swapped (v124) — the
+            letters tile grows a sublabel ("N published") whenever
+            you've published one, making it the tallest tile in its row;
+            moving it to the last slot means that row-stretch only ever
+            pushes against tiles after it instead of the ones next to
+            plain, always-one-line tiles like Contacted an elected. */}
         <StatTile
-          label="Letters written to the editor"
-          value={stats.lettersWritten}
-          sublabel={stats.lettersPublished > 0 ? `${stats.lettersPublished} published` : undefined}
-          color={LOG_TYPE_COLOR.letter_to_editor}
-          icon="lettersToTheEditor"
-          onClick={() => setDetailKey("lettersWritten")}
+          label="Testimony given"
+          value={stats.testimonyGiven}
+          color={LOG_TYPE_COLOR.testimony}
+          icon="testimonyGiven"
+          onClick={() => setDetailKey("testimonyGiven")}
         />
         <StatTile
           label="Contacted an elected"
@@ -320,11 +325,12 @@ export function CivicReportCard({
           onClick={() => setDetailKey("volunteerHours")}
         />
         <StatTile
-          label="Testimony given"
-          value={stats.testimonyGiven}
-          color={LOG_TYPE_COLOR.testimony}
-          icon="testimonyGiven"
-          onClick={() => setDetailKey("testimonyGiven")}
+          label="Letters written to the editor"
+          value={stats.lettersWritten}
+          sublabel={stats.lettersPublished > 0 ? `${stats.lettersPublished} published` : undefined}
+          color={LOG_TYPE_COLOR.letter_to_editor}
+          icon="lettersToTheEditor"
+          onClick={() => setDetailKey("lettersWritten")}
         />
       </div>
 
