@@ -275,7 +275,7 @@ export default async function HomePage({
           </div>
           <Link
             href={`/proposals/${p.id}`}
-            className="mt-2 block text-base font-semibold leading-snug hover:underline"
+            className="font-bryant mt-2 block text-base font-semibold leading-snug hover:underline"
           >
             {p.title}
           </Link>

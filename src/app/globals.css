@@ -10,6 +10,16 @@ body {
   @apply w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm;
 }
 
+/* Bryant 2, via Samantha's Adobe Fonts Web Project (layout.tsx loads the
+   stylesheet). Scoped to proposal titles only, per her original ask —
+   everything else (including this rule's own site chrome) stays Roboto.
+   Only two weights are in the kit (400/700); wherever a title uses a
+   Tailwind weight between those (e.g. font-semibold/600), the browser
+   picks the nearest loaded weight rather than synthesizing a fake one. */
+.font-bryant {
+  font-family: "bryant-web", sans-serif;
+}
+
 /* "Save as PDF" for the civic report card export uses the browser's own
    print dialog rather than a new PDF-generation dependency — free,
    already built into every browser. #civic-export-print only exists in

@@ -77,7 +77,7 @@ export function ProposalMiniCardGrid({
               )}
             </div>
             <div className="min-w-0 p-2">
-              <Link href={`/proposals/${p.id}`} className="block truncate text-sm font-semibold hover:underline">
+              <Link href={`/proposals/${p.id}`} className="font-bryant block truncate text-sm font-semibold hover:underline">
                 {p.title}
               </Link>
               <p className="mt-0.5 truncate text-[10px] uppercase tracking-wide text-neutral-500">

@@ -52,6 +52,15 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className={roboto.className}>
+      {/* Bryant 2, via Samantha's Adobe Fonts Web Project — Next.js
+          hoists a <link> rendered anywhere in a Server Component up
+          into the real document <head> automatically, so this doesn't
+          need the Metadata API. Loads the font FILES; the actual
+          font-family declaration (which CSS name/weight Adobe assigned
+          this kit) still needs to be applied wherever Bryant 2 should
+          show — starting with proposal titles, per the original ask —
+          once we have that exact name from the same Web Project page. */}
+      <link rel="stylesheet" href="https://use.typekit.net/huu0fef.css" />
       <body>
         <header className="border-b border-neutral-200 bg-white">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
