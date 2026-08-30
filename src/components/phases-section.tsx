@@ -311,9 +311,10 @@ export function PhasesSection({
               dragOverPhaseIndex !== null &&
               phases[dragOverPhaseIndex]?.id === s.id &&
               s.id !== dragPhaseId;
+            const showsDragHandle = isOwner && isRealPhase && !isInserting;
             return (
               <Fragment key={s.id}>
-              <div className="min-w-[64px] flex-1">
+              <div className="relative min-w-[64px] flex-1">
                 <button
                   type="button"
                   ref={isRealPhase ? (el) => { phaseRefs.current[s.id] = el; } : undefined}
@@ -344,7 +345,7 @@ export function PhasesSection({
                   } ${showsStartedBorder ? "border-dashed border-green-600" : "border-transparent"} ${
                     isDragging ? "opacity-40" : ""
                   } ${isDropTarget ? "ring-2 ring-offset-1" : ""} ${
-                    isOwner && isRealPhase && !isInserting ? "cursor-grab active:cursor-grabbing" : ""
+                    showsDragHandle ? "cursor-grab active:cursor-grabbing" : ""
                   }`}
                   style={{
                     ...(isDone
@@ -366,7 +367,7 @@ export function PhasesSection({
                       ? `${s.label} — in progress`
                       : isDone
                       ? `${s.label} — done`
-                      : isOwner && isRealPhase && !isInserting
+                      : showsDragHandle
                       ? `${s.label} — drag to reorder`
                       : s.label
                   }
@@ -392,6 +393,24 @@ export function PhasesSection({
                     </span>
                   )}
                 </button>
+                {/* You said the drag itself was undiscoverable — a
+                    tooltip and a cursor change on hover are both
+                    invisible until you happen to try, especially on a
+                    phone where "hover" doesn't exist at all. This small
+                    grip badge, always visible for the owner, is the
+                    actual fix: it's a real, permanent visual cue that
+                    this segment can be dragged, not something you have
+                    to discover by accident. Pointer events still work
+                    from anywhere on the button — this is just the
+                    "look here" marker, not the only draggable spot. */}
+                {showsDragHandle && (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-neutral-300 bg-white text-[9px] leading-none text-neutral-500 shadow-sm"
+                  >
+                    ⠿
+                  </span>
+                )}
               </div>
               {/* Visible placeholder right in the numbered bar, not just
                   a caption sentence below — this is the direct fix for

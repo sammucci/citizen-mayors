@@ -55,9 +55,14 @@ export default async function RootLayout({
       <body>
         <header className="border-b border-neutral-200 bg-white">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-            <Link href="/" className="text-lg font-semibold">
-              <span className="text-duty-red">Citizen</span>{" "}
-              <span className="text-duty-purple">Mayors</span>
+            <Link href="/" className="flex flex-col leading-tight">
+              <span className="text-lg font-semibold">
+                <span className="text-duty-red">Citizen</span>{" "}
+                <span className="text-duty-purple">Mayors</span>
+              </span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-neutral-400">
+                of Philadelphia
+              </span>
             </Link>
             <nav className="flex items-center gap-4 text-sm">
               <Link href="/community-dashboard" className="text-neutral-600 hover:text-neutral-900">

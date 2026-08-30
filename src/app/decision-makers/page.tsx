@@ -92,10 +92,11 @@ export default async function DecisionMakersIndexPage() {
     <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-semibold">Leadership directory</h1>
       <p className="mt-1 text-sm text-neutral-600">
-        Every elected official, department, and board in the registry, organized top-down —
-        Mayor, then Council, then the departments and boards under them. Elected officials have
-        a full crowdsourced profile (office details, legislation, wiki text); departments and
-        boards have a simpler page, but every name below clicks through to one.
+        Everyone who has a say in how Philadelphia is run, organized from the top down — the
+        Mayor, then City Council, then the departments and boards underneath. Elected officials
+        get a full profile that residents help build out (their office, the legislation they've
+        worked on, background info); departments and boards keep it simpler, but every name below
+        is clickable.
       </p>
 
       <div className="mt-5 space-y-6">

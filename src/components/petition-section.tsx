@@ -84,10 +84,9 @@ export function PetitionSection({
           href={petitionUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 flex items-center justify-between rounded-lg bg-duty-purple px-4 py-3 text-sm font-bold text-white shadow-sm hover:opacity-90"
+          className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-duty-red px-4 py-3 text-center text-sm font-bold text-white shadow-sm hover:opacity-90"
         >
           ✍️ Sign the petition
-          <span aria-hidden="true">→</span>
         </a>
       )}
       {isOwner && (
@@ -144,51 +143,70 @@ export function PetitionSection({
         </div>
       )}
 
-      <div className="mt-3 space-y-2">
-        <div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-neutral-500">Petition title</span>
-            <button
-              type="button"
-              onClick={() => copy(title, "title")}
-              className="text-xs text-duty-purple underline"
-            >
-              {copied === "title" ? "Copied!" : "Copy"}
-            </button>
+      {/* Draft-and-copy text + the Change.org starter link are tools for
+          whoever's actually going to go create the petition — the
+          owner. To anyone else, they're irrelevant clutter: a signed-in
+          visitor can't do anything useful with "here's a title to paste
+          somewhere," they can only ever sign the real thing once it
+          exists (the button above). Owner-only. */}
+      {isOwner && (
+        <>
+          <div className="mt-3 space-y-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-neutral-500">Petition title</span>
+                <button
+                  type="button"
+                  onClick={() => copy(title, "title")}
+                  className="text-xs text-duty-purple underline"
+                >
+                  {copied === "title" ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <p className="mt-1 rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-sm text-neutral-800">
+                {title}
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-neutral-500">Petition text</span>
+                <button
+                  type="button"
+                  onClick={() => copy(draftBody, "body")}
+                  className="text-xs text-duty-purple underline"
+                >
+                  {copied === "body" ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <p className="mt-1 whitespace-pre-wrap rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs text-neutral-700">
+                {draftBody}
+              </p>
+            </div>
           </div>
-          <p className="mt-1 rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-sm text-neutral-800">
-            {title}
-          </p>
-        </div>
-        <div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-neutral-500">Petition text</span>
-            <button
-              type="button"
-              onClick={() => copy(draftBody, "body")}
-              className="text-xs text-duty-purple underline"
-            >
-              {copied === "body" ? "Copied!" : "Copy"}
-            </button>
-          </div>
-          <p className="mt-1 whitespace-pre-wrap rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs text-neutral-700">
-            {draftBody}
-          </p>
-        </div>
-      </div>
 
-      <a
-        href="https://www.change.org/start-a-petition"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-3 inline-block rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
-      >
-        Continue to Change.org →
-      </a>
-      <p className="mt-1 text-[11px] text-neutral-400">
-        Opens Change.org's own petition builder in a new tab — paste the text
-        above in once you're there.
-      </p>
+          <a
+            href="https://www.change.org/start-a-petition"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-block rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+          >
+            Continue to Change.org →
+          </a>
+          <p className="mt-1 text-[11px] text-neutral-400">
+            Opens Change.org's own petition builder in a new tab — paste the text
+            above in once you're there.
+          </p>
+        </>
+      )}
+
+      {/* A non-owner with no live link yet would otherwise see nothing
+          but the top description line — this fills that gap honestly
+          instead of leaving a stub-feeling empty section. */}
+      {!isOwner && !petitionUrl && (
+        <p className="mt-3 text-xs text-neutral-400">
+          No petition is live yet — check back once the proposal owner shares the link.
+        </p>
+      )}
     </div>
   );
 }
