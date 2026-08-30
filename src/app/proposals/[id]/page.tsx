@@ -590,7 +590,7 @@ export default async function ProposalPage({
                 )}
                 <span className="text-xs text-neutral-500">📍 {location}</span>
 
-                <h1 className="font-bryant mt-2 text-2xl font-bold leading-tight sm:text-3xl">
+                <h1 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">
                   {proposal.title}
                 </h1>
 

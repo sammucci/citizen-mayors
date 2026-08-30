@@ -52,15 +52,6 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className={roboto.className}>
-      {/* Bryant 2, via Samantha's Adobe Fonts Web Project — Next.js
-          hoists a <link> rendered anywhere in a Server Component up
-          into the real document <head> automatically, so this doesn't
-          need the Metadata API. Loads the font FILES; the actual
-          font-family declaration (which CSS name/weight Adobe assigned
-          this kit) still needs to be applied wherever Bryant 2 should
-          show — starting with proposal titles, per the original ask —
-          once we have that exact name from the same Web Project page. */}
-      <link rel="stylesheet" href="https://use.typekit.net/huu0fef.css" />
       <body>
         <header className="border-b border-neutral-200 bg-white">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
@@ -108,6 +99,20 @@ export default async function RootLayout({
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        {/* First small visual family-resemblance touch with Common Duty
+            (the sister site currently being rebuilt) — its real accent
+            yellow, pulled directly off commonduty.com's own computed
+            styles (#FBE968), used as an arbitrary-value class since this
+            codebase's own tailwind config isn't something I have direct
+            access to edit here (only src/ has ever been shared into
+            this sandbox). Deliberately minimal: no premature "a project
+            of Common Duty" claim until that site is actually live and
+            the two are really linked — see BACKLOG.md. */}
+        <footer className="mt-12 border-t border-black/10 bg-[#FBE968]">
+          <div className="mx-auto max-w-6xl px-4 py-3 text-center text-xs font-medium text-neutral-900">
+            Citizen Mayors — of Philadelphia
+          </div>
+        </footer>
         <FeedbackWidget />
       </body>
     </html>

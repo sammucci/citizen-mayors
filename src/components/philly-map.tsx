@@ -211,7 +211,7 @@ export function PhillyMap({
                 pathOptions={{ color, fillColor: color, fillOpacity: 0.85, weight: 2 }}
               >
                 <Popup>
-                  <Link href={`/proposals/${p.id}`} className="font-bryant font-medium hover:underline">
+                  <Link href={`/proposals/${p.id}`} className="font-medium hover:underline">
                     {p.title}
                   </Link>
                   <div className="mt-1 text-xs text-neutral-500">
@@ -241,7 +241,7 @@ export function PhillyMap({
                 pathOptions={{ color, fillColor: color, fillOpacity: 0.85, weight: 2 }}
               >
                 <Popup>
-                  <Link href={`/proposals/${p.id}`} className="font-bryant font-medium hover:underline">
+                  <Link href={`/proposals/${p.id}`} className="font-medium hover:underline">
                     {p.title}
                   </Link>
                   <div className="mt-1 text-xs text-neutral-500">
@@ -268,7 +268,7 @@ export function PhillyMap({
               pathOptions={{ color, fillColor: color, fillOpacity: 1, weight: 2.5 }}
             >
               <Popup>
-                <Link href={`/proposals/${p.id}`} className="font-bryant font-medium hover:underline">
+                <Link href={`/proposals/${p.id}`} className="font-medium hover:underline">
                   {p.title}
                 </Link>
                 <div className="mt-1 text-xs text-neutral-500">
