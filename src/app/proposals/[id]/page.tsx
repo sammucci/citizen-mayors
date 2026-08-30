@@ -17,6 +17,8 @@ import { EditProposalForm } from "@/components/edit-proposal-form";
 import { PublishToggleButton } from "@/components/publish-toggle-button";
 import { PowerTreeChain } from "@/components/power-tree-chain";
 import { PhasesSection } from "@/components/phases-section";
+import { CaseStudiesSection } from "@/components/case-studies-section";
+import { PetitionSection } from "@/components/petition-section";
 import { InfoHeading } from "@/components/info-heading";
 import { RepositionableImage } from "@/components/repositionable-image";
 import { ReplyToggle } from "@/components/reply-toggle";
@@ -35,8 +37,17 @@ export const dynamic = "force-dynamic";
 
 export default async function ProposalPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  // Set by createProposal() when a cover image chosen at creation time
+  // failed to upload — the proposal itself always gets created either
+  // way (an image problem shouldn't block posting), but that used to
+  // mean the failure was completely silent: no error, just a cover
+  // image that never showed up. This round-trips the real error
+  // message through the redirect so it can be shown here, once, right
+  // where the missing image would otherwise be a confusing mystery.
+  searchParams: { image_error?: string };
 }) {
   const supabase = createClient();
   const {
@@ -198,6 +209,22 @@ export default async function ProposalPage({
     .eq("proposal_id", proposal.id)
     .order("sort_order");
 
+  // Petition box only shows up once a proposal has real forward
+  // momentum — at least one phase marked "done" (i.e. it's ready to
+  // move on to whatever comes next). Before that, starting a petition
+  // would just be premature.
+  const hasCompletedPhase = (proposalPhases ?? []).some((p) => p.progress === "done");
+  const { data: petitionSupporters } = hasCompletedPhase
+    ? await supabase
+        .from("proposal_petition_supporters")
+        .select("user_id")
+        .eq("proposal_id", proposal.id)
+    : { data: null };
+  const petitionSupporterCount = petitionSupporters?.length ?? 0;
+  const iSupportPetition = Boolean(
+    user && (petitionSupporters ?? []).some((s) => s.user_id === user.id)
+  );
+
   // "Common next steps for proposals like this one" — looks at every
   // OTHER proposal in the same category, tallies how often each approved
   // phase label shows up, and surfaces the most common ones as one-click
@@ -263,6 +290,25 @@ export default async function ProposalPage({
     (proposal.proposal_tags ?? []).map((pt: any) => pt.tag_id)
   );
   const availableTags = (allTags ?? []).filter((t) => !appliedTagIds.has(t.id));
+
+  // Precedent & case studies — real-world examples attached to this
+  // specific proposal, shown in the sidebar right under Tags. Same
+  // wide-open, no-approval trust level as proposal_grants.
+  const { data: caseStudyRows } = await supabase
+    .from("proposal_case_studies")
+    .select("*")
+    .eq("proposal_id", proposal.id)
+    .order("created_at", { ascending: false });
+  const caseStudies = (caseStudyRows ?? []).map((cs: any) => ({
+    id: cs.id,
+    projectName: cs.project_name,
+    location: cs.location,
+    cost: cs.cost,
+    fundingSource: cs.funding_source,
+    whoWasInvolved: cs.who_was_involved,
+    challengesFeedback: cs.challenges_feedback,
+    sourceUrl: cs.source_url,
+  }));
 
   // Shown as chips so people can see a tag's already been requested
   // instead of suggesting the same one twice — now also carries enough
@@ -512,6 +558,12 @@ export default async function ProposalPage({
                 </RepositionableImage>
               )}
               <div className="p-4">
+                {isOwner && searchParams?.image_error && (
+                  <p className="mb-2 rounded-md bg-duty-red/10 px-3 py-2 text-xs text-duty-red">
+                    Your proposal posted, but the cover image didn't upload:{" "}
+                    {searchParams.image_error} You can try adding it again below.
+                  </p>
+                )}
                 {!proposal.published && isOwner && (
                   <p className="mb-2 inline-block rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-white">
                     Draft — only you can see this
@@ -1033,6 +1085,24 @@ export default async function ProposalPage({
               />
             )}
           </div>
+
+          <CaseStudiesSection
+            proposalId={proposal.id}
+            caseStudies={caseStudies}
+            canAdd={Boolean(user)}
+            canRemove={isOwner || isAdmin}
+          />
+
+          {hasCompletedPhase && (
+            <PetitionSection
+              proposalId={proposal.id}
+              title={proposal.title}
+              summary={proposal.summary ?? ""}
+              supporterCount={petitionSupporterCount}
+              iSupport={iSupportPetition}
+              canParticipate={Boolean(user)}
+            />
+          )}
         </div>
       </div>
 

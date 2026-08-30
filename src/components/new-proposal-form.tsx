@@ -42,6 +42,18 @@ const BODY_STARTER = `## What it is
 ## Why it matters
 [The problem this solves, or the opportunity it creates.]`;
 
+// Matches cover-image-control.tsx's own limit/message exactly — that
+// component (used to change a proposal's image after it's posted)
+// already caught this same bug: a too-large file used to just fail
+// silently, with the upload error swallowed and only logged
+// server-side. This form had the identical problem on the FIRST image
+// upload (at creation time), just harder to notice, since createProposal
+// always redirects to the new proposal page whether or not the image
+// actually made it — posting the proposal itself never failed, so
+// there was no error to show, just a cover image that quietly never
+// showed up.
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20MB
+
 export function NewProposalForm({
   categories,
   tags,
@@ -51,6 +63,7 @@ export function NewProposalForm({
 }) {
   const [scope, setScope] = useState("citywide");
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
   // Tracks the selected category so the submit button can pick up its
   // color live as you choose — same "buttons match the category"
   // treatment as the rest of the app, just live-updating here since
@@ -67,7 +80,18 @@ export function NewProposalForm({
   }, []);
 
   return (
-    <form action={createProposal} className="mt-6 space-y-5">
+    <form
+      action={(formData) => {
+        const file = formData.get("image");
+        if (file instanceof File && file.size > MAX_IMAGE_BYTES) {
+          setImageError("Your cover image is too big — try a smaller file (under 20MB). The rest of the proposal won't be affected either way.");
+          return;
+        }
+        setImageError(null);
+        return createProposal(formData);
+      }}
+      className="mt-6 space-y-5"
+    >
       <Field label="Title">
         <input
           name="title"
@@ -240,7 +264,14 @@ export function NewProposalForm({
       </Field>
 
       <Field label="Cover image (optional)">
-        <input type="file" name="image" accept="image/*" className="text-sm" />
+        <input
+          type="file"
+          name="image"
+          accept="image/*"
+          className="text-sm"
+          onChange={() => setImageError(null)}
+        />
+        {imageError && <p className="mt-1 text-xs text-duty-red">{imageError}</p>}
       </Field>
 
       <div className="flex flex-wrap items-center gap-2">

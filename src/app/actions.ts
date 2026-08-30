@@ -57,6 +57,7 @@ export async function updateProfile(formData: FormData): Promise<{ error?: strin
   const gender = String(formData.get("gender") ?? "").trim();
   const housingStatus = String(formData.get("housing_status") ?? "").trim();
   const politicalAffiliation = String(formData.get("political_affiliation") ?? "").trim();
+  const educationalAttainment = String(formData.get("educational_attainment") ?? "").trim();
   // Shown on the person's PUBLIC profile (/u/[id]) — the one free-text
   // field on this form that isn't treated as private demographic data.
   // Capped well short of the input's own good sense, just so a pasted
@@ -96,6 +97,7 @@ export async function updateProfile(formData: FormData): Promise<{ error?: strin
       gender: gender || null,
       housing_status: housingStatus || null,
       political_affiliation: politicalAffiliation || null,
+      educational_attainment: educationalAttainment || null,
       bio: bio || null,
     })
     .eq("id", user.id);

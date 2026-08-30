@@ -40,12 +40,35 @@ export function FollowedTagsSection({ tagGroups }: { tagGroups: TagGroup[] }) {
       <div className="mt-3 space-y-2">
         {tagGroups.map((group) => {
           const followedCount = group.tags.filter((t) => t.following).length;
+          const hasPicks = followedCount > 0;
           return (
-            <details key={group.id} className="rounded-lg border border-neutral-200 bg-white">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium marker:content-none">
+            <details
+              key={group.id}
+              className={`rounded-lg border bg-white ${
+                hasPicks ? "border-duty-purple/40" : "border-neutral-200"
+              }`}
+            >
+              {/* Collapsed, every group used to look identical whether it
+                  had picks in it or not — the only tell was the small
+                  gray count text, easy to miss while scanning down the
+                  list. Now a group with at least one followed tag gets a
+                  tinted background + purple left bar + bold purple count,
+                  so which topics you've already picked from is visible
+                  without opening each one. */}
+              <summary
+                className={`flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg border-l-4 px-3 py-2 text-sm font-medium marker:content-none ${
+                  hasPicks
+                    ? "border-l-duty-purple bg-duty-purple/5"
+                    : "border-l-transparent"
+                }`}
+              >
                 <span>{group.label}</span>
-                <span className="shrink-0 text-xs font-normal text-neutral-400">
-                  {followedCount > 0 ? `${followedCount} of ${group.tags.length} followed` : `${group.tags.length} tags`}
+                <span
+                  className={`shrink-0 text-xs ${
+                    hasPicks ? "font-semibold text-duty-purple" : "font-normal text-neutral-400"
+                  }`}
+                >
+                  {hasPicks ? `${followedCount} of ${group.tags.length} followed` : `${group.tags.length} tags`}
                 </span>
               </summary>
               <ul className="flex flex-wrap gap-1.5 border-t border-neutral-100 p-3">

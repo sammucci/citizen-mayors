@@ -191,12 +191,27 @@ export async function createProposal(formData: FormData) {
       .insert(tagIds.map((tag_id) => ({ proposal_id: proposal.id, tag_id })));
   }
 
+  // Used to await this and throw the result away — a real "is this
+  // broken?" bug: the proposal itself always got created and redirected
+  // to successfully, so a too-large (or otherwise failed) cover image
+  // just silently never showed up, with nothing telling you why. The
+  // form now catches the common case (oversized file) client-side
+  // before it ever gets here; this catches whatever's left (storage
+  // hiccup, odd file type) and passes it through as a query param so
+  // the proposal page can show a real explanation instead of a
+  // conspicuously missing image.
   const imageFile = formData.get("image");
+  let imageUploadError: string | undefined;
   if (isNonEmptyFile(imageFile)) {
-    await uploadProposalImage(supabase, proposal.id, imageFile);
+    const result = await uploadProposalImage(supabase, proposal.id, imageFile);
+    imageUploadError = result.error;
   }
 
-  redirect(`/proposals/${proposal.id}`);
+  redirect(
+    imageUploadError
+      ? `/proposals/${proposal.id}?image_error=${encodeURIComponent(imageUploadError)}`
+      : `/proposals/${proposal.id}`
+  );
 }
 
 // Duck-typed file check instead of `instanceof File`. In some server
@@ -1546,4 +1561,111 @@ export async function updatePhaseProgress(formData: FormData) {
     .eq("id", phaseId);
 
   revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Precedent & case studies — "here's a similar project, here's how it
+// got funded, here's who was involved" — meant to help with grant
+// applications, so wide open like proposal_grants right above the
+// schema for it (any signed-in resident can add one, no approval step;
+// this is a research lead, not a claim made on the proposal's behalf).
+// Removal follows the same proposal_grants precedent too: the person
+// who added it does NOT get a special right to remove it back out —
+// only the proposal owner (curation right over their own sidebar) or
+// an admin can.
+export async function addCaseStudy(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const projectName = String(formData.get("project_name") ?? "").trim();
+  if (!projectName) {
+    return { error: "Give the case study a project name first." };
+  }
+
+  const { error } = await supabase.from("proposal_case_studies").insert({
+    proposal_id: proposalId,
+    project_name: projectName,
+    location: String(formData.get("location") ?? "").trim() || null,
+    cost: String(formData.get("cost") ?? "").trim() || null,
+    funding_source: String(formData.get("funding_source") ?? "").trim() || null,
+    who_was_involved: String(formData.get("who_was_involved") ?? "").trim() || null,
+    challenges_feedback: String(formData.get("challenges_feedback") ?? "").trim() || null,
+    source_url: String(formData.get("source_url") ?? "").trim() || null,
+    submitted_by: user.id,
+  });
+  if (error) {
+    console.error("addCaseStudy failed", error);
+    return { error: "Couldn't save that case study — try again in a moment." };
+  }
+
+  revalidatePath(`/proposals/${proposalId}`);
+  return {};
+}
+
+export async function removeCaseStudy(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const caseStudyId = String(formData.get("case_study_id"));
+
+  const [{ data: proposal }, { data: viewerProfile }] = await Promise.all([
+    supabase.from("proposals").select("owner_id").eq("id", proposalId).single(),
+    supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle(),
+  ]);
+  if (proposal?.owner_id !== user.id && !viewerProfile?.is_admin) {
+    throw new Error("Only the proposal owner or an admin can remove a case study.");
+  }
+
+  await supabase.from("proposal_case_studies").delete().eq("id", caseStudyId);
+
+  revalidatePath(`/proposals/${proposalId}`);
+}
+
+// Petition support — the on-platform half of the petition feature (see
+// migration_proposal_petition_supporters.sql for the full reasoning on
+// why this ISN'T a signature-collection system: that's Change.org's
+// job, this is just "N Citizen Mayors are behind this"). Wide open like
+// case studies/grants above, but unlike those, a supporter can remove
+// their OWN row (removeCaseStudy is owner-or-admin only, since that's
+// curation over someone else's sidebar — this is a statement about the
+// signer, so the signer keeps the right to retract it).
+export async function addPetitionSupport(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+
+  const { error } = await supabase
+    .from("proposal_petition_supporters")
+    .insert({ proposal_id: proposalId, user_id: user.id });
+  if (error) {
+    // Unique violation (already supported this one) isn't a real
+    // error from the user's point of view — same state either way.
+    if (error.code === "23505") {
+      revalidatePath(`/proposals/${proposalId}`);
+      return {};
+    }
+    console.error("addPetitionSupport failed", error);
+    return { error: "Couldn't record your support — try again in a moment." };
+  }
+
+  revalidatePath(`/proposals/${proposalId}`);
+  return {};
+}
+
+export async function removePetitionSupport(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+
+  const { error } = await supabase
+    .from("proposal_petition_supporters")
+    .delete()
+    .eq("proposal_id", proposalId)
+    .eq("user_id", user.id);
+  if (error) {
+    console.error("removePetitionSupport failed", error);
+    return { error: "Couldn't undo that — try again in a moment." };
+  }
+
+  revalidatePath(`/proposals/${proposalId}`);
+  return {};
 }

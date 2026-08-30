@@ -58,6 +58,7 @@ export default async function ProfilePage() {
     gender: string | null;
     housing_status: string | null;
     political_affiliation: string | null;
+    educational_attainment: string | null;
   } | null;
   // Not a plain `...(demographics ?? {})` spread — when the right side of
   // a spread might be `{}` (the no-demographics-yet case), TypeScript
@@ -75,6 +76,7 @@ export default async function ProfilePage() {
         gender: demographics?.gender ?? null,
         housing_status: demographics?.housing_status ?? null,
         political_affiliation: demographics?.political_affiliation ?? null,
+        educational_attainment: demographics?.educational_attainment ?? null,
       }
     : null;
 

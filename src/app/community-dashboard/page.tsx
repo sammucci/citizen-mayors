@@ -423,6 +423,7 @@ export default async function CommunityDashboardPage({
     { data: genderRows },
     { data: housingRows },
     { data: politicalRows },
+    { data: educationRows },
   ] = await Promise.all([
     supabase.from("proposals").select("id", { count: "exact", head: true }),
     supabase.from("comments").select("id", { count: "exact", head: true }),
@@ -481,6 +482,7 @@ export default async function CommunityDashboardPage({
     supabase.rpc("demographic_breakdown", { field: "gender", filter_district: selectedDistrict }),
     supabase.rpc("demographic_breakdown", { field: "housing_status", filter_district: selectedDistrict }),
     supabase.rpc("demographic_breakdown", { field: "political_affiliation", filter_district: selectedDistrict }),
+    supabase.rpc("demographic_breakdown", { field: "educational_attainment", filter_district: selectedDistrict }),
   ]);
 
   const categoryToGroup = new Map<string, string>(
@@ -562,6 +564,12 @@ export default async function CommunityDashboardPage({
   const raceBreakdown = breakdownFromCounts(raceRows);
   const genderBreakdown = breakdownFromCounts(genderRows);
   const housingBreakdown = breakdownFromCounts(housingRows);
+  // Educational attainment: no remap function needed, unlike gender/
+  // race/age above — the profile form's six option values were chosen
+  // to match ACS table B15002's own bucketing exactly (see
+  // profile-info-card.tsx and census-district-demographics.ts), so the
+  // labels line up natively.
+  const educationBreakdown = breakdownFromCounts(educationRows);
   // No Census comparison for this one (obviously — ACS doesn't ask
   // political affiliation) — just the self-reported member breakdown, same
   // as everything else here: aggregate counts only, computed IN the
@@ -841,6 +849,16 @@ export default async function CommunityDashboardPage({
               memberItems={regroup(ageBreakdown, remapAgeForComparison)}
               censusItems={
                 (selectedDistrict ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.age : citywideCensusStats().age) ?? []
+              }
+            />
+            <CensusComparisonSection
+              title="Educational attainment"
+              tooltip="ACS reports educational attainment for the population 25 and over only (table B15002) — a smaller base than the all-ages population the other comparisons use, so read these percentages against each other, not against the city's total population. The six buckets here match the profile form's options exactly, no remapping needed."
+              memberItems={educationBreakdown.map((i) => ({ label: i.label, count: i.count }))}
+              censusItems={
+                (selectedDistrict
+                  ? CENSUS_DISTRICT_DEMOGRAPHICS[selectedDistrict]?.education
+                  : citywideCensusStats().education) ?? []
               }
             />
           </div>

@@ -62,6 +62,19 @@ export default async function RootLayout({
               <Link href="/community-dashboard" className="text-neutral-600 hover:text-neutral-900">
                 Community
               </Link>
+              {/* Was only reachable by clicking through a specific
+                  proposal's decision chain — the index page itself
+                  (src/app/decision-makers/page.tsx) already existed but
+                  had no link anywhere in the nav, so there was no way to
+                  just go browse it directly. "Leadership" in the nav,
+                  same /decision-makers URL underneath (organizations
+                  still live at their own /organizations, unlinked here
+                  on purpose — this is specifically about the elected-
+                  official/department/board hierarchy, not every group
+                  a resident might list on their own profile). */}
+              <Link href="/decision-makers" className="text-neutral-600 hover:text-neutral-900">
+                Leadership
+              </Link>
               <Link
                 href="/proposals/new"
                 className="rounded-full bg-duty-purple px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"

@@ -16,6 +16,7 @@ type Profile = {
   gender: string | null;
   housing_status: string | null;
   political_affiliation: string | null;
+  educational_attainment: string | null;
   bio: string | null;
   avatar_url: string | null;
 } | null;
@@ -37,6 +38,7 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
     ["Gender", profile?.gender],
     ["Housing status", profile?.housing_status],
     ["Political affiliation", profile?.political_affiliation],
+    ["Educational attainment", profile?.educational_attainment],
   ].filter(([, value]) => value) as [string, string][];
 
   if (!editing) {
@@ -309,6 +311,31 @@ export function ProfileInfoCard({ profile }: { profile: Profile }) {
             confined to one party. Same rule as everything above: never
             required, never shown next to your name, aggregate-only.
           </span>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-neutral-700">
+            Educational attainment (optional)
+          </span>
+          <SelectField
+            name="educational_attainment"
+            defaultValue={profile?.educational_attainment ?? ""}
+          >
+            <option value="">Prefer not to say</option>
+            {/* Same six buckets the Census Bureau's own ACS educational-
+                attainment tables (B15002) report in, for population 25
+                and over — picking the same buckets means this lines up
+                directly with real Census data on the community
+                dashboard's comparison chart, no remapping needed. */}
+            <option value="Less than high school diploma">Less than high school diploma</option>
+            <option value="High school graduate (includes equivalency)">
+              High school graduate (includes equivalency)
+            </option>
+            <option value="Some college, no degree">Some college, no degree</option>
+            <option value="Associate's degree">Associate&apos;s degree</option>
+            <option value="Bachelor's degree">Bachelor&apos;s degree</option>
+            <option value="Graduate or professional degree">Graduate or professional degree</option>
+          </SelectField>
         </label>
 
         <button className="rounded-md bg-duty-purple px-4 py-2 text-sm font-medium text-white">

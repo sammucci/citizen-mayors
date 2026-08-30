@@ -28,6 +28,7 @@ create table public.profiles (
   -- aggregate count on the community dashboard, neither of which returns
   -- a raw, per-person value to the client.)
   political_affiliation text,
+  educational_attainment text, -- 6th optional demographic, same aggregate-only treatment — added so this can be compared against real Census data (ACS table B15002)
   bio text, -- short, optional civic summary shown on the person's PUBLIC profile (/u/[id]) — the only free-text field that's ever public
   accepted_guidelines_at timestamptz, -- respectful-dialogue prompt acknowledgment
   is_admin boolean not null default false, -- gates admin-only screens, e.g. tag-suggestion review
@@ -316,6 +317,47 @@ create table public.proposal_grants (
   submitted_by uuid not null references public.profiles(id),
   created_at timestamptz not null default now(),
   unique (proposal_id, grant_id)
+);
+
+-- Precedent & case studies — a proposal-specific sidebar box (below
+-- Tags) where anyone can attach a real-world example: a similar
+-- project elsewhere, how it got funded, who was involved, what
+-- challenges came up. Meant to help with grant applications — "here's
+-- precedent this kind of thing works and gets funded." Same trust
+-- model as proposal_grants right above: wide-open insert for any
+-- signed-in resident, no approval step, but only the proposal OWNER or
+-- an admin can remove one back out (not the person who added it).
+create table public.proposal_case_studies (
+  id uuid primary key default gen_random_uuid(),
+  proposal_id uuid not null references public.proposals(id) on delete cascade,
+  project_name text not null,
+  location text,
+  cost text, -- free text on purpose — real-world figures are often approximate or ranges
+  funding_source text,
+  who_was_involved text,
+  challenges_feedback text,
+  source_url text,
+  submitted_by uuid not null references public.profiles(id),
+  created_at timestamptz not null default now()
+);
+
+-- Petition support — NOT a signature-collection system in its own right
+-- (that's Change.org's job; see the petition-drafting box on the
+-- proposal page, which composes text and hands off to Change.org's own
+-- start-a-petition flow rather than reinventing it). This table is
+-- just the on-platform signal: "N Citizen Mayors are behind starting a
+-- petition on this." Unlike proposal_case_studies/proposal_grants
+-- above, removal belongs to the SUPPORTER themselves (or an admin), not
+-- the proposal owner — a signature is a statement about the signer,
+-- not curation over someone else's sidebar. One row per person per
+-- proposal (the unique constraint below), so re-clicking "I support
+-- this" can't inflate the count.
+create table public.proposal_petition_supporters (
+  id uuid primary key default gen_random_uuid(),
+  proposal_id uuid not null references public.proposals(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (proposal_id, user_id)
 );
 
 -- Shared, crowdsourced list of volunteer-hours categories (Environment,
@@ -731,6 +773,8 @@ alter table public.profile_followed_tags enable row level security;
 alter table public.decision_makers enable row level security;
 alter table public.grants enable row level security;
 alter table public.proposal_grants enable row level security;
+alter table public.proposal_case_studies enable row level security;
+alter table public.proposal_petition_supporters enable row level security;
 alter table public.volunteer_categories enable row level security;
 alter table public.volunteer_category_groups enable row level security;
 alter table public.population_categories enable row level security;
@@ -756,6 +800,8 @@ create policy "public read tags" on public.tags for select using (true);
 create policy "public read decision makers" on public.decision_makers for select using (true);
 create policy "public read grants" on public.grants for select using (true);
 create policy "public read proposal grants" on public.proposal_grants for select using (true);
+create policy "public read proposal case studies" on public.proposal_case_studies for select using (true);
+create policy "public read proposal petition supporters" on public.proposal_petition_supporters for select using (true);
 create policy "public read volunteer categories" on public.volunteer_categories for select using (true);
 -- Anyone signed in can add a brand-new category while logging volunteer
 -- hours (same "grows as you use it" idea as decision_makers) — but only
@@ -830,11 +876,13 @@ create policy "public read profiles" on public.profiles for select using (true);
 
 -- Column-level hardening on top of the row-level policy above — see
 -- migration_harden_private_demographics.sql for the full rationale.
--- Revokes direct SELECT on the five private demographic columns from
+-- Revokes direct SELECT on the six private demographic columns from
 -- both API roles; the only two ways to read them are the narrow
 -- functions below (self-only, and aggregate-only), regardless of what
--- any query — present or future — tries to select.
-revoke select (age_range, race_ethnicity, gender, housing_status, political_affiliation)
+-- any query — present or future — tries to select. educational_attainment
+-- joined the other five in the same migration that added it
+-- (migration_educational_attainment.sql).
+revoke select (age_range, race_ethnicity, gender, housing_status, political_affiliation, educational_attainment)
   on public.profiles from anon, authenticated;
 
 create or replace function public.get_my_demographics()
@@ -843,14 +891,15 @@ returns table (
   race_ethnicity text,
   gender text,
   housing_status text,
-  political_affiliation text
+  political_affiliation text,
+  educational_attainment text
 )
 language sql
 security definer
 set search_path = public
 stable
 as $$
-  select age_range, race_ethnicity, gender, housing_status, political_affiliation
+  select age_range, race_ethnicity, gender, housing_status, political_affiliation, educational_attainment
   from public.profiles
   where id = auth.uid();
 $$;
@@ -866,7 +915,7 @@ set search_path = public
 stable
 as $$
 begin
-  if field not in ('age_range', 'race_ethnicity', 'gender', 'housing_status', 'political_affiliation') then
+  if field not in ('age_range', 'race_ethnicity', 'gender', 'housing_status', 'political_affiliation', 'educational_attainment') then
     raise exception 'demographic_breakdown: invalid field %', field;
   end if;
   return query execute format(
@@ -1104,6 +1153,26 @@ create policy "authenticated attach proposal grants" on public.proposal_grants f
 create policy "owner or admin remove proposal grants" on public.proposal_grants for delete
   using (
     exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid())
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin)
+  );
+
+create policy "authenticated add proposal case studies" on public.proposal_case_studies for insert
+  with check (auth.uid() = submitted_by);
+create policy "owner or admin remove proposal case studies" on public.proposal_case_studies for delete
+  using (
+    exists (select 1 from public.proposals p where p.id = proposal_id and p.owner_id = auth.uid())
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin)
+  );
+
+-- Deliberately different removal rule than the two policies above: the
+-- SUPPORTER (or an admin) can remove a petition-support row, not the
+-- proposal owner — an owner shouldn't be able to erase someone else's
+-- stated support just because it's their proposal.
+create policy "authenticated add petition support" on public.proposal_petition_supporters for insert
+  with check (auth.uid() = user_id);
+create policy "supporter or admin remove petition support" on public.proposal_petition_supporters for delete
+  using (
+    auth.uid() = user_id
     or exists (select 1 from public.profiles where id = auth.uid() and is_admin)
   );
 

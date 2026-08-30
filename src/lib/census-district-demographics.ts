@@ -39,6 +39,7 @@ export type DistrictCensusStats = {
   gender: { label: string; count: number }[];
   housing: { label: string; count: number }[];
   age: { label: string; count: number }[];
+  education: { label: string; count: number }[];
 };
 
 // Age brackets pulled separately from ACS5 table B01001 ("Sex by Age"),
@@ -50,6 +51,19 @@ export type DistrictCensusStats = {
 // tract-centroid-to-district join described above, just a second pull
 // against the same table for the four additional variables on each
 // side.
+//
+// Education pulled from a separate table, ACS5 B15002 ("Sex by
+// Educational Attainment for the Population 25 Years and Over") —
+// summed male+female per bucket, then rolled up into the same 6
+// ACS-standard buckets the profile form's educational_attainment field
+// offers (chosen to match exactly, so no remapping is needed). Same
+// tract-centroid-to-district join, 8 API batches of 4 variables each
+// (that table has 32 variables total: 16 male, 16 female). Citywide
+// total across the 6 buckets = 1,089,070 — in the right ballpark for
+// Philadelphia's population 25 and over, a sanity check the join
+// worked. That table's population base (25+) is smaller than the
+// all-ages totals above it, so "education" percentages should be read
+// against each other, not against totalPopulation.
 
 export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> = {
   1: {
@@ -78,6 +92,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "55-64", count: 14658 },
       { label: "65+", count: 20257 },
     ],
+    education: [
+      { label: "Less than high school diploma", count: 11511 },
+      { label: "High school graduate (includes equivalency)", count: 19919 },
+      { label: "Some college, no degree", count: 11882 },
+      { label: "Associate's degree", count: 5493 },
+      { label: "Bachelor's degree", count: 38402 },
+      { label: "Graduate or professional degree", count: 31092 },
+    ],
   },
   2: {
     totalPopulation: 145698,
@@ -104,6 +126,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "45-54", count: 16668 },
       { label: "55-64", count: 17319 },
       { label: "65+", count: 19588 },
+    ],
+    education: [
+      { label: "Less than high school diploma", count: 10434 },
+      { label: "High school graduate (includes equivalency)", count: 26406 },
+      { label: "Some college, no degree", count: 16046 },
+      { label: "Associate's degree", count: 6863 },
+      { label: "Bachelor's degree", count: 29832 },
+      { label: "Graduate or professional degree", count: 26759 },
     ],
   },
   3: {
@@ -132,6 +162,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "55-64", count: 12415 },
       { label: "65+", count: 16419 },
     ],
+    education: [
+      { label: "Less than high school diploma", count: 8369 },
+      { label: "High school graduate (includes equivalency)", count: 27972 },
+      { label: "Some college, no degree", count: 16489 },
+      { label: "Associate's degree", count: 5383 },
+      { label: "Bachelor's degree", count: 17948 },
+      { label: "Graduate or professional degree", count: 13134 },
+    ],
   },
   4: {
     totalPopulation: 156280,
@@ -158,6 +196,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "45-54", count: 15306 },
       { label: "55-64", count: 17155 },
       { label: "65+", count: 23693 },
+    ],
+    education: [
+      { label: "Less than high school diploma", count: 7879 },
+      { label: "High school graduate (includes equivalency)", count: 28584 },
+      { label: "Some college, no degree", count: 22231 },
+      { label: "Associate's degree", count: 6698 },
+      { label: "Bachelor's degree", count: 24656 },
+      { label: "Graduate or professional degree", count: 20147 },
     ],
   },
   5: {
@@ -186,6 +232,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "55-64", count: 17784 },
       { label: "65+", count: 21596 },
     ],
+    education: [
+      { label: "Less than high school diploma", count: 12649 },
+      { label: "High school graduate (includes equivalency)", count: 28030 },
+      { label: "Some college, no degree", count: 16153 },
+      { label: "Associate's degree", count: 5616 },
+      { label: "Bachelor's degree", count: 24484 },
+      { label: "Graduate or professional degree", count: 23838 },
+    ],
   },
   6: {
     totalPopulation: 146475,
@@ -212,6 +266,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "45-54", count: 16466 },
       { label: "55-64", count: 19434 },
       { label: "65+", count: 22026 },
+    ],
+    education: [
+      { label: "Less than high school diploma", count: 16142 },
+      { label: "High school graduate (includes equivalency)", count: 38004 },
+      { label: "Some college, no degree", count: 16515 },
+      { label: "Associate's degree", count: 7601 },
+      { label: "Bachelor's degree", count: 13543 },
+      { label: "Graduate or professional degree", count: 10050 },
     ],
   },
   7: {
@@ -240,6 +302,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "55-64", count: 19147 },
       { label: "65+", count: 14632 },
     ],
+    education: [
+      { label: "Less than high school diploma", count: 23156 },
+      { label: "High school graduate (includes equivalency)", count: 40022 },
+      { label: "Some college, no degree", count: 15778 },
+      { label: "Associate's degree", count: 6084 },
+      { label: "Bachelor's degree", count: 10147 },
+      { label: "Graduate or professional degree", count: 5041 },
+    ],
   },
   8: {
     totalPopulation: 159357,
@@ -266,6 +336,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "45-54", count: 17790 },
       { label: "55-64", count: 21723 },
       { label: "65+", count: 28274 },
+    ],
+    education: [
+      { label: "Less than high school diploma", count: 13457 },
+      { label: "High school graduate (includes equivalency)", count: 34672 },
+      { label: "Some college, no degree", count: 18518 },
+      { label: "Associate's degree", count: 7980 },
+      { label: "Bachelor's degree", count: 16414 },
+      { label: "Graduate or professional degree", count: 18118 },
     ],
   },
   9: {
@@ -294,6 +372,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "55-64", count: 20932 },
       { label: "65+", count: 26921 },
     ],
+    education: [
+      { label: "Less than high school diploma", count: 17948 },
+      { label: "High school graduate (includes equivalency)", count: 39673 },
+      { label: "Some college, no degree", count: 23594 },
+      { label: "Associate's degree", count: 10096 },
+      { label: "Bachelor's degree", count: 14290 },
+      { label: "Graduate or professional degree", count: 10010 },
+    ],
   },
   10: {
     totalPopulation: 162208,
@@ -321,6 +407,14 @@ export const CENSUS_DISTRICT_DEMOGRAPHICS: Record<number, DistrictCensusStats> =
       { label: "55-64", count: 21717 },
       { label: "65+", count: 33723 },
     ],
+    education: [
+      { label: "Less than high school diploma", count: 11618 },
+      { label: "High school graduate (includes equivalency)", count: 39871 },
+      { label: "Some college, no degree", count: 17815 },
+      { label: "Associate's degree", count: 10402 },
+      { label: "Bachelor's degree", count: 23399 },
+      { label: "Graduate or professional degree", count: 14213 },
+    ],
   },
 };
 
@@ -341,5 +435,6 @@ export function citywideCensusStats(): DistrictCensusStats {
     gender: sum((d) => d.gender),
     housing: sum((d) => d.housing),
     age: sum((d) => d.age),
+    education: sum((d) => d.education),
   };
 }
