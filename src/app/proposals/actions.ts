@@ -1570,6 +1570,43 @@ export async function updatePhaseProgress(formData: FormData) {
   revalidatePath(`/proposals/${proposalId}`);
 }
 
+// Owner-only: saves the real, live petition URL (e.g. Change.org) once
+// one actually exists — see petition_url on proposal_phases. Loose
+// validation on purpose (just "looks like a URL"), same spirit as
+// everywhere else in this file that isn't trying to be a strict
+// validator, just catching an obvious typo (pasted the title instead of
+// the link, forgot the https://, etc.) before it goes live as a "Sign
+// the petition" button that would otherwise silently link nowhere.
+export async function setPetitionUrl(formData: FormData): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+
+  const proposalId = String(formData.get("proposal_id"));
+  const phaseId = String(formData.get("phase_id"));
+  const url = String(formData.get("petition_url") ?? "").trim();
+
+  if (url && !/^https?:\/\/.+\..+/.test(url)) {
+    return { error: "That doesn't look like a real link — paste the full URL, starting with https://." };
+  }
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("owner_id")
+    .eq("id", proposalId)
+    .single();
+  if (proposal?.owner_id !== user.id) {
+    throw new Error("Only the proposal owner can set the petition link.");
+  }
+
+  const { error } = await supabase
+    .from("proposal_phases")
+    .update({ petition_url: url || null, updated_at: new Date().toISOString() })
+    .eq("id", phaseId);
+  if (error) return { error: "Something went wrong saving that link." };
+
+  revalidatePath(`/proposals/${proposalId}`);
+  return {};
+}
+
 // Precedent & case studies — "here's a similar project, here's how it
 // got funded, here's who was involved" — meant to help with grant
 // applications, so wide open like proposal_grants right above the

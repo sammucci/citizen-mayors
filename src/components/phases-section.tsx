@@ -14,6 +14,7 @@ type Phase = {
   progress: "not_started" | "in_progress" | "done";
   status: "pending" | "approved";
   addedByName: string;
+  petitionUrl: string | null;
 };
 
 const PROGRESS_LABELS: Record<Phase["progress"], string> = {
@@ -88,8 +89,16 @@ export function PhasesSection({
   // left out of this — it never reaches a "done" state to skip past, so
   // it never needs to steal the default spot from a real phase.
   const firstActivePhase = phases.find((p) => p.progress !== "done");
+  // An active petition (approved + done) beats even that default — it's
+  // the most likely reason someone landed here via the "This project has
+  // an active petition" banner/link near the title, so land them
+  // straight on it instead of whatever the generic "still active" rule
+  // would have picked.
+  const activePetitionPhase = phases.find(
+    (p) => /petition/i.test(p.label) && p.status === "approved" && p.progress === "done"
+  );
   const [selectedId, setSelectedId] = useState<string>(
-    firstActivePhase?.id ?? (phases.length > 0 ? phases[phases.length - 1].id : "anchor")
+    activePetitionPhase?.id ?? firstActivePhase?.id ?? (phases.length > 0 ? phases[phases.length - 1].id : "anchor")
   );
   const [insertMode, setInsertMode] = useState<"before" | "after" | null>(null);
   // Controlled so the "common next steps" chips (below) can prefill it —
@@ -158,47 +167,40 @@ export function PhasesSection({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Phases</h2>
-        <div className="flex items-center gap-1.5">
-          {canContribute && (
-            <button
-              type="button"
-              onClick={() => {
-                goTo(steps.length - 1);
-                openInsert("after");
-              }}
-              className="rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
-            >
-              + Add phase
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => goTo(selectedIndex - 1)}
-            disabled={selectedIndex === 0}
-            aria-label="Previous phase"
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-sm text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            onClick={() => goTo(selectedIndex + 1)}
-            disabled={selectedIndex === steps.length - 1}
-            aria-label="Next phase"
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-sm text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            ›
-          </button>
-        </div>
-      </div>
+      <h2 className="text-base font-semibold">Phases</h2>
       <p className="mt-1 text-sm text-neutral-600">
         Getting approval is one part of it. Here's the rest of what it actually takes to make this real, step by step.
       </p>
 
-      {/* Numbered progress bar — click a number, or use ‹ › above, to
-          jump to that phase. min-w per segment plus overflow-x-auto
+      {/* Its own bold callout up top, not just another dashed suggestion
+          chip buried at the bottom — starting a petition is a real
+          escalation for a proposal, not a routine next step, and it used
+          to read as identically low-key as everything else down there.
+          Always offered (not dependent on peer data), and hidden once a
+          petition phase already exists so it doesn't suggest a second
+          one. */}
+      {canContribute && !phases.some((p) => /petition/i.test(p.label)) && (
+        <button
+          type="button"
+          onClick={() => {
+            goTo(steps.length - 1);
+            openInsert(
+              "after",
+              "Start a petition",
+              "Draft a petition making the case, get residents to back it, and present it to decision-makers."
+            );
+          }}
+          className="mt-3 flex w-full items-center justify-between rounded-lg px-4 py-3 text-left shadow-sm transition hover:opacity-90"
+          style={{ backgroundColor: categoryColor, color: finalTextColor }}
+        >
+          <span className="text-sm font-bold">📣 Ready to escalate? Start a petition</span>
+          <span aria-hidden="true" className="text-lg">→</span>
+        </button>
+      )}
+
+      {/* Numbered progress bar — click a number, or use ‹ Previous /
+          Next › below, to jump to that phase. min-w per segment plus
+          overflow-x-auto
           keeps this readable instead of squeezing every number down to
           nothing once there are more than a handful of phases.
           py-1 (not just pb-1) matters more than it looks like it should:
@@ -426,11 +428,14 @@ export function PhasesSection({
               <div className="mt-3">
                 <PetitionSection
                   proposalId={proposalId}
+                  phaseId={selectedPhase.id}
                   title={proposalTitle}
                   summary={proposalSummary}
                   supporterCount={petitionSupporterCount}
                   iSupport={iSupportPetition}
                   canParticipate={canParticipate}
+                  petitionUrl={selectedPhase.petitionUrl}
+                  isOwner={isOwner}
                 />
               </div>
             )}
@@ -484,16 +489,41 @@ export function PhasesSection({
               )}
             </div>
 
-            {isOwner && (
-              <div className="mt-3 flex items-center justify-end gap-1.5 border-t border-neutral-200 pt-2">
-                {/* Icon buttons instead of a row of text links — same
-                    icon-plus-hover-tooltip pattern already used for
-                    approve (✓) and remove (✕) elsewhere in the app, so
-                    this isn't a new convention, just the same one applied
-                    here. The two "insert" buttons bake the direction
-                    into the icon itself (+◀ / ▶+) rather than two plain
-                    "+"s that would look identical sitting next to each
-                    other. */}
+          </>
+        )}
+
+        {/* One control bar, always in the same place regardless of which
+            step is selected — previously "+ Add phase" lived up in the
+            header, step navigation lived next to it, and move/insert/
+            remove lived down here as icon-only buttons, so the same
+            general area of the page had three separate control clusters
+            that behaved inconsistently. Previous/Next are for anyone
+            (browsing phases isn't an owner-only action); everything else
+            is owner-only. Also now visible from the anchor step, not
+            just from a real phase — the old header button was the only
+            way to add the very first phase, and it's gone now. */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-200 pt-3">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => goTo(selectedIndex - 1)}
+              disabled={selectedIndex === 0}
+              className="rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ‹ Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => goTo(selectedIndex + 1)}
+              disabled={selectedIndex === steps.length - 1}
+              className="rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next ›
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {isOwner && selectedPhase && (
+              <>
                 <button
                   type="button"
                   onClick={() => moveBy(-1)}
@@ -506,33 +536,6 @@ export function PhasesSection({
                 </button>
                 <button
                   type="button"
-                  onClick={() => (insertMode === "before" ? setInsertMode(null) : openInsert("before"))}
-                  title="Insert a new phase before this one"
-                  aria-label="Insert a new phase before this one"
-                  className={`flex h-7 w-9 items-center justify-center rounded-full border text-xs font-bold ${
-                    insertMode === "before"
-                      ? "border-neutral-500 bg-neutral-100 text-neutral-700"
-                      : "border-dashed border-neutral-300 text-neutral-500 hover:bg-neutral-100"
-                  }`}
-                >
-                  +◀
-                </button>
-                <div className="mx-1 h-5 w-px bg-neutral-200" aria-hidden="true" />
-                <button
-                  type="button"
-                  onClick={() => (insertMode === "after" ? setInsertMode(null) : openInsert("after"))}
-                  title="Insert a new phase after this one"
-                  aria-label="Insert a new phase after this one"
-                  className={`flex h-7 w-9 items-center justify-center rounded-full border text-xs font-bold ${
-                    insertMode === "after"
-                      ? "border-neutral-500 bg-neutral-100 text-neutral-700"
-                      : "border-dashed border-neutral-300 text-neutral-500 hover:bg-neutral-100"
-                  }`}
-                >
-                  ▶+
-                </button>
-                <button
-                  type="button"
                   onClick={() => moveBy(1)}
                   disabled={realIndex === -1 || realIndex >= phases.length - 1}
                   title="Move this phase later"
@@ -541,41 +544,52 @@ export function PhasesSection({
                 >
                   ▶
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => setConfirmingRemove(true)}
-                  title="Remove this phase"
-                  className="ml-2 text-xs text-duty-red underline hover:opacity-80"
-                >
-                  Remove
-                </button>
-              </div>
+              </>
             )}
-
-            {confirmingRemove && (
-              <form
-                action={async (formData) => {
-                  await removePhase(formData);
-                  router.refresh();
-                  setConfirmingRemove(false);
-                }}
-                className="mt-2 flex flex-wrap items-center gap-1.5 rounded border border-duty-red/40 bg-duty-red/5 p-2"
+            {canContribute && (
+              <button
+                type="button"
+                onClick={() => (insertMode === "after" ? setInsertMode(null) : openInsert("after"))}
+                className="rounded-full px-3 py-1 text-xs font-bold"
+                style={{ backgroundColor: categoryColor, color: finalTextColor }}
               >
-                <input type="hidden" name="proposal_id" value={proposalId} />
-                <input type="hidden" name="phase_id" value={selectedPhase.id} />
-                <p className="flex-1 text-xs text-neutral-700">Remove this phase?</p>
-                <button className="rounded bg-duty-red px-2 py-1 text-xs font-medium text-white">Remove</button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingRemove(false)}
-                  className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-white"
-                >
-                  Cancel
-                </button>
-              </form>
+                + Add a phase
+              </button>
             )}
-          </>
+            {isOwner && selectedPhase && (
+              <button
+                type="button"
+                onClick={() => setConfirmingRemove(true)}
+                title="Remove this phase"
+                className="text-xs text-duty-red underline hover:opacity-80"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+
+        {confirmingRemove && selectedPhase && (
+          <form
+            action={async (formData) => {
+              await removePhase(formData);
+              router.refresh();
+              setConfirmingRemove(false);
+            }}
+            className="mt-2 flex flex-wrap items-center gap-1.5 rounded border border-duty-red/40 bg-duty-red/5 p-2"
+          >
+            <input type="hidden" name="proposal_id" value={proposalId} />
+            <input type="hidden" name="phase_id" value={selectedPhase.id} />
+            <p className="flex-1 text-xs text-neutral-700">Remove this phase?</p>
+            <button className="rounded bg-duty-red px-2 py-1 text-xs font-medium text-white">Remove</button>
+            <button
+              type="button"
+              onClick={() => setConfirmingRemove(false)}
+              className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-white"
+            >
+              Cancel
+            </button>
+          </form>
         )}
 
         {/* Insert form — appends a brand-new phase either right before or
@@ -670,7 +684,7 @@ export function PhasesSection({
         )}
       </div>
 
-      {(recommendedLabels.length > 0 || (canContribute && !phases.some((p) => /petition/i.test(p.label)))) && (
+      {recommendedLabels.length > 0 && (
         <div className="mt-3">
           <p className="text-xs font-medium text-neutral-500">Common next steps for proposals like this one:</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -693,27 +707,6 @@ export function PhasesSection({
                 + {label}
               </button>
             ))}
-            {/* Always offered, not dependent on peer data — a petition
-                is a real forward-momentum step for almost any proposal,
-                and this is the one place the petition tools ever show
-                up now (inside whatever phase you name after adding it). */}
-            {canContribute && !phases.some((p) => /petition/i.test(p.label)) && (
-              <button
-                type="button"
-                onClick={() => {
-                  goTo(steps.length - 1);
-                  openInsert(
-                    "after",
-                    "Start a petition",
-                    "Draft a petition making the case, get residents to back it, and present it to decision-makers."
-                  );
-                }}
-                className="rounded-full border border-dashed px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
-                style={{ borderColor: `${categoryColor}88` }}
-              >
-                + Start a petition
-              </button>
-            )}
           </div>
         </div>
       )}

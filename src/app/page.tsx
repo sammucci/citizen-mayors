@@ -30,6 +30,7 @@ type SearchParams = {
   category?: string;
   tag?: string;
   district?: string;
+  petition?: string;
 };
 
 export default async function HomePage({
@@ -81,11 +82,31 @@ export default async function HomePage({
 
   const { data: proposals } = await query;
 
-  const filteredProposals = searchParams.tag
+  // Which proposals have an active petition (a phase named for a
+  // petition, approved, and marked done — i.e. actually launched, not
+  // just suggested or still in progress). Fetched separately rather than
+  // pushed into the proposals query above since Postgrest can't filter
+  // a parent row by a related child row's field without a view/RPC —
+  // same reason the tag filter below is also applied client-side after
+  // the initial fetch, not in the query itself.
+  const { data: allPhases } = await supabase
+    .from("proposal_phases")
+    .select("proposal_id, label, status, progress");
+  const activePetitionProposalIds = new Set(
+    (allPhases ?? [])
+      .filter((p) => /petition/i.test(p.label) && p.status === "approved" && p.progress === "done")
+      .map((p) => p.proposal_id)
+  );
+
+  let filteredProposals = searchParams.tag
     ? (proposals ?? []).filter((p: any) =>
         p.proposal_tags?.some((pt: any) => pt.tags?.slug === searchParams.tag)
       )
     : proposals ?? [];
+
+  if (searchParams.petition === "1") {
+    filteredProposals = filteredProposals.filter((p: any) => activePetitionProposalIds.has(p.id));
+  }
 
   // A proposal plots on the map if it has either a council district
   // (centroid fallback), real geocoded coordinates (an address that was
@@ -128,7 +149,7 @@ export default async function HomePage({
       </Link>
 
       <div className="mt-6">
-        <ProposalFilters categories={categories ?? []} tags={tags ?? []} />
+        <ProposalFilters categories={categories ?? []} tags={tags ?? []} hasPetitionFilter />
         <p className="mt-1 text-xs text-neutral-400">
           District filters also include citywide proposals, since those apply
           everywhere.
@@ -225,6 +246,11 @@ export default async function HomePage({
           />
         )}
         <div className="flex flex-1 flex-col p-4">
+          {activePetitionProposalIds.has(p.id) && (
+            <span className="mb-2 inline-flex w-fit items-center gap-1 rounded-full bg-duty-purple px-2 py-0.5 text-[11px] font-bold text-white">
+              📣 Active petition
+            </span>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/?category=${p.categories?.slug ?? ""}`}

@@ -44,9 +44,14 @@ function FilterSelect({
 export function ProposalFilters({
   categories,
   tags,
+  hasPetitionFilter,
 }: {
   categories: Category[];
   tags: Tag[];
+  // Only the homepage passes this — a plain boolean flag rather than
+  // making every caller of this shared component pass petition data it
+  // doesn't have.
+  hasPetitionFilter?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -58,6 +63,8 @@ export function ProposalFilters({
     else params.delete(key);
     router.push(`/?${params.toString()}`);
   }
+
+  const petitionActive = searchParams.get("petition") === "1";
 
   return (
     <div className="flex flex-wrap gap-3 text-sm">
@@ -99,6 +106,21 @@ export function ProposalFilters({
           </option>
         ))}
       </FilterSelect>
+
+      {hasPetitionFilter && (
+        <button
+          type="button"
+          onClick={() => updateParam("petition", petitionActive ? "" : "1")}
+          aria-pressed={petitionActive}
+          className={
+            petitionActive
+              ? "rounded-md bg-duty-purple px-3 py-2 text-sm font-semibold text-white shadow-sm"
+              : "rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-700 shadow-sm transition hover:border-neutral-400"
+          }
+        >
+          📣 Active petitions
+        </button>
+      )}
     </div>
   );
 }

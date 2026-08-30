@@ -204,7 +204,7 @@ export default async function ProposalPage({
   // moved here).
   const { data: proposalPhases } = await supabase
     .from("proposal_phases")
-    .select("id, label, note, progress, status, added_by, profiles ( display_name )")
+    .select("id, label, note, progress, status, added_by, petition_url, profiles ( display_name )")
     .eq("proposal_id", proposal.id)
     .order("sort_order");
 
@@ -213,6 +213,16 @@ export default async function ProposalPage({
   // rather than as a separate box gated on some unrelated phase being
   // "done." Only need to fetch supporters at all if such a phase exists.
   const hasPetitionPhase = (proposalPhases ?? []).some((p) => /petition/i.test(p.label));
+  // Distinct from hasPetitionPhase above — this one's specifically for
+  // the "this project has an active petition" banner near the title
+  // (and for the homepage filter/badge): a petition phase merely
+  // existing isn't "active," it needs to actually be approved and
+  // marked done — i.e. actually launched, not just suggested or still
+  // in progress.
+  const activePetitionPhase = (proposalPhases ?? []).find(
+    (p) => /petition/i.test(p.label) && p.status === "approved" && p.progress === "done"
+  );
+  const hasActivePetition = Boolean(activePetitionPhase);
   const { data: petitionSupporters } = hasPetitionPhase
     ? await supabase
         .from("proposal_petition_supporters")
@@ -567,6 +577,19 @@ export default async function ProposalPage({
                   <p className="mb-2 inline-block rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-white">
                     Draft — only you can see this
                   </p>
+                )}
+                {hasActivePetition && (
+                  <a
+                    href={activePetitionPhase?.petition_url || "#phases"}
+                    target={activePetitionPhase?.petition_url ? "_blank" : undefined}
+                    rel={activePetitionPhase?.petition_url ? "noopener noreferrer" : undefined}
+                    className="mb-2 flex items-center gap-2 rounded-md bg-duty-purple px-3 py-2 text-xs font-bold text-white hover:opacity-90"
+                  >
+                    📣{" "}
+                    {activePetitionPhase?.petition_url
+                      ? "This project has an active petition — sign it"
+                      : "This project has an active petition — see it below"}
+                  </a>
                 )}
                 <span className="text-xs text-neutral-500">📍 {location}</span>
 
@@ -1100,7 +1123,7 @@ export default async function ProposalPage({
           tall and skinny) and the horizontal, left-to-right step-by-step
           feel of this list (per the GoVocal reference) needs real width
           to work at all. */}
-      <div className="mt-6">
+      <div id="phases" className="mt-6 scroll-mt-4">
         <PhasesSection
           proposalId={proposal.id}
           categoryColor={categoryColor}
@@ -1123,6 +1146,7 @@ export default async function ProposalPage({
             progress: p.progress,
             status: p.status,
             addedByName: p.profiles?.display_name ?? "A resident",
+            petitionUrl: p.petition_url ?? null,
           }))}
           proposalTitle={proposal.title}
           proposalSummary={proposal.summary ?? ""}

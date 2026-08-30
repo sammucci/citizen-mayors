@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { addPetitionSupport, removePetitionSupport } from "@/app/proposals/actions";
+import { addPetitionSupport, removePetitionSupport, setPetitionUrl } from "@/app/proposals/actions";
 
 // Sidebar box, appears once a proposal has real forward momentum (see
 // proposals/[id]/page.tsx — gated on at least one phase marked "done",
@@ -23,22 +23,34 @@ import { addPetitionSupport, removePetitionSupport } from "@/app/proposals/actio
 //    itself.
 export function PetitionSection({
   proposalId,
+  phaseId,
   title,
   summary,
   supporterCount,
   iSupport,
   canParticipate,
+  petitionUrl,
+  isOwner,
 }: {
   proposalId: string;
+  phaseId: string;
   title: string;
   summary: string;
   supporterCount: number;
   iSupport: boolean;
   canParticipate: boolean;
+  // The real, live petition link, once the owner's pasted one in — see
+  // setPetitionUrl in proposals/actions.ts. Null until then.
+  petitionUrl: string | null;
+  isOwner: boolean;
 }) {
   const [copied, setCopied] = useState<"title" | "body" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [urlDraft, setUrlDraft] = useState(petitionUrl ?? "");
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [urlSaving, setUrlSaving] = useState(false);
 
   const draftBody = `${summary || "[Add a sentence or two on why this matters.]"}\n\nWe're asking decision-makers to act on this: "${title}."\n\nThis proposal was developed on Citizen Mayors, a platform where Philadelphia residents build and track civic proposals through the city's real decision-making process.`;
 
@@ -61,6 +73,75 @@ export function PetitionSection({
         This proposal has real momentum — a petition can help build pressure and
         show decision-makers how much support it has.
       </p>
+
+      {/* The actual live link, once it exists, is the headline action —
+          everything below (draft text, generic Change.org starter link)
+          is what gets you TO a petition; this is what lets anyone
+          actually sign the one that already exists. */}
+      {petitionUrl && !editingUrl && (
+        <a
+          href={petitionUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 flex items-center justify-between rounded-lg bg-duty-purple px-4 py-3 text-sm font-bold text-white shadow-sm hover:opacity-90"
+        >
+          ✍️ Sign the petition
+          <span aria-hidden="true">→</span>
+        </a>
+      )}
+      {isOwner && (
+        <div className="mt-1.5">
+          {editingUrl ? (
+            <form
+              action={async (formData) => {
+                setUrlSaving(true);
+                setUrlError(null);
+                const result = await setPetitionUrl(formData);
+                setUrlSaving(false);
+                if (result?.error) setUrlError(result.error);
+                else setEditingUrl(false);
+              }}
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              <input type="hidden" name="proposal_id" value={proposalId} />
+              <input type="hidden" name="phase_id" value={phaseId} />
+              <input
+                name="petition_url"
+                value={urlDraft}
+                onChange={(e) => setUrlDraft(e.target.value)}
+                placeholder="https://www.change.org/p/..."
+                className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+              />
+              <button
+                disabled={urlSaving}
+                className="rounded-full bg-duty-purple px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingUrl(false);
+                  setUrlDraft(petitionUrl ?? "");
+                  setUrlError(null);
+                }}
+                className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+              >
+                Cancel
+              </button>
+              {urlError && <p className="w-full text-xs text-duty-red">{urlError}</p>}
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingUrl(true)}
+              className="text-xs text-duty-purple underline"
+            >
+              {petitionUrl ? "Change petition link" : "Already created it? Paste the link here"}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mt-3 space-y-2">
         <div>

@@ -627,6 +627,14 @@ create table public.proposal_phases (
   -- approved immediately, anyone else's land pending until approved.
   status text not null default 'approved' check (status in ('pending', 'approved')),
   added_by uuid references public.profiles(id),
+  -- The real, live petition link (e.g. on Change.org), once one exists.
+  -- Only meaningful on a phase whose label reads as a petition (see
+  -- isPetitionPhase in phases-section.tsx) — null on every other phase.
+  -- Owner pastes it in after actually creating the petition elsewhere;
+  -- once set, it becomes the primary "Sign the petition" link on this
+  -- phase and in the "active petition" banner at the top of the
+  -- proposal page, instead of just the generic Change.org starter link.
+  petition_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
