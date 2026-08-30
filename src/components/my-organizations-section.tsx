@@ -27,8 +27,9 @@ export function MyOrganizationsSection({
 
   return (
     <div>
-      <h2 className="text-lg font-semibold">Your civic groups</h2>
-      <p className="mt-0.5 text-xs text-neutral-500">
+      {/* No h2 here — the tab above already says "Civic groups"; see
+          profile-tabbed-sections.tsx. */}
+      <p className="text-xs text-neutral-500">
         Neighborhood groups and civic organizations you&apos;re part of — each one gets its own
         crowdsourced profile page, same as decision-makers.
       </p>

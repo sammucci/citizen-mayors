@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CivicReportCard, type CivicStats, type CivicLog, type CivicDetails } from "@/components/civic-report-card";
+import { CivicReportCard, type CivicLog, type CivicDetails } from "@/components/civic-report-card";
 import { MyOrganizationsSection } from "@/components/my-organizations-section";
 import { FollowedTagsSection } from "@/components/followed-tags-section";
 
@@ -25,7 +25,6 @@ type TagGroup = { id: number | string; label: string; tags: TagOption[] };
 // how the three are displayed. Each section underneath is untouched;
 // this is just what wraps them.
 export function ProfileTabbedSections({
-  civicStats,
   civicLogs,
   civicDetails,
   categoryColor,
@@ -36,7 +35,6 @@ export function ProfileTabbedSections({
   allOrganizationNames,
   tagGroups,
 }: {
-  civicStats: CivicStats;
   civicLogs: CivicLog[];
   civicDetails: CivicDetails;
   categoryColor: string;
@@ -78,7 +76,6 @@ export function ProfileTabbedSections({
       <div className="rounded-tr-lg rounded-br-lg rounded-bl-lg border border-duty-purple/40 bg-white p-4">
         {tab === "report" && (
           <CivicReportCard
-            stats={civicStats}
             logs={civicLogs}
             details={civicDetails}
             categoryColor={categoryColor}

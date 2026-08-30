@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { type CivicLog, type CivicStats } from "@/components/civic-report-card";
+import { type CivicLog } from "@/components/civic-report-card";
 import { ProfileInfoCard } from "@/components/profile-info-card";
 import { ProposalMiniCardGrid } from "@/components/proposal-mini-card-grid";
 import { ProfileTabbedSections } from "@/components/profile-tabbed-sections";
@@ -181,27 +181,35 @@ export default async function ProfilePage() {
     .map((c: any) => c.parent_comment_id)
     .filter((id: string | null): id is string => Boolean(id));
 
+  // created_at added to each of these three (wasn't needed before the
+  // civic report card had a year filter) so a "distinct person/decision-
+  // maker engaged with" count can be scoped to a single year — it's a
+  // real per-interaction timestamp, not something invented after the
+  // fact, so "engaged with in 2025" means someone you actually talked to
+  // or logged an update for that year, dedupe happening within the year
+  // rather than across your whole account history.
   const [{ data: repliesToMe }, { data: peopleIRepliedTo }, { data: myPowerTreeUpdates }] =
     await Promise.all([
       myCommentIds.length > 0
-        ? supabase.from("comments").select("author_id").in("parent_comment_id", myCommentIds)
-        : Promise.resolve({ data: [] as { author_id: string }[] }),
+        ? supabase.from("comments").select("author_id, created_at").in("parent_comment_id", myCommentIds)
+        : Promise.resolve({ data: [] as { author_id: string; created_at: string }[] }),
       parentIdsIRepliedTo.length > 0
-        ? supabase.from("comments").select("author_id").in("id", parentIdsIRepliedTo)
-        : Promise.resolve({ data: [] as { author_id: string }[] }),
+        ? supabase.from("comments").select("author_id, created_at").in("id", parentIdsIRepliedTo)
+        : Promise.resolve({ data: [] as { author_id: string; created_at: string }[] }),
       supabase
         .from("power_tree_node_updates")
-        .select("proposal_power_tree_nodes ( decision_maker_id, decision_makers ( name ) )")
+        .select("created_at, proposal_power_tree_nodes ( decision_maker_id, decision_makers ( name ) )")
         .eq("author_id", user.id),
     ]);
 
-  const peopleConversedWithIds = [
-    ...new Set(
-      [...(repliesToMe ?? []), ...(peopleIRepliedTo ?? [])]
-        .map((r: any) => r.author_id)
-        .filter((id: string) => id !== user.id)
-    ),
-  ];
+  const yearsByPersonId = new Map<string, Set<number>>();
+  for (const r of [...(repliesToMe ?? []), ...(peopleIRepliedTo ?? [])] as any[]) {
+    if (r.author_id === user.id) continue;
+    const years = yearsByPersonId.get(r.author_id) ?? new Set<number>();
+    years.add(new Date(r.created_at).getFullYear());
+    yearsByPersonId.set(r.author_id, years);
+  }
+  const peopleConversedWithIds = [...yearsByPersonId.keys()];
   const peopleConversedWith = peopleConversedWithIds.length;
 
   const { data: conversedProfiles } =
@@ -209,20 +217,26 @@ export default async function ProfilePage() {
       ? await supabase.from("profiles").select("id, display_name").in("id", peopleConversedWithIds)
       : { data: [] as { id: string; display_name: string | null }[] };
 
-  const decisionMakerNamesById = new Map<string, string>();
+  const decisionMakerYearsById = new Map<string, { name: string; years: Set<number> }>();
   for (const u of (myPowerTreeUpdates ?? []) as any[]) {
     const dmId = u.proposal_power_tree_nodes?.decision_maker_id;
     const dmName = u.proposal_power_tree_nodes?.decision_makers?.name;
-    if (dmId && dmName && !decisionMakerNamesById.has(dmId)) {
-      decisionMakerNamesById.set(dmId, dmName);
-    }
+    if (!dmId || !dmName) continue;
+    const existing = decisionMakerYearsById.get(dmId) ?? { name: dmName, years: new Set<number>() };
+    existing.years.add(new Date(u.created_at).getFullYear());
+    decisionMakerYearsById.set(dmId, existing);
   }
-  const decisionMakersEngaged = decisionMakerNamesById.size;
+  const decisionMakersEngaged = decisionMakerYearsById.size;
 
-  const contributedProposals = new Map<string, string>();
+  const contributedProposals = new Map<string, { title: string; years: Set<number> }>();
   for (const c of (myComments ?? []) as any[]) {
     if (c.is_suggested_edit && c.proposals?.owner_id && c.proposals.owner_id !== user.id) {
-      contributedProposals.set(c.proposal_id, c.proposals?.title ?? "A proposal");
+      const existing = contributedProposals.get(c.proposal_id) ?? {
+        title: c.proposals?.title ?? "A proposal",
+        years: new Set<number>(),
+      };
+      existing.years.add(new Date(c.created_at).getFullYear());
+      contributedProposals.set(c.proposal_id, existing);
     }
   }
   const contributedToOthers = contributedProposals.size;
@@ -256,28 +270,17 @@ export default async function ProfilePage() {
     status: l.status,
   }));
 
-  const publishedLogs = civicLogs.filter((l) => l.status === "published");
-  const civicStats: CivicStats = {
-    proposalsMade: myProposals?.length ?? 0,
-    contributedToOthers,
-    commentsMade: myComments?.length ?? 0,
-    peopleConversedWith,
-    decisionMakersEngaged,
-    lettersWritten: publishedLogs.filter((l) => l.logType === "letter_to_editor").length,
-    lettersPublished: publishedLogs.filter((l) => l.logType === "letter_to_editor" && l.published)
-      .length,
-    contactedOfficials: publishedLogs.filter((l) => l.logType === "contacted_official").length,
-    meetingsAttended: publishedLogs.filter((l) => l.logType === "community_meeting").length,
-    volunteerHours: publishedLogs
-      .filter((l) => l.logType === "volunteer_hours")
-      .reduce((sum, l) => sum + (l.hours ?? 0), 0),
-    testimonyGiven: publishedLogs.filter((l) => l.logType === "testimony").length,
-  };
-
-  // Feeds the "click a stat tile to see what's behind it" popups for
-  // the platform-engagement half (the four self-reported log types
-  // just use the `logs` list directly on the client, no extra data
-  // needed for those).
+  // Samantha's ask: the civic report card should stay all-time by
+  // default, but with a year filter so past years are still visible
+  // instead of getting buried. That means every detail item needs to
+  // carry the year(s) it actually happened in — a proposal or comment
+  // has exactly one, but "people you've talked with" and "decision-
+  // makers engaged" are DISTINCT-per-year counts (see yearsByPersonId /
+  // decisionMakerYearsById above), so those carry every year they had a
+  // real interaction in. civic-report-card.tsx does the actual year
+  // filtering/counting from these — no separately pre-computed
+  // CivicStats object anymore, so the displayed numbers can't drift out
+  // of sync with what's actually in `details`/`logs`.
   const civicDetails = {
     proposalsMade: (myProposals ?? []).map((p: any) => ({
       label: p.title,
@@ -285,21 +288,28 @@ export default async function ProfilePage() {
         p.geography_label ? ` · ${p.geography_label}` : p.geography_scope === "citywide" ? " · Citywide" : ""
       }`,
       href: `/proposals/${p.id}`,
+      years: [new Date(p.created_at).getFullYear()],
     })),
-    contributedToOthers: [...contributedProposals.entries()].map(([id, title]) => ({
-      label: title,
+    contributedToOthers: [...contributedProposals.entries()].map(([id, v]) => ({
+      label: v.title,
       href: `/proposals/${id}`,
+      years: [...v.years].sort(),
     })),
     commentsMade: (myComments ?? []).map((c: any) => ({
       label: c.body.length > 80 ? `${c.body.slice(0, 80)}…` : c.body,
       sublabel: c.proposals?.title ?? undefined,
       href: `/proposals/${c.proposal_id}`,
+      years: [new Date(c.created_at).getFullYear()],
     })),
     peopleConversedWith: (conversedProfiles ?? []).map((p: any) => ({
       label: p.display_name ?? "A resident",
       href: `/u/${p.id}`,
+      years: [...(yearsByPersonId.get(p.id) ?? new Set<number>())].sort(),
     })),
-    decisionMakersEngaged: [...decisionMakerNamesById.values()].map((name) => ({ label: name })),
+    decisionMakersEngaged: [...decisionMakerYearsById.values()].map((v) => ({
+      label: v.name,
+      years: [...v.years].sort(),
+    })),
   };
 
   // Grouped by proposal so "Your comments" reads as one row per
@@ -450,7 +460,6 @@ export default async function ProfilePage() {
           three-tab folder instead of a long scroll of unrelated-looking
           blocks. See profile-tabbed-sections.tsx. */}
       <ProfileTabbedSections
-        civicStats={civicStats}
         civicLogs={civicLogs}
         civicDetails={civicDetails}
         categoryColor="#6C3FD1"

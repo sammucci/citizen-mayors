@@ -13,6 +13,7 @@ import { PopulationServedField } from "@/components/population-served-field";
 import { CivicReportCardExport } from "@/components/civic-report-card-export";
 import { StatIcon, type StatIconName } from "@/components/stat-icons";
 import { brightnessOf, darken } from "@/lib/color-brightness";
+import { SelectField } from "@/components/select-field";
 
 export type CivicStats = {
   proposalsMade: number;
@@ -28,7 +29,13 @@ export type CivicStats = {
   testimonyGiven: number;
 };
 
-export type CivicDetailItem = { label: string; href?: string; sublabel?: string };
+// `years` is every calendar year this item actually counts toward — a
+// proposal or comment has exactly one (when it was made), but "people
+// you've talked with" and "decision-makers engaged" are distinct-per-
+// year counts (see profile/page.tsx), so a person you talked to in both
+// 2025 and 2026 carries both years and shows up in either year's count,
+// same as they would if you re-talked to them for real.
+export type CivicDetailItem = { label: string; href?: string; sublabel?: string; years: number[] };
 export type CivicDetails = {
   proposalsMade: CivicDetailItem[];
   contributedToOthers: CivicDetailItem[];
@@ -98,7 +105,6 @@ function formatDate(iso: string) {
 // than a plain table. A real "export as image" button is a reasonable
 // fast-follow; for now this is designed to look good in a screenshot.
 export function CivicReportCard({
-  stats,
   logs,
   details,
   categoryColor,
@@ -106,7 +112,6 @@ export function CivicReportCard({
   populationCategories,
   displayName,
 }: {
-  stats: CivicStats;
   logs: CivicLog[];
   details: CivicDetails;
   categoryColor: string;
@@ -118,10 +123,68 @@ export function CivicReportCard({
   const [pendingNewType, setPendingNewType] = useState<CivicLog["logType"] | null>(null);
   const [detailKey, setDetailKey] = useState<ClickableStatKey | null>(null);
   const [exporting, setExporting] = useState(false);
+  // "All time" is the default — nothing resets on its own each January —
+  // but Samantha's ask was for a real year filter so a past year's work
+  // stays visible instead of just getting buried under this year's.
+  // Everything below (the stat numbers, the detail-list popups, the
+  // published-log list AND its count, the export) is computed from this
+  // one selection, so nothing here can quietly drift out of sync with
+  // what's actually filtered.
+  const [year, setYear] = useState<number | "all">("all");
   const dirtyRef = useRef(false);
 
   const drafts = logs.filter((l) => l.status === "draft");
-  const published = logs.filter((l) => l.status === "published");
+
+  function logYear(l: CivicLog) {
+    return new Date(`${l.occurredOn}T00:00:00`).getFullYear();
+  }
+  function inYear(itemYears: number[]) {
+    return year === "all" || itemYears.includes(year);
+  }
+
+  // Every year that has SOMETHING in it (a log, a proposal, a comment,
+  // a real conversation) — plus the current year always, even for a
+  // brand-new account with nothing logged yet, so "this year" is never
+  // missing from the picker.
+  const availableYears = Array.from(
+    new Set([
+      new Date().getFullYear(),
+      ...logs.map(logYear),
+      ...Object.values(details).flatMap((items) => items.flatMap((i) => i.years)),
+    ])
+  ).sort((a, b) => b - a);
+
+  const published = logs.filter((l) => l.status === "published" && (year === "all" || logYear(l) === year));
+
+  const filteredDetails: CivicDetails = {
+    proposalsMade: details.proposalsMade.filter((i) => inYear(i.years)),
+    contributedToOthers: details.contributedToOthers.filter((i) => inYear(i.years)),
+    commentsMade: details.commentsMade.filter((i) => inYear(i.years)),
+    peopleConversedWith: details.peopleConversedWith.filter((i) => inYear(i.years)),
+    decisionMakersEngaged: details.decisionMakersEngaged.filter((i) => inYear(i.years)),
+  };
+
+  // Computed here, not passed in as a prop — the four self-reported log
+  // stats and the five "distinct thing engaged with" stats both boil
+  // down to "how many things are in the filtered list right now," so
+  // there's one source of truth (details + logs) instead of a separately
+  // pre-computed CivicStats that could fall out of sync with what's
+  // actually in those lists once a year filter entered the picture.
+  const stats: CivicStats = {
+    proposalsMade: filteredDetails.proposalsMade.length,
+    contributedToOthers: filteredDetails.contributedToOthers.length,
+    commentsMade: filteredDetails.commentsMade.length,
+    peopleConversedWith: filteredDetails.peopleConversedWith.length,
+    decisionMakersEngaged: filteredDetails.decisionMakersEngaged.length,
+    lettersWritten: published.filter((l) => l.logType === "letter_to_editor").length,
+    lettersPublished: published.filter((l) => l.logType === "letter_to_editor" && l.published).length,
+    contactedOfficials: published.filter((l) => l.logType === "contacted_official").length,
+    meetingsAttended: published.filter((l) => l.logType === "community_meeting").length,
+    volunteerHours: published
+      .filter((l) => l.logType === "volunteer_hours")
+      .reduce((sum, l) => sum + (l.hours ?? 0), 0),
+    testimonyGiven: published.filter((l) => l.logType === "testimony").length,
+  };
 
   // Opens the "add a log" modal pre-set to a specific type — used by the
   // "log this now" prompt inside an empty stat-tile popup, so clicking
@@ -137,13 +200,28 @@ export function CivicReportCard({
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Your civic report card</h2>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            A year-in-review of what you've actually done — shareable, so far.
-          </p>
-        </div>
+        {/* No h2 here — the tab above this card (see
+            profile-tabbed-sections.tsx) already says "Civic report
+            card"; repeating it as a title right underneath just
+            duplicated the same words twice in a row. */}
+        <p className="text-xs text-neutral-500">
+          A year-in-review of what you've actually done — shareable, so far.
+        </p>
         <div className="flex shrink-0 items-center gap-1.5">
+          <SelectField
+            value={year}
+            onChange={(e) => setYear(e.target.value === "all" ? "all" : Number(e.target.value))}
+            fullWidth={false}
+            className="!py-1.5 !text-xs"
+            aria-label="Filter the report card by year"
+          >
+            <option value="all">All time</option>
+            {availableYears.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </SelectField>
           <button
             type="button"
             onClick={() => setExporting(true)}
@@ -286,7 +364,7 @@ export function CivicReportCard({
       {published.length > 0 && (
         <details className="mt-3">
           <summary className="cursor-pointer list-none text-xs text-neutral-500 underline marker:content-none">
-            View your full log ({published.length})
+            View /edit your full log ({published.length})
           </summary>
           <ul className="mt-2 space-y-1.5">
             {published.map((log) => (
@@ -319,8 +397,8 @@ export function CivicReportCard({
         <CivicReportCardExport
           displayName={displayName}
           stats={stats}
-          proposals={details.proposalsMade}
-          comments={details.commentsMade}
+          proposals={filteredDetails.proposalsMade}
+          comments={filteredDetails.commentsMade}
           logs={published}
           onClose={() => setExporting(false)}
         />
@@ -339,7 +417,7 @@ export function CivicReportCard({
               onLogNow={() => openNewLog(STAT_TO_LOG_TYPE[detailKey])}
             />
           ) : (
-            <PlainDetailList items={details[detailKey]} />
+            <PlainDetailList items={filteredDetails[detailKey]} />
           )}
         </DetailModal>
       )}
@@ -590,7 +668,13 @@ function StatTile({
     <button
       type="button"
       onClick={onClick}
-      className="overflow-hidden rounded-2xl text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      // A pale ~8% tint against stark white was hard to make out,
+      // especially for the lighter colors in this set — same fix
+      // already used on the mini proposal cards below (a real border in
+      // the tile's own color, not just a tinted fill) so these read
+      // clearly against the white page instead of nearly blending in.
+      className="overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      style={{ borderColor: `${color}66` }}
     >
       <div className="h-2" style={{ backgroundColor: color }} aria-hidden="true" />
       <div className="relative p-4" style={{ backgroundColor: `${color}14` }}>

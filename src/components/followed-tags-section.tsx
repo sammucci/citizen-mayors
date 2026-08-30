@@ -31,8 +31,9 @@ export function FollowedTagsSection({ tagGroups }: { tagGroups: TagGroup[] }) {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold">Your expertise &amp; interests</h2>
-      <p className="mt-0.5 text-xs text-neutral-500">
+      {/* No h2 here — the tab above already says "Expertise & interests";
+          see profile-tabbed-sections.tsx. */}
+      <p className="text-xs text-neutral-500">
         Pick the topics you know about or want to weigh in on — you&apos;ll get a
         notification when a proposal shows up carrying one of these, new or
         newly tagged with it.
