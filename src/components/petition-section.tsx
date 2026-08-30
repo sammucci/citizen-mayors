@@ -67,11 +67,16 @@ export function PetitionSection({
   }
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <h2 className="text-base font-semibold">Ready to take this further?</h2>
-      <p className="mt-0.5 text-xs text-neutral-500">
-        This proposal has real momentum — a petition can help build pressure and
-        show decision-makers how much support it has.
+    // No card chrome of its own on purpose — this always renders inside
+    // a phase's own detail panel now (see phases-section.tsx), directly
+    // under that phase's title and status. A second full white box
+    // nested inside the gray phase card read as a separate, disconnected
+    // thing rather than more detail about the phase you're already
+    // looking at — a top border is enough to separate it from the
+    // status buttons just above.
+    <div className="mt-3 border-t border-neutral-200 pt-3">
+      <p className="text-xs text-neutral-500">
+        A petition can help build pressure and show decision-makers how much support this has.
       </p>
 
       {/* The actual live link, once it exists, is the headline action —

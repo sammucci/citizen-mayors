@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { addPhase, approvePhase, removePhase, reorderPhases, updatePhase, updatePhaseProgress } from "@/app/proposals/actions";
@@ -228,7 +228,8 @@ export function PhasesSection({
             const isInProgress = s.phase?.progress === "in_progress";
             const showsStartedBorder = isAnchorStarted || isInProgress;
             return (
-              <div key={s.id} className="min-w-[64px] flex-1">
+              <Fragment key={s.id}>
+              <div className="min-w-[64px] flex-1">
                 <button
                   type="button"
                   onClick={() => goTo(i)}
@@ -287,14 +288,39 @@ export function PhasesSection({
                   )}
                 </button>
               </div>
+              {/* Visible placeholder right in the numbered bar, not just
+                  a caption sentence below — this is the direct fix for
+                  "you can't see where you're adding it": the new phase's
+                  actual position, between two real steps, shown the same
+                  way every other step is shown. Only ever appears after
+                  whichever step is currently selected, since "+ Add a
+                  phase" always inserts after the current selection now. */}
+              {insertMode === "after" && i === selectedIndex && (
+                <div className="min-w-[64px] flex-1">
+                  <div
+                    className="flex w-full items-center justify-center rounded-md border-2 border-dashed py-2 text-xs font-bold"
+                    style={{ borderColor: categoryColor, color: categoryColor }}
+                  >
+                    +
+                  </div>
+                </div>
+              )}
+              </Fragment>
             );
           })}
         </div>
         <div className="mt-1 flex gap-1">
-          {steps.map((s) => (
-            <div key={s.id} className="min-w-[64px] flex-1 truncate text-center text-[10px] text-neutral-500">
-              {s.label}
-            </div>
+          {steps.map((s, i) => (
+            <Fragment key={s.id}>
+              <div className="min-w-[64px] flex-1 truncate text-center text-[10px] text-neutral-500">
+                {s.label}
+              </div>
+              {insertMode === "after" && i === selectedIndex && (
+                <div className="min-w-[64px] flex-1 truncate text-center text-[10px] font-semibold" style={{ color: categoryColor }}>
+                  {insertLabel || "New phase"}
+                </div>
+              )}
+            </Fragment>
           ))}
         </div>
       </div>
@@ -424,22 +450,11 @@ export function PhasesSection({
               <p className="mt-2 text-sm text-neutral-700">{selectedPhase.note}</p>
             )}
 
-            {isPetitionPhase && selectedPhase.status === "approved" && (
-              <div className="mt-3">
-                <PetitionSection
-                  proposalId={proposalId}
-                  phaseId={selectedPhase.id}
-                  title={proposalTitle}
-                  summary={proposalSummary}
-                  supporterCount={petitionSupporterCount}
-                  iSupport={iSupportPetition}
-                  canParticipate={canParticipate}
-                  petitionUrl={selectedPhase.petitionUrl}
-                  isOwner={isOwner}
-                />
-              </div>
-            )}
-
+            {/* Status control lives with the phase's own header, not
+                after the petition box — this is "what state is THIS
+                phase in," the same regardless of whether it happens to
+                be a petition phase, so it shouldn't get pushed down by
+                petition-specific content. */}
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {selectedPhase.status === "pending" && isOwner && (
                 <form
@@ -489,6 +504,19 @@ export function PhasesSection({
               )}
             </div>
 
+            {isPetitionPhase && selectedPhase.status === "approved" && (
+              <PetitionSection
+                proposalId={proposalId}
+                phaseId={selectedPhase.id}
+                title={proposalTitle}
+                summary={proposalSummary}
+                supporterCount={petitionSupporterCount}
+                iSupport={iSupportPetition}
+                canParticipate={canParticipate}
+                petitionUrl={selectedPhase.petitionUrl}
+                isOwner={isOwner}
+              />
+            )}
           </>
         )}
 
@@ -501,8 +529,12 @@ export function PhasesSection({
             (browsing phases isn't an owner-only action); everything else
             is owner-only. Also now visible from the anchor step, not
             just from a real phase — the old header button was the only
-            way to add the very first phase, and it's gone now. */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-200 pt-3">
+            way to add the very first phase, and it's gone now.
+            Deliberately NOT justify-between — spreading the two groups
+            to opposite edges of a wide card left a huge dead gap in the
+            middle that read as two disconnected controls instead of one
+            bar. Grouped together with a divider between them instead. */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-neutral-200 pt-3">
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -521,7 +553,10 @@ export function PhasesSection({
               Next ›
             </button>
           </div>
-          <div className="flex items-center gap-1.5">
+          {(canContribute || (isOwner && selectedPhase)) && (
+            <div className="mx-1 h-5 w-px bg-neutral-200" aria-hidden="true" />
+          )}
+          <div className="flex flex-wrap items-center gap-1.5">
             {isOwner && selectedPhase && (
               <>
                 <button
