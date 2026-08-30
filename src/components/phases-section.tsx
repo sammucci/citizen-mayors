@@ -100,7 +100,15 @@ export function PhasesSection({
   const [selectedId, setSelectedId] = useState<string>(
     activePetitionPhase?.id ?? firstActivePhase?.id ?? (phases.length > 0 ? phases[phases.length - 1].id : "anchor")
   );
-  const [insertMode, setInsertMode] = useState<"before" | "after" | null>(null);
+  const [isInserting, setIsInserting] = useState(false);
+  // Which step the new phase lands after — its OWN piece of state, not
+  // implied by whatever happens to be selected in the stepper above.
+  // That was the actual bug you flagged: the add-phase form had no way
+  // to change where it was inserting, because the position was silently
+  // whatever step you'd last clicked. Now it's an explicit dropdown in
+  // the form itself, and the "+" placeholder in the stepper moves live
+  // as you change it.
+  const [insertAfterId, setInsertAfterId] = useState<string>("anchor");
   // Controlled so the "common next steps" chips (below) can prefill it —
   // that's now the ONLY way any phase gets created (typed fresh, or
   // prefilled from a suggestion): one form, not three separate paths
@@ -132,11 +140,20 @@ export function PhasesSection({
   // petition for X") is what decides whether the petition tools show up
   // here, in that phase's own detail panel.
   const isPetitionPhase = Boolean(selectedPhase && /petition/i.test(selectedPhase.label));
+  // Where the "+" placeholder shows up in the stepper, and what
+  // insert_index actually gets sent — both derived from insertAfterId,
+  // never from whatever's separately selected above.
+  const insertAfterIndex = steps.findIndex((s) => s.id === insertAfterId);
+  function phasesIndexAfter(afterId: string): number {
+    const afterStep = steps.find((s) => s.id === afterId);
+    if (!afterStep || !afterStep.phase) return 0; // anchor, or not found — insert as the first real phase
+    const idx = phases.findIndex((p) => p.id === afterStep.phase!.id);
+    return idx === -1 ? phases.length : idx + 1;
+  }
 
   function goTo(index: number) {
     const clamped = Math.max(0, Math.min(steps.length - 1, index));
     setSelectedId(steps[clamped].id);
-    setInsertMode(null);
     setEditing(false);
   }
 
@@ -148,10 +165,15 @@ export function PhasesSection({
   }
 
   // Single entry point for opening the add-phase form, whether from the
-  // top "+ Add phase" button, the contextual insert-before/after buttons,
-  // or a "common next steps" suggestion chip (which passes a prefill).
-  function openInsert(mode: "before" | "after", prefillLabel = "", prefillNote = "") {
-    setInsertMode(mode);
+  // "+ Add a phase" button or a suggestion chip (which passes a
+  // prefill). Deliberately does NOT touch selectedId/goTo anymore —
+  // opening the form used to yank you over to whichever step it was
+  // going to insert after (jarring, and part of "everything moving
+  // around"); now the form has its own explicit "insert after" picker,
+  // so it doesn't need to hijack what you're currently looking at.
+  function openInsert(afterId: string, prefillLabel = "", prefillNote = "") {
+    setIsInserting(true);
+    setInsertAfterId(afterId);
     setInsertLabel(prefillLabel);
     setInsertNote(prefillNote);
   }
@@ -176,20 +198,21 @@ export function PhasesSection({
           chip buried at the bottom — starting a petition is a real
           escalation for a proposal, not a routine next step, and it used
           to read as identically low-key as everything else down there.
-          Always offered (not dependent on peer data), and hidden once a
-          petition phase already exists so it doesn't suggest a second
-          one. */}
-      {canContribute && !phases.some((p) => /petition/i.test(p.label)) && (
+          Hidden once a petition phase already exists (no suggesting a
+          second one), AND gated on the decision chain actually having at
+          least one decision-maker in it — a petition has to be addressed
+          to someone, and on a brand-new proposal with an empty chain
+          there's nobody yet to send it to. */}
+      {canContribute && anchorNodeCount > 0 && !phases.some((p) => /petition/i.test(p.label)) && (
         <button
           type="button"
-          onClick={() => {
-            goTo(steps.length - 1);
+          onClick={() =>
             openInsert(
-              "after",
+              steps[steps.length - 1].id,
               "Start a petition",
               "Draft a petition making the case, get residents to back it, and present it to decision-makers."
-            );
-          }}
+            )
+          }
           className="mt-3 flex w-full items-center justify-between rounded-lg px-4 py-3 text-left shadow-sm transition hover:opacity-90"
           style={{ backgroundColor: categoryColor, color: finalTextColor }}
         >
@@ -292,10 +315,11 @@ export function PhasesSection({
                   a caption sentence below — this is the direct fix for
                   "you can't see where you're adding it": the new phase's
                   actual position, between two real steps, shown the same
-                  way every other step is shown. Only ever appears after
-                  whichever step is currently selected, since "+ Add a
-                  phase" always inserts after the current selection now. */}
-              {insertMode === "after" && i === selectedIndex && (
+                  way every other step is shown. Tied to insertAfterId
+                  (the form's own explicit picker), NOT to whichever step
+                  happens to be selected — moves live as you change the
+                  dropdown, since that's the whole point of this marker. */}
+              {isInserting && i === insertAfterIndex && (
                 <div className="min-w-[64px] flex-1">
                   <div
                     className="flex w-full items-center justify-center rounded-md border-2 border-dashed py-2 text-xs font-bold"
@@ -315,7 +339,7 @@ export function PhasesSection({
               <div className="min-w-[64px] flex-1 truncate text-center text-[10px] text-neutral-500">
                 {s.label}
               </div>
-              {insertMode === "after" && i === selectedIndex && (
+              {isInserting && i === insertAfterIndex && (
                 <div className="min-w-[64px] flex-1 truncate text-center text-[10px] font-semibold" style={{ color: categoryColor }}>
                   {insertLabel || "New phase"}
                 </div>
@@ -415,47 +439,39 @@ export function PhasesSection({
           </form>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {selectedPhase.status === "pending" && (
-                <span className="inline-block rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
-                  ⏳ Pending approval
-                </span>
-              )}
-              <h3 className="text-base font-semibold text-neutral-800">{selectedPhase.label}</h3>
-              {isOwner && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditLabel(selectedPhase.label);
-                    setEditNote(selectedPhase.note ?? "");
-                    setEditError(null);
-                    setEditing(true);
-                  }}
-                  title="Edit this phase"
-                  aria-label="Edit this phase"
-                  className="text-xs text-neutral-400 hover:text-neutral-600"
-                >
-                  ✎
-                </button>
-              )}
-            </div>
-            {selectedPhase.status === "pending" ? (
-              <p className="mt-0.5 text-xs text-neutral-500">Suggested by {selectedPhase.addedByName}</p>
-            ) : (
-              <p className="mt-0.5 text-xs font-medium text-neutral-500">
-                {PROGRESS_LABELS[selectedPhase.progress]}
-              </p>
-            )}
-            {selectedPhase.note && (
-              <p className="mt-2 text-sm text-neutral-700">{selectedPhase.note}</p>
-            )}
-
-            {/* Status control lives with the phase's own header, not
-                after the petition box — this is "what state is THIS
-                phase in," the same regardless of whether it happens to
-                be a petition phase, so it shouldn't get pushed down by
-                petition-specific content. */}
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {/* Title on the left, status control on the right — this
+                used to all stack in a single left-hand column (title,
+                then a redundant status-text line, then the status
+                buttons below that), which is exactly the "everything
+                piled on the left" pattern to avoid. The pills
+                themselves now show current status directly (the
+                highlighted one), so the separate text line saying the
+                same thing again is gone. */}
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {selectedPhase.status === "pending" && (
+                  <span className="inline-block rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                    ⏳ Pending approval
+                  </span>
+                )}
+                <h3 className="text-base font-semibold text-neutral-800">{selectedPhase.label}</h3>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditLabel(selectedPhase.label);
+                      setEditNote(selectedPhase.note ?? "");
+                      setEditError(null);
+                      setEditing(true);
+                    }}
+                    title="Edit this phase"
+                    aria-label="Edit this phase"
+                    className="text-xs text-neutral-400 hover:text-neutral-600"
+                  >
+                    ✎
+                  </button>
+                )}
+              </div>
               {selectedPhase.status === "pending" && isOwner && (
                 <form
                   action={async (formData) => {
@@ -503,62 +519,19 @@ export function PhasesSection({
                 </div>
               )}
             </div>
-
-            {isPetitionPhase && selectedPhase.status === "approved" && (
-              <PetitionSection
-                proposalId={proposalId}
-                phaseId={selectedPhase.id}
-                title={proposalTitle}
-                summary={proposalSummary}
-                supporterCount={petitionSupporterCount}
-                iSupport={iSupportPetition}
-                canParticipate={canParticipate}
-                petitionUrl={selectedPhase.petitionUrl}
-                isOwner={isOwner}
-              />
+            {selectedPhase.status === "pending" && (
+              <p className="mt-0.5 text-xs text-neutral-500">Suggested by {selectedPhase.addedByName}</p>
             )}
-          </>
-        )}
+            {selectedPhase.note && (
+              <p className="mt-2 text-sm text-neutral-700">{selectedPhase.note}</p>
+            )}
 
-        {/* One control bar, always in the same place regardless of which
-            step is selected — previously "+ Add phase" lived up in the
-            header, step navigation lived next to it, and move/insert/
-            remove lived down here as icon-only buttons, so the same
-            general area of the page had three separate control clusters
-            that behaved inconsistently. Previous/Next are for anyone
-            (browsing phases isn't an owner-only action); everything else
-            is owner-only. Also now visible from the anchor step, not
-            just from a real phase — the old header button was the only
-            way to add the very first phase, and it's gone now.
-            Deliberately NOT justify-between — spreading the two groups
-            to opposite edges of a wide card left a huge dead gap in the
-            middle that read as two disconnected controls instead of one
-            bar. Grouped together with a divider between them instead. */}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-neutral-200 pt-3">
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => goTo(selectedIndex - 1)}
-              disabled={selectedIndex === 0}
-              className="rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              ‹ Previous
-            </button>
-            <button
-              type="button"
-              onClick={() => goTo(selectedIndex + 1)}
-              disabled={selectedIndex === steps.length - 1}
-              className="rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next ›
-            </button>
-          </div>
-          {(canContribute || (isOwner && selectedPhase)) && (
-            <div className="mx-1 h-5 w-px bg-neutral-200" aria-hidden="true" />
-          )}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {isOwner && selectedPhase && (
-              <>
+            {/* Move/Remove — kept with THIS phase's own detail (unlike
+                "+ Add a phase," which is a separate, standalone action
+                now living below in the white area), right-aligned so it
+                doesn't pile up under everything else on the left. */}
+            {isOwner && (
+              <div className="mt-3 flex items-center justify-end gap-1.5 border-t border-neutral-200 pt-2">
                 <button
                   type="button"
                   onClick={() => moveBy(-1)}
@@ -579,30 +552,32 @@ export function PhasesSection({
                 >
                   ▶
                 </button>
-              </>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingRemove(true)}
+                  title="Remove this phase"
+                  className="ml-1 text-xs text-duty-red underline hover:opacity-80"
+                >
+                  Remove
+                </button>
+              </div>
             )}
-            {canContribute && (
-              <button
-                type="button"
-                onClick={() => (insertMode === "after" ? setInsertMode(null) : openInsert("after"))}
-                className="rounded-full px-3 py-1 text-xs font-bold"
-                style={{ backgroundColor: categoryColor, color: finalTextColor }}
-              >
-                + Add a phase
-              </button>
+
+            {isPetitionPhase && selectedPhase.status === "approved" && (
+              <PetitionSection
+                proposalId={proposalId}
+                phaseId={selectedPhase.id}
+                title={proposalTitle}
+                summary={proposalSummary}
+                supporterCount={petitionSupporterCount}
+                iSupport={iSupportPetition}
+                canParticipate={canParticipate}
+                petitionUrl={selectedPhase.petitionUrl}
+                isOwner={isOwner}
+              />
             )}
-            {isOwner && selectedPhase && (
-              <button
-                type="button"
-                onClick={() => setConfirmingRemove(true)}
-                title="Remove this phase"
-                className="text-xs text-duty-red underline hover:opacity-80"
-              >
-                Remove
-              </button>
-            )}
-          </div>
-        </div>
+          </>
+        )}
 
         {confirmingRemove && selectedPhase && (
           <form
@@ -626,98 +601,118 @@ export function PhasesSection({
             </button>
           </form>
         )}
-
-        {/* Insert form — appends a brand-new phase either right before or
-            right after whichever step is currently selected (or, from
-            the anchor, right after it — i.e. as the very first real
-            phase). */}
-        {insertMode && (
-          <form
-            action={async (formData) => {
-              setInsertError(null);
-              try {
-                const result = await addPhase(formData);
-                router.refresh();
-                setInsertMode(null);
-                setInsertLabel("");
-                setInsertNote("");
-                setSelectedId(result.id); // land on the phase you just added, not the one you were already on
-              } catch (e) {
-                setInsertError(e instanceof Error ? e.message : "Could not add that phase.");
-              }
-            }}
-            className="mt-3 space-y-1.5 rounded-lg border-2 p-3"
-            style={{ borderColor: categoryColor, backgroundColor: `${categoryColor}0d` }}
-          >
-            <input type="hidden" name="proposal_id" value={proposalId} />
-            <input
-              type="hidden"
-              name="insert_index"
-              value={
-                selectedPhase
-                  ? insertMode === "before"
-                    ? realIndex
-                    : realIndex + 1
-                  : 0
-              }
-            />
-            {/* One clear heading — this used to be two small caption
-                lines of text sitting under a plain dashed border, easy to
-                miss as "you are now adding a phase" rather than just more
-                page furniture. */}
-            <p className="text-sm font-semibold text-neutral-800">+ Add a phase</p>
-            <p className="text-[11px] text-neutral-500">
-              {selectedPhase
-                ? `Inserting ${insertMode} "${selectedPhase.label}"`
-                : "Adding the first real phase, right after the anchor"}
-            </p>
-            <div>
-              <label className="text-[11px] font-medium text-neutral-500">Phase name</label>
-              <input
-                name="label"
-                required
-                autoFocus
-                value={insertLabel}
-                onChange={(e) => setInsertLabel(e.target.value)}
-                placeholder="e.g. Write a letter to the editor"
-                className="mt-0.5 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium text-neutral-500">
-                What does this step actually involve?
-              </label>
-              <input
-                name="note"
-                required
-                value={insertNote}
-                onChange={(e) => setInsertNote(e.target.value)}
-                placeholder="e.g. Draft a letter making the case, get 5 neighbors to co-sign, send to the district office"
-                className="mt-0.5 w-full rounded border border-neutral-300 px-2 py-1 text-xs"
-              />
-            </div>
-            <div className="flex gap-1.5 pt-0.5">
-              <button
-                className="rounded px-3 py-1 text-xs font-semibold"
-                style={{ backgroundColor: categoryColor, color: finalTextColor }}
-              >
-                Add phase
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setInsertMode(null);
-                  setInsertError(null);
-                }}
-                className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-white"
-              >
-                Cancel
-              </button>
-            </div>
-            {insertError && <p className="text-xs text-duty-red">{insertError}</p>}
-          </form>
-        )}
       </div>
+
+      {/* "+ Add a phase" lives here now — outside the gray per-phase
+          detail panel above, in the plain white card area. It used to be
+          tucked into that panel's own bottom bar, which made it look like
+          an action tied to whichever phase you had selected (it isn't —
+          it's a standalone thing, and burying it up there was also why
+          you had no way to change where the new phase actually landed:
+          the position was silently "wherever you were last looking," not
+          a real choice). Now it's its own button, and the form has an
+          explicit "Insert after" picker so the "+" marker in the stepper
+          above moves to wherever you actually pick, not just where you
+          happened to be standing when you opened the form. Previous/Next
+          step navigation is gone entirely — the numbered stepper above
+          already does that job. */}
+      {canContribute && (
+        <div className="mt-3 border-t border-neutral-200 pt-3">
+          {!isInserting ? (
+            <button
+              type="button"
+              onClick={() => openInsert(selectedId)}
+              className="rounded-full px-3 py-1.5 text-xs font-bold"
+              style={{ backgroundColor: categoryColor, color: finalTextColor }}
+            >
+              + Add a phase
+            </button>
+          ) : (
+            <form
+              action={async (formData) => {
+                setInsertError(null);
+                try {
+                  const result = await addPhase(formData);
+                  router.refresh();
+                  setIsInserting(false);
+                  setInsertLabel("");
+                  setInsertNote("");
+                  setSelectedId(result.id); // land on the phase you just added, not the one you were already on
+                } catch (e) {
+                  setInsertError(e instanceof Error ? e.message : "Could not add that phase.");
+                }
+              }}
+              className="space-y-1.5 rounded-lg border-2 p-3"
+              style={{ borderColor: categoryColor, backgroundColor: `${categoryColor}0d` }}
+            >
+              <input type="hidden" name="proposal_id" value={proposalId} />
+              <input type="hidden" name="insert_index" value={phasesIndexAfter(insertAfterId)} />
+              <p className="text-sm font-semibold text-neutral-800">+ Add a phase</p>
+              <div>
+                <label className="text-[11px] font-medium text-neutral-500">Insert after</label>
+                {/* This is the actual fix for "you still can't change
+                    where it's adding" — a real, visible choice instead of
+                    an implicit one tied to whatever was selected above. */}
+                <select
+                  value={insertAfterId}
+                  onChange={(e) => setInsertAfterId(e.target.value)}
+                  className="mt-0.5 w-full rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
+                >
+                  {steps.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-neutral-500">Phase name</label>
+                <input
+                  name="label"
+                  required
+                  autoFocus
+                  value={insertLabel}
+                  onChange={(e) => setInsertLabel(e.target.value)}
+                  placeholder="e.g. Write a letter to the editor"
+                  className="mt-0.5 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-neutral-500">
+                  What does this step actually involve?
+                </label>
+                <input
+                  name="note"
+                  required
+                  value={insertNote}
+                  onChange={(e) => setInsertNote(e.target.value)}
+                  placeholder="e.g. Draft a letter making the case, get 5 neighbors to co-sign, send to the district office"
+                  className="mt-0.5 w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+                />
+              </div>
+              <div className="flex gap-1.5 pt-0.5">
+                <button
+                  className="rounded px-3 py-1 text-xs font-semibold"
+                  style={{ backgroundColor: categoryColor, color: finalTextColor }}
+                >
+                  Add phase
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsInserting(false);
+                    setInsertError(null);
+                  }}
+                  className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-white"
+                >
+                  Cancel
+                </button>
+              </div>
+              {insertError && <p className="text-xs text-duty-red">{insertError}</p>}
+            </form>
+          )}
+        </div>
+      )}
 
       {recommendedLabels.length > 0 && (
         <div className="mt-3">
@@ -727,15 +722,14 @@ export function PhasesSection({
               <button
                 key={label}
                 type="button"
-                onClick={() => {
+                onClick={() =>
                   // Prefills the same add-phase form below instead of
                   // skipping straight to the database — a suggestion is a
                   // starting point, not a finished phase, and it still
                   // needs a real note same as anything typed from
                   // scratch (what this looks like for YOUR proposal).
-                  goTo(steps.length - 1);
-                  openInsert("after", label);
-                }}
+                  openInsert(steps[steps.length - 1].id, label)
+                }
                 className="rounded-full border border-dashed px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
                 style={{ borderColor: `${categoryColor}88` }}
               >
