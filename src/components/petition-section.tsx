@@ -184,11 +184,25 @@ export function PetitionSection({
             </div>
           </div>
 
+          {/* Common Duty's own step-by-step petition guide — linked
+              here, not on the public Sign button or the homepage badge,
+              because this is the one spot in the flow where someone's
+              actually about to WRITE a petition and could use help
+              making it good, versus just signing one that already
+              exists. */}
+          <a
+            href="https://www.commonduty.com/petition"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 block text-xs text-duty-purple underline"
+          >
+            Need help writing this? Common Duty's petition guide →
+          </a>
           <a
             href="https://www.change.org/start-a-petition"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-block rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+            className="mt-2 inline-block rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
           >
             Continue to Change.org →
           </a>
