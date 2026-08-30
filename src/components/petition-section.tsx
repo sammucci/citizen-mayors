@@ -105,8 +105,7 @@ export function PetitionSection({
       </a>
       <p className="mt-1 text-[11px] text-neutral-400">
         Opens Change.org's own petition builder in a new tab — paste the text
-        above in once you're there. (There's no way to hand it off pre-filled;
-        we checked.)
+        above in once you're there.
       </p>
 
       <div className="mt-4 flex items-center justify-between border-t border-neutral-100 pt-3">

@@ -18,7 +18,6 @@ import { PublishToggleButton } from "@/components/publish-toggle-button";
 import { PowerTreeChain } from "@/components/power-tree-chain";
 import { PhasesSection } from "@/components/phases-section";
 import { CaseStudiesSection } from "@/components/case-studies-section";
-import { PetitionSection } from "@/components/petition-section";
 import { InfoHeading } from "@/components/info-heading";
 import { RepositionableImage } from "@/components/repositionable-image";
 import { ReplyToggle } from "@/components/reply-toggle";
@@ -209,12 +208,12 @@ export default async function ProposalPage({
     .eq("proposal_id", proposal.id)
     .order("sort_order");
 
-  // Petition box only shows up once a proposal has real forward
-  // momentum — at least one phase marked "done" (i.e. it's ready to
-  // move on to whatever comes next). Before that, starting a petition
-  // would just be premature.
-  const hasCompletedPhase = (proposalPhases ?? []).some((p) => p.progress === "done");
-  const { data: petitionSupporters } = hasCompletedPhase
+  // Petition tools live inside whichever phase is actually about a
+  // petition (matched on the phase's own label — see phases-section.tsx)
+  // rather than as a separate box gated on some unrelated phase being
+  // "done." Only need to fetch supporters at all if such a phase exists.
+  const hasPetitionPhase = (proposalPhases ?? []).some((p) => /petition/i.test(p.label));
+  const { data: petitionSupporters } = hasPetitionPhase
     ? await supabase
         .from("proposal_petition_supporters")
         .select("user_id")
@@ -1092,17 +1091,6 @@ export default async function ProposalPage({
             canAdd={Boolean(user)}
             canRemove={isOwner || isAdmin}
           />
-
-          {hasCompletedPhase && (
-            <PetitionSection
-              proposalId={proposal.id}
-              title={proposal.title}
-              summary={proposal.summary ?? ""}
-              supporterCount={petitionSupporterCount}
-              iSupport={iSupportPetition}
-              canParticipate={Boolean(user)}
-            />
-          )}
         </div>
       </div>
 
@@ -1136,6 +1124,11 @@ export default async function ProposalPage({
             status: p.status,
             addedByName: p.profiles?.display_name ?? "A resident",
           }))}
+          proposalTitle={proposal.title}
+          proposalSummary={proposal.summary ?? ""}
+          petitionSupporterCount={petitionSupporterCount}
+          iSupportPetition={iSupportPetition}
+          canParticipate={Boolean(user)}
         />
       </div>
     </div>

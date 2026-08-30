@@ -18,10 +18,11 @@
 -- the proposal owner — a signature is a statement about the signer, not
 -- something the owner curates.
 --
--- Gating for when the petition box even appears lives in the app layer
--- (proposals/[id]/page.tsx checks for at least one proposal_phases row
--- with progress = 'done' — i.e., the proposal has real forward momentum
--- and is ready to move to its next stage), not in this table.
+-- Gating for when the petition tools appear lives in the app layer, not
+-- this table: phases-section.tsx matches on the phase's own label (e.g.
+-- "Start a petition") and shows the draft + this counter inside THAT
+-- phase's own detail panel, once it's an approved phase — not as a
+-- separate box gated on some unrelated phase being marked done.
 create table public.proposal_petition_supporters (
   id uuid primary key default gen_random_uuid(),
   proposal_id uuid not null references public.proposals(id) on delete cascade,

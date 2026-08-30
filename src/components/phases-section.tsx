@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { addPhase, approvePhase, removePhase, reorderPhases, updatePhase, updatePhaseProgress } from "@/app/proposals/actions";
 import { readableTextColor } from "@/lib/readable-text-color";
+import { PetitionSection } from "@/components/petition-section";
 
 type Phase = {
   id: string;
@@ -44,6 +45,11 @@ export function PhasesSection({
   recommendedLabels,
   councilPerson,
   anchorNodeCount,
+  proposalTitle,
+  proposalSummary,
+  petitionSupporterCount,
+  iSupportPetition,
+  canParticipate,
 }: {
   proposalId: string;
   categoryColor: string;
@@ -58,6 +64,17 @@ export function PhasesSection({
   // always grow, so this only ever unlocks a dashed "started" treatment
   // (see the stepper below), never the solid "done" fill real phases get.
   anchorNodeCount: number;
+  // Petition tools (draft text + on-platform backer count) live INSIDE
+  // whichever phase is actually about a petition — not as a separate
+  // sidebar box gated on some unrelated phase being "done". A phase
+  // titled e.g. "Start a petition" or "Circulate a petition" is where
+  // they show up, in that phase's own detail panel, same as everything
+  // else about that phase. See isPetitionPhase below.
+  proposalTitle: string;
+  proposalSummary: string;
+  petitionSupporterCount: number;
+  iSupportPetition: boolean;
+  canParticipate: boolean;
 }) {
   const router = useRouter();
   const finalTextColor = readableTextColor(categoryColor);
@@ -75,6 +92,13 @@ export function PhasesSection({
     firstActivePhase?.id ?? (phases.length > 0 ? phases[phases.length - 1].id : "anchor")
   );
   const [insertMode, setInsertMode] = useState<"before" | "after" | null>(null);
+  // Controlled so the "common next steps" chips (below) can prefill it —
+  // that's now the ONLY way any phase gets created (typed fresh, or
+  // prefilled from a suggestion): one form, not three separate paths
+  // that behaved slightly differently from each other.
+  const [insertLabel, setInsertLabel] = useState("");
+  const [insertNote, setInsertNote] = useState("");
+  const [insertError, setInsertError] = useState<string | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editLabel, setEditLabel] = useState("");
@@ -93,6 +117,12 @@ export function PhasesSection({
   // move-left/right and insert-before/after, which only ever operate on
   // real phases and their neighbors.
   const realIndex = selectedPhase ? phases.findIndex((p) => p.id === selectedPhase.id) : -1;
+  // Matched on the phase's own label rather than a separate database
+  // flag — same lightweight approach as the anchor step already uses.
+  // Whatever you named the phase ("Start a petition," "Circulate a
+  // petition for X") is what decides whether the petition tools show up
+  // here, in that phase's own detail panel.
+  const isPetitionPhase = Boolean(selectedPhase && /petition/i.test(selectedPhase.label));
 
   function goTo(index: number) {
     const clamped = Math.max(0, Math.min(steps.length - 1, index));
@@ -106,6 +136,15 @@ export function PhasesSection({
     fd.set("proposal_id", proposalId);
     newPhases.forEach((p) => fd.append("phase_id", p.id));
     reorderPhases(fd).then(() => router.refresh());
+  }
+
+  // Single entry point for opening the add-phase form, whether from the
+  // top "+ Add phase" button, the contextual insert-before/after buttons,
+  // or a "common next steps" suggestion chip (which passes a prefill).
+  function openInsert(mode: "before" | "after", prefillLabel = "", prefillNote = "") {
+    setInsertMode(mode);
+    setInsertLabel(prefillLabel);
+    setInsertNote(prefillNote);
   }
 
   function moveBy(delta: -1 | 1) {
@@ -127,7 +166,7 @@ export function PhasesSection({
               type="button"
               onClick={() => {
                 goTo(steps.length - 1);
-                setInsertMode("after");
+                openInsert("after");
               }}
               className="rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
             >
@@ -383,6 +422,19 @@ export function PhasesSection({
               <p className="mt-2 text-sm text-neutral-700">{selectedPhase.note}</p>
             )}
 
+            {isPetitionPhase && selectedPhase.status === "approved" && (
+              <div className="mt-3">
+                <PetitionSection
+                  proposalId={proposalId}
+                  title={proposalTitle}
+                  summary={proposalSummary}
+                  supporterCount={petitionSupporterCount}
+                  iSupport={iSupportPetition}
+                  canParticipate={canParticipate}
+                />
+              </div>
+            )}
+
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {selectedPhase.status === "pending" && isOwner && (
                 <form
@@ -454,7 +506,7 @@ export function PhasesSection({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setInsertMode(insertMode === "before" ? null : "before")}
+                  onClick={() => (insertMode === "before" ? setInsertMode(null) : openInsert("before"))}
                   title="Insert a new phase before this one"
                   aria-label="Insert a new phase before this one"
                   className={`flex h-7 w-9 items-center justify-center rounded-full border text-xs font-bold ${
@@ -468,7 +520,7 @@ export function PhasesSection({
                 <div className="mx-1 h-5 w-px bg-neutral-200" aria-hidden="true" />
                 <button
                   type="button"
-                  onClick={() => setInsertMode(insertMode === "after" ? null : "after")}
+                  onClick={() => (insertMode === "after" ? setInsertMode(null) : openInsert("after"))}
                   title="Insert a new phase after this one"
                   aria-label="Insert a new phase after this one"
                   className={`flex h-7 w-9 items-center justify-center rounded-full border text-xs font-bold ${
@@ -533,11 +585,20 @@ export function PhasesSection({
         {insertMode && (
           <form
             action={async (formData) => {
-              await addPhase(formData);
-              router.refresh();
-              setInsertMode(null);
+              setInsertError(null);
+              try {
+                const result = await addPhase(formData);
+                router.refresh();
+                setInsertMode(null);
+                setInsertLabel("");
+                setInsertNote("");
+                setSelectedId(result.id); // land on the phase you just added, not the one you were already on
+              } catch (e) {
+                setInsertError(e instanceof Error ? e.message : "Could not add that phase.");
+              }
             }}
-            className="mt-3 space-y-1.5 rounded-lg border border-dashed border-neutral-300 bg-white p-2.5"
+            className="mt-3 space-y-1.5 rounded-lg border-2 p-3"
+            style={{ borderColor: categoryColor, backgroundColor: `${categoryColor}0d` }}
           >
             <input type="hidden" name="proposal_id" value={proposalId} />
             <input
@@ -551,43 +612,65 @@ export function PhasesSection({
                   : 0
               }
             />
+            {/* One clear heading — this used to be two small caption
+                lines of text sitting under a plain dashed border, easy to
+                miss as "you are now adding a phase" rather than just more
+                page furniture. */}
+            <p className="text-sm font-semibold text-neutral-800">+ Add a phase</p>
             <p className="text-[11px] text-neutral-500">
               {selectedPhase
                 ? `Inserting ${insertMode} "${selectedPhase.label}"`
                 : "Adding the first real phase, right after the anchor"}
             </p>
-            <input
-              name="label"
-              required
-              autoFocus
-              placeholder="e.g. Write a letter to the editor"
-              className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
-            />
-            <input
-              name="note"
-              placeholder="Optional note — why this step, or how to do it"
-              className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
-            />
-            <div className="flex gap-1.5">
+            <div>
+              <label className="text-[11px] font-medium text-neutral-500">Phase name</label>
+              <input
+                name="label"
+                required
+                autoFocus
+                value={insertLabel}
+                onChange={(e) => setInsertLabel(e.target.value)}
+                placeholder="e.g. Write a letter to the editor"
+                className="mt-0.5 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-neutral-500">
+                What does this step actually involve?
+              </label>
+              <input
+                name="note"
+                required
+                value={insertNote}
+                onChange={(e) => setInsertNote(e.target.value)}
+                placeholder="e.g. Draft a letter making the case, get 5 neighbors to co-sign, send to the district office"
+                className="mt-0.5 w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+              />
+            </div>
+            <div className="flex gap-1.5 pt-0.5">
               <button
-                className="rounded px-2 py-1 text-xs"
+                className="rounded px-3 py-1 text-xs font-semibold"
                 style={{ backgroundColor: categoryColor, color: finalTextColor }}
               >
-                Add
+                Add phase
               </button>
               <button
                 type="button"
-                onClick={() => setInsertMode(null)}
-                className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+                onClick={() => {
+                  setInsertMode(null);
+                  setInsertError(null);
+                }}
+                className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-white"
               >
                 Cancel
               </button>
             </div>
+            {insertError && <p className="text-xs text-duty-red">{insertError}</p>}
           </form>
         )}
       </div>
 
-      {recommendedLabels.length > 0 && (
+      {(recommendedLabels.length > 0 || (canContribute && !phases.some((p) => /petition/i.test(p.label)))) && (
         <div className="mt-3">
           <p className="text-xs font-medium text-neutral-500">Common next steps for proposals like this one:</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -596,10 +679,13 @@ export function PhasesSection({
                 key={label}
                 type="button"
                 onClick={() => {
-                  const fd = new FormData();
-                  fd.set("proposal_id", proposalId);
-                  fd.set("label", label);
-                  addPhase(fd).then(() => router.refresh());
+                  // Prefills the same add-phase form below instead of
+                  // skipping straight to the database — a suggestion is a
+                  // starting point, not a finished phase, and it still
+                  // needs a real note same as anything typed from
+                  // scratch (what this looks like for YOUR proposal).
+                  goTo(steps.length - 1);
+                  openInsert("after", label);
                 }}
                 className="rounded-full border border-dashed px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
                 style={{ borderColor: `${categoryColor}88` }}
@@ -607,6 +693,27 @@ export function PhasesSection({
                 + {label}
               </button>
             ))}
+            {/* Always offered, not dependent on peer data — a petition
+                is a real forward-momentum step for almost any proposal,
+                and this is the one place the petition tools ever show
+                up now (inside whatever phase you name after adding it). */}
+            {canContribute && !phases.some((p) => /petition/i.test(p.label)) && (
+              <button
+                type="button"
+                onClick={() => {
+                  goTo(steps.length - 1);
+                  openInsert(
+                    "after",
+                    "Start a petition",
+                    "Draft a petition making the case, get residents to back it, and present it to decision-makers."
+                  );
+                }}
+                className="rounded-full border border-dashed px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+                style={{ borderColor: `${categoryColor}88` }}
+              >
+                + Start a petition
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -1380,7 +1380,7 @@ async function reindexPhases(
 // insert_index is a 0-based position in the phase list (0 = right after
 // the fixed "Map your decision chain" anchor); omitting it appends at
 // the end, same as the old always-append behavior.
-export async function addPhase(formData: FormData) {
+export async function addPhase(formData: FormData): Promise<{ id: string }> {
   const { supabase, user } = await requireUser();
 
   const proposalId = String(formData.get("proposal_id"));
@@ -1388,6 +1388,12 @@ export async function addPhase(formData: FormData) {
   const note = String(formData.get("note") ?? "").trim();
   const insertIndexRaw = formData.get("insert_index");
   if (!label) throw new Error("A phase needs at least a short label.");
+  // Note is required, not optional — "Phase 2, not started" with no
+  // note is nearly content-free. A sentence of real context (what this
+  // step is, or how to do it) is the minimum for a phase to be worth
+  // adding. The one-click "common next steps" suggestions supply a
+  // sensible default note themselves rather than being exempt from this.
+  if (!note) throw new Error("Add a short note on what this step actually involves.");
 
   const { data: proposal } = await supabase
     .from("proposals")
@@ -1426,6 +1432,7 @@ export async function addPhase(formData: FormData) {
   await reindexPhases(supabase, existingIds);
 
   revalidatePath(`/proposals/${proposalId}`);
+  return { id: newPhase.id };
 }
 
 // Full drag-and-drop reorder, same shape as reorderPowerTreeNodes — the
